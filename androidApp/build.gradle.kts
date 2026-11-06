@@ -102,6 +102,22 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel)
 }
 
+configurations.all {
+    resolutionStrategy {
+        force(
+            "androidx.core:core:${libs.versions.androidxCore.get()}",
+            "androidx.core:core-ktx:${libs.versions.androidxCore.get()}",
+            "androidx.lifecycle:lifecycle-viewmodel-compose:${libs.versions.androidxLifecycle.get()}",
+            "androidx.lifecycle:lifecycle-runtime-compose:${libs.versions.androidxLifecycle.get()}",
+            "androidx.lifecycle:lifecycle-viewmodel:${libs.versions.androidxLifecycle.get()}",
+            "androidx.lifecycle:lifecycle-runtime:${libs.versions.androidxLifecycle.get()}",
+            "androidx.lifecycle:lifecycle-runtime-ktx:${libs.versions.androidxLifecycle.get()}",
+            "androidx.lifecycle:lifecycle-viewmodel-ktx:${libs.versions.androidxLifecycle.get()}",
+            "androidx.lifecycle:lifecycle-common:${libs.versions.androidxLifecycle.get()}"
+        )
+    }
+}
+
 val targetApk = layout.buildDirectory.file("outputs/apk/debug/androidApp-debug.apk")
 
 tasks.register<CopyDebugApkTask>("copyDebugApkToRoot") {

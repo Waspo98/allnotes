@@ -6,13 +6,6 @@ import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import app.overbay.allnotes.db.AllNotesDatabase
 
-/**
- * Android implementation of [DatabaseDriverFactory].
- *
- * Backed by [AndroidSqliteDriver]. Retrieves the application [Context] from
- * [AndroidStoragePaths.context] initialized during [MainActivity.onCreate], or
- * from an optional explicit constructor parameter.
- */
 actual class DatabaseDriverFactory(
     private val context: Context? = AndroidStoragePaths.context
 ) {
@@ -22,8 +15,7 @@ actual class DatabaseDriverFactory(
         val appContext = context ?: AndroidStoragePaths.context
             ?: throw IllegalStateException(
                 "AndroidStoragePaths.context has not been initialized. " +
-                "Please assign AndroidStoragePaths.context = applicationContext in MainActivity.onCreate " +
-                "before instantiating DatabaseDriverFactory."
+                    "Assign AndroidStoragePaths.context = applicationContext in MainActivity.onCreate."
             )
 
         return AndroidSqliteDriver(
@@ -31,10 +23,21 @@ actual class DatabaseDriverFactory(
             context = appContext,
             name = DATABASE_NAME,
             callback = object : AndroidSqliteDriver.Callback(AllNotesDatabase.Schema) {
+                override fun onConfigure(db: SupportSQLiteDatabase) {
+                    super.onConfigure(db)
+                    try {
+                        db.setForeignKeyConstraintsEnabled(true)
+                        db.enableWriteAheadLogging()
+                    } catch (_: Exception) {
+                    }
+                }
+
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
-                    db.enableWriteAheadLogging()
-                    db.setForeignKeyConstraintsEnabled(true)
+                    try {
+                        db.execSQL("PRAGMA foreign_keys = ON;")
+                    } catch (_: Exception) {
+                    }
                 }
             }
         )
