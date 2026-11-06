@@ -1,0 +1,50 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+.kotlin/
+
+# Debug/release build artifacts (delivered via GitHub Releases)
+*.apk
+*.aab
+*.msi
+*.exe
+AllNotes-windows-*.zip
+logcat.txt
+screenshot.png
+window_dump.xml
+build_output.txt
+
+# Web & JS/Wasm build outputs
+/webApp/build/
+dist/
+node_modules/
+kotlin-js-store/
+
+# Server runtime data & Docker secrets
+/data/
+/server/data/
+*.db
+*.db-shm
+*.db-wal
+.env
+
+# Keystores & release signing secrets
+*.jks
+*.keystore
+*.p8
+*.pepk
+*.der
+google-services.json
+client_secret*.json
