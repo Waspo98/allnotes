@@ -208,6 +208,12 @@ SET is_pinned = :isPinned,
     updated_at_epoch_ms = :updatedAtEpochMs
 WHERE id = :id;
 
+updatePageParent:
+UPDATE note_page
+SET parent_page_id = :parentPageId,
+    updated_at_epoch_ms = :updatedAtEpochMs
+WHERE id = :id;
+
 deletePage:
 DELETE FROM note_page
 WHERE id = :id;

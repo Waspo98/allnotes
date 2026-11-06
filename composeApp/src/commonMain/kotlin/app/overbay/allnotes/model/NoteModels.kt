@@ -67,6 +67,7 @@ sealed interface DocumentBlock {
         val isBold: Boolean = false,
         val isItalic: Boolean = false,
         val isUnderlined: Boolean = false,
+        val isStrikethrough: Boolean = false,
         val isHighlighted: Boolean = false
     ) : DocumentBlock
 

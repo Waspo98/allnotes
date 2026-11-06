@@ -11,60 +11,50 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.overbay.allnotes.model.NotePage
-import app.overbay.allnotes.model.NoteSection
-import app.overbay.allnotes.model.Notebook
+import app.overbay.allnotes.ui.editor.blocks.DocumentBlockView
+import app.overbay.allnotes.ui.editor.toolbar.DesktopFormattingRibbon
+import app.overbay.allnotes.ui.editor.toolbar.MobileFloatingToolbar
+import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.theme.allNotesSpring
 import app.overbay.allnotes.ui.theme.containerColor
 import app.overbay.allnotes.ui.theme.contentColor
+import app.overbay.allnotes.ui.workspace.ActiveDialog
+import app.overbay.allnotes.ui.workspace.WorkspaceAction
+import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 
 @Composable
 fun DocumentEditorPane(
-    notebook: Notebook?,
-    section: NoteSection?,
-    page: NotePage?,
+    state: WorkspaceUiState,
     isCompactMobile: Boolean,
-    isSidebarOpen: Boolean,
-    onToggleSidebar: () -> Unit,
-    onOpenMobileHierarchy: () -> Unit,
-    onUpdatePageTitle: (String) -> Unit,
-    onUpdateBlockText: (String, String) -> Unit,
-    onToggleParagraphStyle: (String, String) -> Unit,
-    onToggleChecklistItem: (String, String) -> Unit,
-    onAddChecklistItem: (String, String) -> Unit,
-    onDeleteBlock: (String) -> Unit,
-    onInsertHeading: () -> Unit,
-    onInsertParagraph: () -> Unit,
-    onInsertChecklist: () -> Unit,
-    onInsertTable: () -> Unit,
-    onInsertCallout: () -> Unit,
-    onInsertCode: () -> Unit,
-    onTogglePin: () -> Unit,
-    onDeletePage: () -> Unit,
-    modifier: Modifier = Modifier,
-    onInsertBulletList: () -> Unit = {},
-    onUpdateHeadingLevel: (String, Int) -> Unit = { _, _ -> },
-    onAddBulletListItem: (String, String) -> Unit = { _, _ -> },
-    onUpdateTableCell: (String, Int, Int, String) -> Unit = { _, _, _, _ -> },
-    onAddTableRow: (String) -> Unit = {}
+    onAction: (WorkspaceAction) -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val notebook = state.activeNotebook
+    val section = state.activeSection
+    val page = state.activePage
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -76,9 +66,10 @@ fun DocumentEditorPane(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .widthIn(max = if (isCompactMobile) 600.dp else 900.dp)
+                    .widthIn(max = if (isCompactMobile) 640.dp else 940.dp)
                     .padding(horizontal = if (isCompactMobile) 12.dp else 24.dp, vertical = 12.dp)
             ) {
+                // Top Breadcrumb & Workspace Mode Bar
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -90,14 +81,24 @@ fun DocumentEditorPane(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (!isCompactMobile) {
-                            TextButton(onClick = onToggleSidebar) {
-                                Text(if (isSidebarOpen) "Hide Sidebar" else "Show Sidebar")
+                            FilledTonalButton(
+                                onClick = { onAction(WorkspaceAction.ToggleSidebar) },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(AllNotesIcons.Sidebar, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (state.isSidebarOpen) "Hide Sidebar" else "Show Sidebar",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
                             }
                         } else {
                             FilledTonalButton(
-                                onClick = onOpenMobileHierarchy,
+                                onClick = { onAction(WorkspaceAction.SetMobileHierarchySheetOpen(true)) },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                             ) {
+                                Icon(AllNotesIcons.Sidebar, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text("Hierarchy", style = MaterialTheme.typography.labelMedium)
                             }
                         }
@@ -121,9 +122,37 @@ fun DocumentEditorPane(
                         }
                     }
 
-                    if (!isCompactMobile) {
+                    if (isCompactMobile && page != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            IconButton(
+                                onClick = { onAction(WorkspaceAction.ToggleActivePagePin) },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    AllNotesIcons.Pin,
+                                    contentDescription = if (page.isPinned) "Unpin Page" else "Pin Page",
+                                    tint = if (page.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { onAction(WorkspaceAction.TogglePageSubpageIndent(page.id)) },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    if (page.parentPageId != null) AllNotesIcons.Outdent else AllNotesIcons.Indent,
+                                    contentDescription = "Subpage indent",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    } else if (!isCompactMobile) {
                         Text(
-                            text = "Word Studio View",
+                            text = "Word Document Studio · Overbay.app",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -133,80 +162,147 @@ fun DocumentEditorPane(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 if (!isCompactMobile && page != null) {
-                    WordStyleFormattingRibbon(
-                        isPinned = page.isPinned,
-                        onInsertHeading = onInsertHeading,
-                        onInsertParagraph = onInsertParagraph,
-                        onInsertChecklist = onInsertChecklist,
-                        onInsertBulletList = onInsertBulletList,
-                        onInsertTable = onInsertTable,
-                        onInsertCallout = onInsertCallout,
-                        onInsertCode = onInsertCode,
-                        onTogglePin = onTogglePin,
-                        onDeletePage = onDeletePage
+                    DesktopFormattingRibbon(
+                        state = state,
+                        onAction = onAction
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
                 if (page == null) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Select or create a page from the hierarchy to begin writing.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        shape = RoundedCornerShape(if (isCompactMobile) 18.dp else 24.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(32.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "No Document Page Selected",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Select a page from the hierarchy or create a new page in this section.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            FilledTonalButton(onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_PAGE)) }) {
+                                Icon(AllNotesIcons.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Create New Page")
+                            }
+                        }
+                    }
+                } else {
+                    // Word-Grade Bounded Document Sheet
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        shape = RoundedCornerShape(if (isCompactMobile) 20.dp else 26.dp),
+                        tonalElevation = 1.dp,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                     ) {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
-                                start = if (isCompactMobile) 14.dp else 32.dp,
-                                end = if (isCompactMobile) 14.dp else 32.dp,
-                                top = if (isCompactMobile) 16.dp else 28.dp,
-                                bottom = if (isCompactMobile) 96.dp else 48.dp
+                                start = if (isCompactMobile) 16.dp else 44.dp,
+                                end = if (isCompactMobile) 16.dp else 44.dp,
+                                top = if (isCompactMobile) 20.dp else 36.dp,
+                                bottom = if (isCompactMobile) 104.dp else 64.dp
                             ),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            verticalArrangement = Arrangement.spacedBy(18.dp)
                         ) {
                             item(key = "page-header-${page.id}") {
                                 Column(modifier = Modifier.fillMaxWidth()) {
-                                    OutlinedTextField(
-                                        value = page.title,
-                                        onValueChange = onUpdatePageTitle,
-                                        textStyle = MaterialTheme.typography.headlineMedium.copy(
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                        placeholder = { Text("Page Title") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        if (page.title.isEmpty()) {
+                                            Text(
+                                                text = "Untitled Page",
+                                                style = MaterialTheme.typography.headlineLarge.copy(
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                                )
+                                            )
+                                        }
+                                        BasicTextField(
+                                            value = page.title,
+                                            onValueChange = { onAction(WorkspaceAction.UpdateActivePageTitle(it)) },
+                                            textStyle = MaterialTheme.typography.headlineLarge.copy(
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            ),
+                                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Text(
+                                            text = "${page.blocks.size} blocks",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        if (page.isPinned) {
+                                            Text(
+                                                text = "• Pinned",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        if (page.parentPageId != null) {
+                                            Text(
+                                                text = "• Nested Subpage",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.tertiary
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                                 }
                             }
 
                             items(page.blocks, key = { it.id }) { block ->
                                 DocumentBlockView(
                                     block = block,
-                                    onUpdateText = { updated -> onUpdateBlockText(block.id, updated) },
-                                    onToggleParagraphStyle = { style -> onToggleParagraphStyle(block.id, style) },
-                                    onToggleChecklistItem = { itemId -> onToggleChecklistItem(block.id, itemId) },
-                                    onAddChecklistItem = { text -> onAddChecklistItem(block.id, text) },
-                                    onDeleteBlock = { onDeleteBlock(block.id) },
-                                    modifier = Modifier.animateItem(placementSpec = allNotesSpring()),
-                                    onUpdateHeadingLevel = { lvl -> onUpdateHeadingLevel(block.id, lvl) },
-                                    onAddBulletListItem = { text -> onAddBulletListItem(block.id, text) },
-                                    onUpdateTableCell = { r, c, txt -> onUpdateTableCell(block.id, r, c, txt) },
-                                    onAddTableRow = { onAddTableRow(block.id) }
+                                    isActive = block.id == state.activeBlockId,
+                                    onAction = onAction,
+                                    modifier = Modifier.animateItem(placementSpec = allNotesSpring())
                                 )
+                            }
+
+                            item(key = "page-footer-insert-${page.id}") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    AssistChip(
+                                        onClick = { onAction(WorkspaceAction.InsertParagraph(null)) },
+                                        leadingIcon = { Icon(AllNotesIcons.Add, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                                        label = { Text("Add Paragraph") }
+                                    )
+                                    AssistChip(
+                                        onClick = { onAction(WorkspaceAction.InsertChecklist(null)) },
+                                        leadingIcon = { Icon(AllNotesIcons.Checklist, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                                        label = { Text("Add Checklist") }
+                                    )
+                                }
                             }
                         }
                     }
@@ -214,17 +310,12 @@ fun DocumentEditorPane(
             }
 
             if (isCompactMobile && page != null) {
-                MobileExpressiveFloatingToolbar(
-                    onOpenHierarchy = onOpenMobileHierarchy,
-                    onInsertHeading = onInsertHeading,
-                    onInsertParagraph = onInsertParagraph,
-                    onInsertChecklist = onInsertChecklist,
-                    onInsertBulletList = onInsertBulletList,
-                    onInsertTable = onInsertTable,
-                    onInsertCallout = onInsertCallout,
+                MobileFloatingToolbar(
+                    state = state,
+                    onAction = onAction,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 16.dp, start = 12.dp, end = 12.dp)
+                        .padding(bottom = 14.dp, start = 10.dp, end = 10.dp)
                 )
             }
         }

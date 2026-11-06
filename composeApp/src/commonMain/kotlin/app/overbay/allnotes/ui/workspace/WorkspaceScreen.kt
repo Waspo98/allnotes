@@ -25,6 +25,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -51,21 +52,35 @@ fun WorkspaceScreen(
                 if (event.type == KeyEventType.KeyDown && (event.isCtrlPressed || event.isMetaPressed)) {
                     when (event.key) {
                         Key.B -> {
-                            viewModel.toggleActiveParagraphStyle("bold")
+                            viewModel.dispatch(WorkspaceAction.ToggleActiveParagraphStyle("bold"))
                             true
                         }
                         Key.I -> {
-                            viewModel.toggleActiveParagraphStyle("italic")
+                            viewModel.dispatch(WorkspaceAction.ToggleActiveParagraphStyle("italic"))
                             true
+                        }
+                        Key.U -> {
+                            viewModel.dispatch(WorkspaceAction.ToggleActiveParagraphStyle("underline"))
+                            true
+                        }
+                        Key.L -> {
+                            if (event.isShiftPressed) {
+                                viewModel.dispatch(WorkspaceAction.InsertChecklist(state.activeBlockId))
+                                true
+                            } else false
                         }
                         Key.F -> {
                             if (!state.isSidebarOpen) {
-                                viewModel.toggleSidebar()
+                                viewModel.dispatch(WorkspaceAction.ToggleSidebar)
                             }
                             true
                         }
                         Key.S -> {
-                            viewModel.triggerManualSync()
+                            if (event.isShiftPressed) {
+                                viewModel.dispatch(WorkspaceAction.ToggleActiveParagraphStyle("strikethrough"))
+                            } else {
+                                viewModel.dispatch(WorkspaceAction.TriggerSync)
+                            }
                             true
                         }
                         else -> false
@@ -87,12 +102,7 @@ fun WorkspaceScreen(
                     Row(modifier = Modifier.fillMaxHeight()) {
                         HierarchySidebar(
                             state = state,
-                            onSelectNotebook = viewModel::selectNotebook,
-                            onSelectSection = viewModel::selectSection,
-                            onSelectPage = viewModel::selectPage,
-                            onSearchQueryChange = viewModel::setSearchQuery,
-                            onOpenDialog = viewModel::openDialog,
-                            onTriggerSync = viewModel::triggerManualSync,
+                            onAction = viewModel::dispatch,
                             modifier = Modifier.width(340.dp)
                         )
                         VerticalDivider()
@@ -101,32 +111,9 @@ fun WorkspaceScreen(
             }
 
             DocumentEditorPane(
-                notebook = state.activeNotebook,
-                section = state.activeSection,
-                page = state.activePage,
+                state = state,
                 isCompactMobile = isCompactMobile,
-                isSidebarOpen = state.isSidebarOpen,
-                onToggleSidebar = viewModel::toggleSidebar,
-                onOpenMobileHierarchy = { viewModel.setMobileHierarchySheetOpen(true) },
-                onUpdatePageTitle = viewModel::updateActivePageTitle,
-                onUpdateBlockText = viewModel::updateBlockText,
-                onToggleParagraphStyle = viewModel::toggleParagraphStyle,
-                onToggleChecklistItem = viewModel::toggleChecklistItem,
-                onAddChecklistItem = viewModel::addChecklistItem,
-                onDeleteBlock = viewModel::deleteBlock,
-                onInsertHeading = { viewModel.insertHeadingBlock(2) },
-                onInsertParagraph = viewModel::insertParagraphBlock,
-                onInsertChecklist = viewModel::insertChecklistBlock,
-                onInsertBulletList = { viewModel.insertBulletListBlock(false) },
-                onInsertTable = viewModel::insertTableBlock,
-                onInsertCallout = viewModel::insertCalloutBlock,
-                onInsertCode = viewModel::insertCodeBlock,
-                onUpdateHeadingLevel = viewModel::updateHeadingLevel,
-                onAddBulletListItem = viewModel::addBulletListItem,
-                onUpdateTableCell = viewModel::updateTableCell,
-                onAddTableRow = viewModel::addTableRow,
-                onTogglePin = viewModel::toggleActivePagePin,
-                onDeletePage = viewModel::deleteActivePage,
+                onAction = viewModel::dispatch,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -134,33 +121,29 @@ fun WorkspaceScreen(
         if (isCompactMobile && state.isMobileHierarchySheetOpen) {
             val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
             ModalBottomSheet(
-                onDismissRequest = { viewModel.setMobileHierarchySheetOpen(false) },
+                onDismissRequest = { viewModel.dispatch(WorkspaceAction.SetMobileHierarchySheetOpen(false)) },
                 sheetState = sheetState
             ) {
                 HierarchySidebar(
                     state = state,
-                    onSelectNotebook = viewModel::selectNotebook,
-                    onSelectSection = viewModel::selectSection,
-                    onSelectPage = { pageId ->
-                        coroutineScope.launch {
-                            sheetState.hide()
-                            viewModel.selectPage(pageId)
+                    onAction = { action ->
+                        if (action is WorkspaceAction.SelectPage) {
+                            coroutineScope.launch {
+                                sheetState.hide()
+                                viewModel.dispatch(action)
+                            }
+                        } else {
+                            viewModel.dispatch(action)
                         }
                     },
-                    onSearchQueryChange = viewModel::setSearchQuery,
-                    onOpenDialog = viewModel::openDialog,
-                    onTriggerSync = viewModel::triggerManualSync,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         }
 
         WorkspaceDialogsHost(
-            activeDialog = state.activeDialog,
-            onDismiss = viewModel::dismissDialog,
-            onCreateNotebook = viewModel::createNotebook,
-            onCreateSection = viewModel::createSection,
-            onCreatePage = viewModel::createPage
+            state = state,
+            onAction = viewModel::dispatch
         )
     }
 }

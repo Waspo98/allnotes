@@ -120,24 +120,53 @@ class SqlDelightNoteStore(
                 )
             }
 
-            // Insert pages with serialized blocks
+            // Insert pages in two passes so out-of-order subpages never trip FK checks
             for (page in snapshot.pages) {
                 val blocksJson = json.encodeToString(page.blocks)
                 queries.insertPage(
                     id = page.id,
                     sectionId = page.sectionId,
-                    parentPageId = page.parentPageId,
+                    parentPageId = null,
                     title = page.title,
                     blocksJson = blocksJson,
                     isPinned = if (page.isPinned) 1L else 0L,
                     updatedAtEpochMs = page.updatedAtEpochMs
                 )
             }
+            for (page in snapshot.pages) {
+                if (page.parentPageId != null) {
+                    queries.updatePageParent(
+                        parentPageId = page.parentPageId,
+                        updatedAtEpochMs = page.updatedAtEpochMs,
+                        id = page.id
+                    )
+                }
+            }
 
             // Update workspace revision metadata
             queries.updateMetaRevision(
                 revision = snapshot.revision,
                 updatedAtEpochMs = snapshot.pages.maxOfOrNull { it.updatedAtEpochMs } ?: 0L
+            )
+        }
+    }
+
+    override fun savePage(page: NotePage, revision: Long) {
+        database.transaction {
+            savePage(page)
+            queries.updateMetaRevision(
+                revision = revision,
+                updatedAtEpochMs = page.updatedAtEpochMs
+            )
+        }
+    }
+
+    override fun deletePage(pageId: String, revision: Long) {
+        database.transaction {
+            queries.deletePage(pageId)
+            queries.updateMetaRevision(
+                revision = revision,
+                updatedAtEpochMs = 0L
             )
         }
     }

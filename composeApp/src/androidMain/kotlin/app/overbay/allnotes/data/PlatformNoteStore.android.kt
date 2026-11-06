@@ -1,20 +1,22 @@
 package app.overbay.allnotes.data
 
-import android.content.Context
+import app.cash.sqldelight.db.SqlDriver
 import app.overbay.allnotes.db.AllNotesDatabase
+import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import java.io.File
 import kotlinx.serialization.json.Json
 
 /**
- * Global Android storage paths and application context holder.
+ * Global Android storage paths and SQLite driver provider.
+ * Avoids holding raw Android Context or Activity references in static singletons.
  */
 object AndroidStoragePaths {
     @Volatile
     var filesDirectory: File? = null
 
     @Volatile
-    var context: Context? = null
+    var driverFactory: (() -> SqlDriver)? = null
 }
 
 /**
@@ -53,7 +55,6 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             if (legacyFile != null && legacyFile.exists()) {
                 val legacySnapshot = json.decodeFromString<WorkspaceSnapshot>(legacyFile.readText())
                 sqlStore.saveSnapshot(legacySnapshot)
-                // Archive legacy JSON file
                 legacyFile.renameTo(File(legacyFile.parentFile, "allnotes_workspace_v1.json.migrated"))
                 return legacySnapshot
             }
@@ -69,6 +70,20 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             sqlStore.saveSnapshot(snapshot)
         } catch (_: Exception) {
             // Fail-safe local persistence
+        }
+    }
+
+    actual override fun savePage(page: NotePage, revision: Long) {
+        try {
+            sqlStore.savePage(page, revision)
+        } catch (_: Exception) {
+        }
+    }
+
+    actual override fun deletePage(pageId: String, revision: Long) {
+        try {
+            sqlStore.deletePage(pageId, revision)
+        } catch (_: Exception) {
         }
     }
 }

@@ -1,5 +1,6 @@
 package app.overbay.allnotes.data
 
+import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import kotlinx.browser.localStorage
 import kotlinx.serialization.encodeToString
@@ -27,5 +28,13 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
         } catch (_: Exception) {
             // Browser storage quota or private mode fallback
         }
+    }
+
+    actual override fun savePage(page: NotePage, revision: Long) {
+        super.savePage(page, revision)
+    }
+
+    actual override fun deletePage(pageId: String, revision: Long) {
+        super.deletePage(pageId, revision)
     }
 }

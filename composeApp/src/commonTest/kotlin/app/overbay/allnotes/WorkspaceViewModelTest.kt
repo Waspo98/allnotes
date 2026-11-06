@@ -433,4 +433,92 @@ class WorkspaceViewModelTest {
         assertEquals("New Callout Value", refreshed.blocks.filterIsInstance<DocumentBlock.Callout>().first().text)
         assertEquals("println(\"Hello AllNotes\")", refreshed.blocks.filterIsInstance<DocumentBlock.CodeSnippet>().first().code)
     }
+
+    // ========================================================
+    // 9. Full Hierarchy CRUD, Subpage Indenting & Recency Timestamps
+    // ========================================================
+
+    @Test
+    fun notebookAndSectionEditAndDeleteAndSubpageIndentingWork() {
+        val (vm, _) = createTestFixture()
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.CreateNotebook("Engineering", "Core", SectionAccentKey.TEAL))
+        assertEquals("Engineering", vm.uiState.value.activeNotebook?.title)
+
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.UpdateActiveNotebook("Engineering v2", "Updated", SectionAccentKey.VIOLET))
+        assertEquals("Engineering v2", vm.uiState.value.activeNotebook?.title)
+        assertEquals(SectionAccentKey.VIOLET, vm.uiState.value.activeNotebook?.accent)
+
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.CreateSection("API Specs", SectionAccentKey.ROSE))
+        assertEquals("API Specs", vm.uiState.value.activeSection?.title)
+
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.UpdateActiveSection("REST & Sync Specs", SectionAccentKey.AMBER))
+        assertEquals("REST & Sync Specs", vm.uiState.value.activeSection?.title)
+
+        // Create root page and nested subpage
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.CreatePage("Root Spec Page", asSubpageOfActive = false))
+        val rootPageId = vm.uiState.value.activePage!!.id
+        assertTrue(vm.uiState.value.activePage!!.updatedAtEpochMs > 0L)
+
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.CreatePage("Child Subpage", asSubpageOfActive = true))
+        val childPage = vm.uiState.value.activePage!!
+        assertEquals(rootPageId, childPage.parentPageId)
+
+        // Promote subpage back to root
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.TogglePageSubpageIndent(childPage.id))
+        assertEquals(null, vm.uiState.value.activePage?.parentPageId)
+    }
+
+    // ========================================================
+    // 10. Rich Block In-Place Mutations & Reordering
+    // ========================================================
+
+    @Test
+    fun richBlockInPlaceMutationsAndOrderingWork() {
+        val (vm, repo) = createTestFixture()
+        val sec = vm.uiState.value.activeSection!!
+        val page = repo.createPage(sec.id, "Rich Mutation Page")
+        vm.selectPage(page.id)
+
+        vm.insertChecklistBlock()
+        vm.insertBulletListBlock(isNumbered = false)
+        vm.insertTableBlock()
+        vm.insertCalloutBlock()
+        vm.insertCodeBlock()
+
+        val chk = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Checklist>().first()
+        vm.updateChecklistTitle(chk.id, "Sprint Tasks")
+        val firstChkItem = chk.items.first()
+        vm.updateChecklistItemText(chk.id, firstChkItem.id, "Edited Task 1")
+        assertEquals("Sprint Tasks", vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Checklist>().first().title)
+        assertEquals("Edited Task 1", vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Checklist>().first().items.first().text)
+
+        val bl = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.BulletList>().first()
+        vm.toggleBulletListKind(bl.id)
+        vm.updateBulletListItem(bl.id, 0, "Updated step 1")
+        val updatedBl = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.BulletList>().first()
+        assertTrue(updatedBl.isNumbered)
+        assertEquals("Updated step 1", updatedBl.items[0])
+
+        val tbl = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Table>().first()
+        vm.updateTableHeader(tbl.id, 0, "Renamed Header")
+        assertEquals("Renamed Header", vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Table>().first().headers[0])
+
+        val cal = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Callout>().first()
+        vm.updateCalloutTitle(cal.id, "Architecture Alert")
+        vm.updateCalloutTone(cal.id, CalloutTone.IMPORTANT)
+        val updatedCal = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Callout>().first()
+        assertEquals("Architecture Alert", updatedCal.title)
+        assertEquals(CalloutTone.IMPORTANT, updatedCal.tone)
+
+        val cod = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.CodeSnippet>().first()
+        vm.updateCodeLanguage(cod.id, "python")
+        assertEquals("python", vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.CodeSnippet>().first().language)
+
+        // Move code block up
+        val blocksBeforeMove = vm.uiState.value.activePage!!.blocks
+        val lastId = blocksBeforeMove.last().id
+        vm.moveBlock(lastId, -1)
+        val blocksAfterMove = vm.uiState.value.activePage!!.blocks
+        assertEquals(lastId, blocksAfterMove[blocksAfterMove.lastIndex - 1].id)
+    }
 }

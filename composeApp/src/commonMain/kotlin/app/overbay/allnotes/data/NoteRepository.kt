@@ -7,13 +7,16 @@ import app.overbay.allnotes.model.NoteSection
 import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.WorkspaceSnapshot
+import kotlin.time.TimeSource
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class NoteRepository(
     private val storage: NoteStorageBackend = PlatformNoteStore(),
-    private val syncProvider: SyncProvider = LocalLoopbackSyncProvider()
+    private var syncProvider: SyncProvider = LocalLoopbackSyncProvider()
 ) {
     private val _snapshot = MutableStateFlow(
         storage.loadSnapshot() ?: SampleWorkspaceFactory.createStarterSnapshot().also {
@@ -22,14 +25,33 @@ class NoteRepository(
     )
     val snapshot: StateFlow<WorkspaceSnapshot> = _snapshot.asStateFlow()
 
+    private val monotonicStart = TimeSource.Monotonic.markNow()
     private var idCounter = 1000L
+    private var lastEpochMs = 1762425000000L
 
-    private fun nextId(prefix: String): String {
+    @OptIn(ExperimentalUuidApi::class)
+    fun nextId(prefix: String): String {
         idCounter += 1
-        return "$prefix-${_snapshot.value.revision}-$idCounter"
+        val shortUuid = Uuid.random().toHexString().take(8)
+        return "$prefix-${_snapshot.value.revision}-$idCounter-$shortUuid"
     }
 
-    private fun commit(transform: (WorkspaceSnapshot) -> WorkspaceSnapshot) {
+    fun nextTimestampMs(): Long {
+        val currentMax = _snapshot.value.pages.maxOfOrNull { it.updatedAtEpochMs } ?: 0L
+        val elapsed = monotonicStart.elapsedNow().inWholeMilliseconds
+        val candidate = maxOf(1762425000000L + elapsed, currentMax + 1L, lastEpochMs + 1L)
+        lastEpochMs = candidate
+        return candidate
+    }
+
+    val currentSyncEndpoint: String
+        get() = syncProvider.endpointUrl
+
+    fun configureSyncProvider(provider: SyncProvider) {
+        syncProvider = provider
+    }
+
+    private fun commitFullSnapshot(transform: (WorkspaceSnapshot) -> WorkspaceSnapshot) {
         val updated = transform(_snapshot.value).let {
             it.copy(revision = it.revision + 1)
         }
@@ -37,21 +59,41 @@ class NoteRepository(
         storage.saveSnapshot(updated)
     }
 
+    private fun commitPageMutation(pageId: String, mutatePage: (NotePage) -> NotePage) {
+        val current = _snapshot.value
+        var mutatedTarget: NotePage? = null
+        val updatedPages = current.pages.map { page ->
+            if (page.id == pageId) {
+                mutatePage(page).also { mutatedTarget = it }
+            } else {
+                page
+            }
+        }
+        val target = mutatedTarget ?: return
+        val nextRev = current.revision + 1
+        val updated = current.copy(pages = updatedPages, revision = nextRev)
+        _snapshot.value = updated
+        storage.savePage(target, nextRev)
+    }
+
     fun createNotebook(title: String, subtitle: String, accent: SectionAccentKey): Notebook {
         val cleanTitle = title.trim().ifEmpty { "Untitled Notebook" }
+        val now = nextTimestampMs()
         val newNotebook = Notebook(
             id = nextId("nb"),
             title = cleanTitle,
             subtitle = subtitle.trim(),
             accent = accent,
-            sortOrder = _snapshot.value.notebooks.size
+            sortOrder = _snapshot.value.notebooks.size,
+            updatedAtEpochMs = now
         )
         val defaultSection = NoteSection(
             id = nextId("sec"),
             notebookId = newNotebook.id,
             title = "General Notes",
             accent = accent,
-            sortOrder = 0
+            sortOrder = 0,
+            updatedAtEpochMs = now
         )
         val starterPage = NotePage(
             id = nextId("page"),
@@ -63,9 +105,10 @@ class NoteRepository(
                     id = nextId("blk"),
                     text = "Start typing or add structured blocks below."
                 )
-            )
+            ),
+            updatedAtEpochMs = now
         )
-        commit { current ->
+        commitFullSnapshot { current ->
             current.copy(
                 notebooks = current.notebooks + newNotebook,
                 sections = current.sections + defaultSection,
@@ -75,14 +118,52 @@ class NoteRepository(
         return newNotebook
     }
 
+    fun updateNotebook(notebookId: String, title: String, subtitle: String, accent: SectionAccentKey) {
+        val cleanTitle = title.trim().ifEmpty { "Untitled Notebook" }
+        val now = nextTimestampMs()
+        commitFullSnapshot { current ->
+            current.copy(
+                notebooks = current.notebooks.map { nb ->
+                    if (nb.id == notebookId) {
+                        nb.copy(
+                            title = cleanTitle,
+                            subtitle = subtitle.trim(),
+                            accent = accent,
+                            updatedAtEpochMs = now
+                        )
+                    } else nb
+                }
+            )
+        }
+    }
+
+    fun deleteNotebook(notebookId: String) {
+        commitFullSnapshot { current ->
+            val remainingNotebooks = current.notebooks.filterNot { it.id == notebookId }
+            val removedSectionIds = current.sections.filter { it.notebookId == notebookId }.map { it.id }.toSet()
+            val remainingSections = current.sections.filterNot { it.notebookId == notebookId }
+            val remainingPages = current.pages.filterNot { it.sectionId in removedSectionIds }
+            current.copy(
+                notebooks = remainingNotebooks,
+                sections = remainingSections,
+                pages = remainingPages
+            )
+        }
+        if (_snapshot.value.notebooks.isEmpty()) {
+            createNotebook("AllNotes Workspace", "Default notebook", SectionAccentKey.INDIGO)
+        }
+    }
+
     fun createSection(notebookId: String, title: String, accent: SectionAccentKey): NoteSection {
         val cleanTitle = title.trim().ifEmpty { "New Section" }
+        val now = nextTimestampMs()
         val newSection = NoteSection(
             id = nextId("sec"),
             notebookId = notebookId,
             title = cleanTitle,
             accent = accent,
-            sortOrder = _snapshot.value.sections.count { it.notebookId == notebookId }
+            sortOrder = _snapshot.value.sections.count { it.notebookId == notebookId },
+            updatedAtEpochMs = now
         )
         val firstPage = NotePage(
             id = nextId("page"),
@@ -93,9 +174,10 @@ class NoteRepository(
                     id = nextId("blk"),
                     text = ""
                 )
-            )
+            ),
+            updatedAtEpochMs = now
         )
-        commit { current ->
+        commitFullSnapshot { current ->
             current.copy(
                 sections = current.sections + newSection,
                 pages = current.pages + firstPage
@@ -104,88 +186,117 @@ class NoteRepository(
         return newSection
     }
 
-    fun createPage(sectionId: String, title: String = "Untitled Page"): NotePage {
+    fun updateSection(sectionId: String, title: String, accent: SectionAccentKey) {
+        val cleanTitle = title.trim().ifEmpty { "Untitled Section" }
+        val now = nextTimestampMs()
+        commitFullSnapshot { current ->
+            current.copy(
+                sections = current.sections.map { sec ->
+                    if (sec.id == sectionId) {
+                        sec.copy(title = cleanTitle, accent = accent, updatedAtEpochMs = now)
+                    } else sec
+                }
+            )
+        }
+    }
+
+    fun deleteSection(sectionId: String) {
+        commitFullSnapshot { current ->
+            current.copy(
+                sections = current.sections.filterNot { it.id == sectionId },
+                pages = current.pages.filterNot { it.sectionId == sectionId }
+            )
+        }
+    }
+
+    fun createPage(sectionId: String, title: String = "Untitled Page", parentPageId: String? = null): NotePage {
+        val now = nextTimestampMs()
         val newPage = NotePage(
             id = nextId("page"),
             sectionId = sectionId,
+            parentPageId = parentPageId,
             title = title.trim().ifEmpty { "Untitled Page" },
             blocks = listOf(
                 DocumentBlock.Paragraph(
                     id = nextId("blk"),
                     text = ""
                 )
-            )
+            ),
+            updatedAtEpochMs = now
         )
-        commit { current ->
-            current.copy(pages = listOf(newPage) + current.pages)
-        }
+        val current = _snapshot.value
+        val nextRev = current.revision + 1
+        val updated = current.copy(pages = listOf(newPage) + current.pages, revision = nextRev)
+        _snapshot.value = updated
+        storage.savePage(newPage, nextRev)
         return newPage
     }
 
     fun deletePage(pageId: String) {
-        commit { current ->
-            current.copy(pages = current.pages.filterNot { it.id == pageId })
+        val current = _snapshot.value
+        if (current.pages.none { it.id == pageId }) return
+        val nextRev = current.revision + 1
+        val updatedPages = current.pages
+            .filterNot { it.id == pageId }
+            .map { page ->
+                if (page.parentPageId == pageId) page.copy(parentPageId = null) else page
+            }
+        val updated = current.copy(pages = updatedPages, revision = nextRev)
+        _snapshot.value = updated
+        storage.deletePage(pageId, nextRev)
+    }
+
+    fun updatePageParent(pageId: String, parentPageId: String?) {
+        if (pageId == parentPageId) return
+        val now = nextTimestampMs()
+        commitPageMutation(pageId) { page ->
+            page.copy(parentPageId = parentPageId, updatedAtEpochMs = now)
         }
     }
 
     fun togglePagePin(pageId: String) {
-        commit { current ->
-            current.copy(
-                pages = current.pages.map { page ->
-                    if (page.id == pageId) page.copy(isPinned = !page.isPinned) else page
-                }
-            )
+        val now = nextTimestampMs()
+        commitPageMutation(pageId) { page ->
+            page.copy(isPinned = !page.isPinned, updatedAtEpochMs = now)
         }
     }
 
     fun updatePageTitle(pageId: String, newTitle: String) {
-        commit { current ->
-            current.copy(
-                pages = current.pages.map { page ->
-                    if (page.id == pageId) page.copy(title = newTitle) else page
-                }
-            )
+        val now = nextTimestampMs()
+        commitPageMutation(pageId) { page ->
+            page.copy(title = newTitle, updatedAtEpochMs = now)
         }
     }
 
     fun updatePageBlocks(pageId: String, blocks: List<DocumentBlock>) {
-        commit { current ->
-            current.copy(
-                pages = current.pages.map { page ->
-                    if (page.id == pageId) page.copy(blocks = blocks) else page
-                }
-            )
+        val now = nextTimestampMs()
+        commitPageMutation(pageId) { page ->
+            page.copy(blocks = blocks, updatedAtEpochMs = now)
         }
     }
 
     fun appendBlock(pageId: String, block: DocumentBlock) {
-        commit { current ->
-            current.copy(
-                pages = current.pages.map { page ->
-                    if (page.id == pageId) page.copy(blocks = page.blocks + block) else page
-                }
-            )
+        val now = nextTimestampMs()
+        commitPageMutation(pageId) { page ->
+            page.copy(blocks = page.blocks + block, updatedAtEpochMs = now)
         }
     }
 
     fun toggleChecklistItem(pageId: String, blockId: String, itemId: String) {
-        commit { current ->
-            current.copy(
-                pages = current.pages.map { page ->
-                    if (page.id != pageId) return@map page
-                    page.copy(
-                        blocks = page.blocks.map { block ->
-                            if (block.id == blockId && block is DocumentBlock.Checklist) {
-                                block.copy(
-                                    items = block.items.map { item ->
-                                        if (item.id == itemId) item.copy(isChecked = !item.isChecked) else item
-                                    }
-                                )
-                            } else {
-                                block
+        val now = nextTimestampMs()
+        commitPageMutation(pageId) { page ->
+            page.copy(
+                updatedAtEpochMs = now,
+                blocks = page.blocks.map { block ->
+                    if (block.id == blockId && block is DocumentBlock.Checklist) {
+                        block.copy(
+                            items = block.items.map { item ->
+                                if (item.id == itemId) item.copy(isChecked = !item.isChecked) else item
                             }
-                        }
-                    )
+                        )
+                    } else {
+                        block
+                    }
                 }
             )
         }
@@ -195,19 +306,16 @@ class NoteRepository(
         val cleanText = text.trim()
         if (cleanText.isEmpty()) return
         val newItem = ChecklistItem(id = nextId("chk"), text = cleanText, isChecked = false)
-        commit { current ->
-            current.copy(
-                pages = current.pages.map { page ->
-                    if (page.id != pageId) return@map page
-                    page.copy(
-                        blocks = page.blocks.map { block ->
-                            if (block.id == blockId && block is DocumentBlock.Checklist) {
-                                block.copy(items = block.items + newItem)
-                            } else {
-                                block
-                            }
-                        }
-                    )
+        val now = nextTimestampMs()
+        commitPageMutation(pageId) { page ->
+            page.copy(
+                updatedAtEpochMs = now,
+                blocks = page.blocks.map { block ->
+                    if (block.id == blockId && block is DocumentBlock.Checklist) {
+                        block.copy(items = block.items + newItem)
+                    } else {
+                        block
+                    }
                 }
             )
         }

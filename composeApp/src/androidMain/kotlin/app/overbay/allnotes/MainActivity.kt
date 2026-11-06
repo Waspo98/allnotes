@@ -23,8 +23,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        AndroidStoragePaths.filesDirectory = applicationContext.filesDir
-        AndroidStoragePaths.context = applicationContext
+        val appCtx = applicationContext
+        AndroidStoragePaths.filesDirectory = appCtx.filesDir
+        AndroidStoragePaths.driverFactory = {
+            app.overbay.allnotes.data.DatabaseDriverFactory.createAndroidDriver(appCtx)
+        }
         installCrashLogger()
         enableEdgeToEdge()
 

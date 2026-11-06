@@ -1,6 +1,7 @@
 package app.overbay.allnotes.server
 
 import app.overbay.allnotes.data.SampleWorkspaceFactory
+import app.overbay.allnotes.data.WorkspaceMerger
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
@@ -72,13 +73,17 @@ class AllNotesServer(
                     try {
                         val incoming = serverJson.decodeFromString<WorkspaceSnapshot>(body)
                         val encoded = synchronized(snapshotLock) {
-                            val currentRevision = if (snapshotFile.exists()) {
+                            val existing = if (snapshotFile.exists()) {
                                 try {
-                                    serverJson.decodeFromString<WorkspaceSnapshot>(snapshotFile.readText()).revision
-                                } catch (_: Exception) { 0L }
-                            } else 0L
-                            val bumped = incoming.copy(revision = maxOf(incoming.revision, currentRevision) + 1)
-                            val serialized = serverJson.encodeToString(bumped)
+                                    serverJson.decodeFromString<WorkspaceSnapshot>(snapshotFile.readText())
+                                } catch (_: Exception) { null }
+                            } else null
+                            val merged = if (existing != null) {
+                                WorkspaceMerger.merge(existing, incoming)
+                            } else {
+                                incoming.copy(revision = maxOf(incoming.revision, 0L) + 1)
+                            }
+                            val serialized = serverJson.encodeToString(merged)
                             atomicWriteSnapshot(snapshotFile, serialized)
                             serialized
                         }

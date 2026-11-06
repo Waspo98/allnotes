@@ -1,6 +1,7 @@
 package app.overbay.allnotes.data
 
 import app.overbay.allnotes.db.AllNotesDatabase
+import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import java.io.File
 import kotlinx.serialization.json.Json
@@ -55,6 +56,20 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             sqlStore.saveSnapshot(snapshot)
         } catch (_: Exception) {
             // Fail-safe background persistence
+        }
+    }
+
+    actual override fun savePage(page: NotePage, revision: Long) {
+        try {
+            sqlStore.savePage(page, revision)
+        } catch (_: Exception) {
+        }
+    }
+
+    actual override fun deletePage(pageId: String, revision: Long) {
+        try {
+            sqlStore.deletePage(pageId, revision)
+        } catch (_: Exception) {
         }
     }
 }

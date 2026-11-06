@@ -3,13 +3,14 @@ package app.overbay.allnotes.ui.theme
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import app.overbay.allnotes.model.SectionAccentKey
 
@@ -85,49 +86,61 @@ private val DarkColors = darkColorScheme(
     scrim = Color(0xFF000000)
 )
 
+@Immutable
+data class AccentPalette(
+    val container: Color,
+    val onContainer: Color,
+    val accent: Color
+)
+
+private val LocalIsDarkTheme = staticCompositionLocalOf { false }
+
+private fun SectionAccentKey.resolvePalette(isDark: Boolean): AccentPalette = when (this) {
+    SectionAccentKey.INDIGO -> if (isDark) {
+        AccentPalette(container = Color(0xFF233288), onContainer = Color(0xFFDDE1FF), accent = Color(0xFF9FA8DA))
+    } else {
+        AccentPalette(container = Color(0xFFDDE1FF), onContainer = Color(0xFF001258), accent = Color(0xFF3949AB))
+    }
+    SectionAccentKey.EMERALD -> if (isDark) {
+        AccentPalette(container = Color(0xFF0D5238), onContainer = Color(0xFFA7F3D0), accent = Color(0xFF34D399))
+    } else {
+        AccentPalette(container = Color(0xFFD1FAE5), onContainer = Color(0xFF064E3B), accent = Color(0xFF059669))
+    }
+    SectionAccentKey.AMBER -> if (isDark) {
+        AccentPalette(container = Color(0xFF633B06), onContainer = Color(0xFFFDE68A), accent = Color(0xFFFBBF24))
+    } else {
+        AccentPalette(container = Color(0xFFFEF3C7), onContainer = Color(0xFF78350F), accent = Color(0xFFD97706))
+    }
+    SectionAccentKey.ROSE -> if (isDark) {
+        AccentPalette(container = Color(0xFF6E1433), onContainer = Color(0xFFFFD9E2), accent = Color(0xFFFB7185))
+    } else {
+        AccentPalette(container = Color(0xFFFFE4E6), onContainer = Color(0xFF881337), accent = Color(0xFFE11D48))
+    }
+    SectionAccentKey.TEAL -> if (isDark) {
+        AccentPalette(container = Color(0xFF0A4F5C), onContainer = Color(0xFFCCFBF1), accent = Color(0xFF2DD4BF))
+    } else {
+        AccentPalette(container = Color(0xFFCCFBF1), onContainer = Color(0xFF134E4A), accent = Color(0xFF0D9488))
+    }
+    SectionAccentKey.VIOLET -> if (isDark) {
+        AccentPalette(container = Color(0xFF46237A), onContainer = Color(0xFFEDE9FE), accent = Color(0xFFA78BFA))
+    } else {
+        AccentPalette(container = Color(0xFFEDE9FE), onContainer = Color(0xFF4C1D95), accent = Color(0xFF7C3AED))
+    }
+}
+
 fun <T> allNotesSpring() = spring<T>(
     dampingRatio = Spring.DampingRatioLowBouncy,
     stiffness = Spring.StiffnessLow
 )
 
 @Composable
-fun SectionAccentKey.containerColor(): Color {
-    val scheme: ColorScheme = MaterialTheme.colorScheme
-    return when (this) {
-        SectionAccentKey.INDIGO -> scheme.primaryContainer
-        SectionAccentKey.EMERALD -> scheme.tertiaryContainer
-        SectionAccentKey.AMBER -> scheme.secondaryContainer
-        SectionAccentKey.ROSE -> scheme.errorContainer
-        SectionAccentKey.TEAL -> scheme.tertiaryContainer
-        SectionAccentKey.VIOLET -> scheme.primaryContainer
-    }
-}
+fun SectionAccentKey.containerColor(): Color = resolvePalette(LocalIsDarkTheme.current).container
 
 @Composable
-fun SectionAccentKey.contentColor(): Color {
-    val scheme: ColorScheme = MaterialTheme.colorScheme
-    return when (this) {
-        SectionAccentKey.INDIGO -> scheme.onPrimaryContainer
-        SectionAccentKey.EMERALD -> scheme.onTertiaryContainer
-        SectionAccentKey.AMBER -> scheme.onSecondaryContainer
-        SectionAccentKey.ROSE -> scheme.onErrorContainer
-        SectionAccentKey.TEAL -> scheme.onTertiaryContainer
-        SectionAccentKey.VIOLET -> scheme.onPrimaryContainer
-    }
-}
+fun SectionAccentKey.contentColor(): Color = resolvePalette(LocalIsDarkTheme.current).onContainer
 
 @Composable
-fun SectionAccentKey.accentColor(): Color {
-    val scheme: ColorScheme = MaterialTheme.colorScheme
-    return when (this) {
-        SectionAccentKey.INDIGO -> scheme.primary
-        SectionAccentKey.EMERALD -> scheme.tertiary
-        SectionAccentKey.AMBER -> scheme.secondary
-        SectionAccentKey.ROSE -> scheme.error
-        SectionAccentKey.TEAL -> scheme.inversePrimary
-        SectionAccentKey.VIOLET -> scheme.primary
-    }
-}
+fun SectionAccentKey.accentColor(): Color = resolvePalette(LocalIsDarkTheme.current).accent
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -135,8 +148,10 @@ fun AllNotesTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    MaterialExpressiveTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        content = content
-    )
+    CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
+        MaterialExpressiveTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            content = content
+        )
+    }
 }
