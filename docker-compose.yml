@@ -1,0 +1,20 @@
+services:
+  allnotes:
+    build: .
+    container_name: allnotes
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+      - PORT=8094
+      - DATA_DIR=/data
+      - WEB_DIST_DIR=/app/web
+    volumes:
+      - ./data:/data
+    ports:
+      - "8094:8094"
+    networks:
+      - web_proxy
+
+networks:
+  web_proxy:
+    external: true
