@@ -35,7 +35,10 @@ class WorkspaceViewModelAdversarialTest {
     private fun createFixture(): Pair<WorkspaceViewModel, NoteRepository> {
         val storage = InMemoryAdversarialStorage()
         val repo = NoteRepository(storage = storage)
-        val vm = WorkspaceViewModel(repository = repo)
+        val vm = WorkspaceViewModel(
+            repository = repo,
+            coroutineDispatcher = Dispatchers.Unconfined
+        )
         return Pair(vm, repo)
     }
 

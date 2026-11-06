@@ -8,6 +8,7 @@ import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import app.overbay.allnotes.ui.workspace.WorkspaceViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,7 +28,10 @@ class WorkspaceViewModelTest {
     private fun createTestFixture(): Pair<WorkspaceViewModel, NoteRepository> {
         val storage = InMemoryNoteStorage()
         val repo = NoteRepository(storage = storage)
-        val vm = WorkspaceViewModel(repository = repo)
+        val vm = WorkspaceViewModel(
+            repository = repo,
+            coroutineDispatcher = Dispatchers.Unconfined
+        )
         return Pair(vm, repo)
     }
 

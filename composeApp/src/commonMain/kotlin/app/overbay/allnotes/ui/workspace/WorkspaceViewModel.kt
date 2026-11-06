@@ -9,6 +9,8 @@ import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.NoteSection
 import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.SectionAccentKey
+import app.overbay.allnotes.model.WorkspaceSnapshot
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -87,7 +89,8 @@ private fun blockContainsQuery(block: DocumentBlock, query: String): Boolean = w
 
 class WorkspaceViewModel(
     private val repository: NoteRepository = NoteRepository(),
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val coroutineDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + coroutineDispatcher)
 ) {
     private val _uiState = MutableStateFlow( buildInitialState() )
     val uiState: StateFlow<WorkspaceUiState> = _uiState.asStateFlow()
@@ -96,8 +99,8 @@ class WorkspaceViewModel(
 
     init {
         scope.launch {
-            repository.snapshot.collect {
-                syncStateFromRepository()
+            repository.snapshot.collect { incoming ->
+                syncStateFromRepository(incomingSnapshot = incoming)
             }
         }
     }
@@ -121,54 +124,84 @@ class WorkspaceViewModel(
     fun syncStateFromRepository(
         targetNotebookId: String? = null,
         targetSectionId: String? = null,
-        targetPageId: String? = null
+        targetPageId: String? = null,
+        incomingSnapshot: WorkspaceSnapshot? = null
     ) {
-        val snap = repository.snapshot.value
+        val snap = incomingSnapshot ?: repository.snapshot.value
         _uiState.update { current ->
+            // Prevent stale background emissions from overwriting state that has already
+            // advanced to a higher revision via newer mutations or synchronous operations.
+            if (snap.revision < current.revision && targetNotebookId == null && targetSectionId == null && targetPageId == null) {
+                return@update current
+            }
+
+            // If explicit navigation targets are provided, ensure we resolve them against
+            // the freshest repository snapshot available.
+            val effectiveSnap = if (snap.revision < current.revision) repository.snapshot.value else snap
+
             var nbId = targetNotebookId ?: current.selectedNotebookId
             var secId = targetSectionId ?: current.selectedSectionId
             var pageId = targetPageId ?: current.selectedPageId
 
             if (targetPageId != null) {
-                val matchedPage = snap.pages.firstOrNull { it.id == targetPageId }
+                val matchedPage = effectiveSnap.pages.firstOrNull { it.id == targetPageId }
                 if (matchedPage != null) {
                     pageId = matchedPage.id
                     secId = matchedPage.sectionId
-                    val matchedSec = snap.sections.firstOrNull { it.id == secId }
+                    val matchedSec = effectiveSnap.sections.firstOrNull { it.id == secId }
                     if (matchedSec != null) {
                         nbId = matchedSec.notebookId
                     }
                 }
             } else if (targetSectionId != null) {
-                val matchedSec = snap.sections.firstOrNull { it.id == targetSectionId }
+                val matchedSec = effectiveSnap.sections.firstOrNull { it.id == targetSectionId }
                 if (matchedSec != null) {
                     secId = matchedSec.id
                     nbId = matchedSec.notebookId
-                    pageId = snap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
+                    pageId = effectiveSnap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
                 }
             } else if (targetNotebookId != null) {
-                val matchedNb = snap.notebooks.firstOrNull { it.id == targetNotebookId }
+                val matchedNb = effectiveSnap.notebooks.firstOrNull { it.id == targetNotebookId }
                 if (matchedNb != null) {
                     nbId = matchedNb.id
-                    secId = snap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
-                    pageId = snap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
+                    secId = effectiveSnap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
+                    pageId = effectiveSnap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
+                }
+            } else {
+                // When syncing without explicit target, retain existing active page's section and notebook hierarchy
+                if (pageId.isNotEmpty()) {
+                    val matchedPage = effectiveSnap.pages.firstOrNull { it.id == pageId }
+                    if (matchedPage != null) {
+                        secId = matchedPage.sectionId
+                        val matchedSec = effectiveSnap.sections.firstOrNull { it.id == secId }
+                        if (matchedSec != null) {
+                            nbId = matchedSec.notebookId
+                        }
+                    }
                 }
             }
 
-            if (snap.notebooks.none { it.id == nbId }) {
-                nbId = snap.notebooks.firstOrNull()?.id.orEmpty()
+            if (effectiveSnap.notebooks.none { it.id == nbId }) {
+                nbId = effectiveSnap.notebooks.firstOrNull()?.id.orEmpty()
             }
-            if (snap.sections.none { it.id == secId && it.notebookId == nbId }) {
-                secId = snap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
+            if (effectiveSnap.sections.none { it.id == secId && it.notebookId == nbId }) {
+                secId = effectiveSnap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
             }
-            if (snap.pages.none { it.id == pageId && it.sectionId == secId }) {
-                pageId = snap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
+            if (effectiveSnap.pages.none { it.id == pageId && it.sectionId == secId }) {
+                // If pageId still exists elsewhere in the snapshot, preserve its hierarchy
+                val pageElsewhere = effectiveSnap.pages.firstOrNull { it.id == pageId }
+                if (pageElsewhere != null) {
+                    secId = pageElsewhere.sectionId
+                    nbId = effectiveSnap.sections.firstOrNull { it.id == secId }?.notebookId ?: nbId
+                } else {
+                    pageId = effectiveSnap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
+                }
             }
 
             val retainedActiveBlockId = if (pageId != current.selectedPageId) {
                 null
             } else {
-                val activePageBlocks = snap.pages.firstOrNull { it.id == pageId }?.blocks.orEmpty()
+                val activePageBlocks = effectiveSnap.pages.firstOrNull { it.id == pageId }?.blocks.orEmpty()
                 if (activePageBlocks.any { it.id == current.activeBlockId }) {
                     current.activeBlockId
                 } else {
@@ -177,14 +210,14 @@ class WorkspaceViewModel(
             }
 
             current.copy(
-                notebooks = snap.notebooks,
-                sections = snap.sections,
-                pages = snap.pages,
+                notebooks = effectiveSnap.notebooks,
+                sections = effectiveSnap.sections,
+                pages = effectiveSnap.pages,
                 selectedNotebookId = nbId,
                 selectedSectionId = secId,
                 selectedPageId = pageId,
                 activeBlockId = retainedActiveBlockId,
-                revision = snap.revision
+                revision = maxOf(effectiveSnap.revision, current.revision)
             )
         }
     }
