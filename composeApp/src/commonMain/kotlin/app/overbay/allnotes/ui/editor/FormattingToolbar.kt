@@ -26,6 +26,7 @@ fun WordStyleFormattingRibbon(
     onInsertHeading: () -> Unit,
     onInsertParagraph: () -> Unit,
     onInsertChecklist: () -> Unit,
+    onInsertBulletList: () -> Unit = {},
     onInsertTable: () -> Unit,
     onInsertCallout: () -> Unit,
     onInsertCode: () -> Unit,
@@ -59,6 +60,10 @@ fun WordStyleFormattingRibbon(
                 label = { Text("+ Checklist") }
             )
             AssistChip(
+                onClick = onInsertBulletList,
+                label = { Text("+ Bullet List") }
+            )
+            AssistChip(
                 onClick = onInsertTable,
                 label = { Text("+ Table") }
             )
@@ -89,6 +94,7 @@ fun MobileExpressiveFloatingToolbar(
     onInsertHeading: () -> Unit,
     onInsertParagraph: () -> Unit,
     onInsertChecklist: () -> Unit,
+    onInsertBulletList: () -> Unit = {},
     onInsertTable: () -> Unit,
     onInsertCallout: () -> Unit,
     modifier: Modifier = Modifier
@@ -116,6 +122,10 @@ fun MobileExpressiveFloatingToolbar(
             AssistChip(
                 onClick = onInsertChecklist,
                 label = { Text("To-Do") }
+            )
+            AssistChip(
+                onClick = onInsertBulletList,
+                label = { Text("List") }
             )
             AssistChip(
                 onClick = onInsertTable,

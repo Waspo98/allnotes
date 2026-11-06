@@ -24,6 +24,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AndroidStoragePaths.filesDirectory = applicationContext.filesDir
+        AndroidStoragePaths.context = applicationContext
         enableEdgeToEdge()
         setContent {
             Surface(

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.NoteSection
 import app.overbay.allnotes.model.Notebook
+import app.overbay.allnotes.ui.theme.accentColor
 import app.overbay.allnotes.ui.theme.allNotesSpring
 import app.overbay.allnotes.ui.theme.containerColor
 import app.overbay.allnotes.ui.theme.contentColor
@@ -188,7 +189,8 @@ fun HierarchySidebar(
                     PageHierarchyItem(
                         page = page,
                         isSelected = page.id == state.activePage?.id,
-                        onClick = { onSelectPage(page.id) }
+                        onClick = { onSelectPage(page.id) },
+                        modifier = Modifier.animateItem(placementSpec = allNotesSpring())
                     )
                 }
             }
@@ -202,6 +204,14 @@ private fun NotebookPill(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val bg by animateColorAsState(
+        targetValue = if (isSelected) notebook.accent.containerColor() else MaterialTheme.colorScheme.surfaceContainer,
+        animationSpec = allNotesSpring()
+    )
+    val fg by animateColorAsState(
+        targetValue = if (isSelected) notebook.accent.contentColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = allNotesSpring()
+    )
     FilterChip(
         selected = isSelected,
         onClick = onClick,
@@ -214,8 +224,10 @@ private fun NotebookPill(
             )
         },
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = notebook.accent.containerColor(),
-            selectedLabelColor = notebook.accent.contentColor()
+            containerColor = bg,
+            labelColor = fg,
+            selectedContainerColor = bg,
+            selectedLabelColor = fg
         )
     )
 }
@@ -251,7 +263,7 @@ private fun SectionTabChip(
                 modifier = Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(fg)
+                    .background(section.accent.accentColor())
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -267,7 +279,8 @@ private fun SectionTabChip(
 private fun PageHierarchyItem(
     page: NotePage,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val containerColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
@@ -285,7 +298,7 @@ private fun PageHierarchyItem(
         color = containerColor,
         contentColor = contentColor,
         shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier

@@ -7,6 +7,7 @@ services:
       - TZ=America/Chicago
       - PORT=8094
       - DATA_DIR=/data
+      - WEB_DIR=/app/web
       - WEB_DIST_DIR=/app/web
     volumes:
       - ./data:/data

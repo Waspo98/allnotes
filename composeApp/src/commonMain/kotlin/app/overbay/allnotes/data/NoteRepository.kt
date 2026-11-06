@@ -214,6 +214,22 @@ class NoteRepository(
     }
 
     suspend fun syncWithServer(): Result<WorkspaceSnapshot> {
-        return syncProvider.pushSnapshot(_snapshot.value)
+        val result = syncProvider.pushSnapshot(_snapshot.value)
+        result.onSuccess { acknowledged ->
+            _snapshot.value = acknowledged
+            storage.saveSnapshot(acknowledged)
+        }
+        return result
+    }
+
+    suspend fun pullFromServer(): Result<WorkspaceSnapshot> {
+        val result = syncProvider.pullSnapshot()
+        result.onSuccess { remote ->
+            if (remote.revision > _snapshot.value.revision) {
+                _snapshot.value = remote
+                storage.saveSnapshot(remote)
+            }
+        }
+        return result
     }
 }

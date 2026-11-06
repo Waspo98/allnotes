@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -25,10 +26,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.NoteSection
 import app.overbay.allnotes.model.Notebook
+import app.overbay.allnotes.ui.theme.allNotesSpring
 import app.overbay.allnotes.ui.theme.containerColor
 import app.overbay.allnotes.ui.theme.contentColor
 
@@ -55,7 +58,12 @@ fun DocumentEditorPane(
     onInsertCode: () -> Unit,
     onTogglePin: () -> Unit,
     onDeletePage: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onInsertBulletList: () -> Unit = {},
+    onUpdateHeadingLevel: (String, Int) -> Unit = { _, _ -> },
+    onAddBulletListItem: (String, String) -> Unit = { _, _ -> },
+    onUpdateTableCell: (String, Int, Int, String) -> Unit = { _, _, _, _ -> },
+    onAddTableRow: (String) -> Unit = {}
 ) {
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -77,6 +85,7 @@ fun DocumentEditorPane(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f, fill = false),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -85,8 +94,11 @@ fun DocumentEditorPane(
                                 Text(if (isSidebarOpen) "Hide Sidebar" else "Show Sidebar")
                             }
                         } else {
-                            TextButton(onClick = onOpenMobileHierarchy) {
-                                Text("Browse Hierarchy")
+                            FilledTonalButton(
+                                onClick = onOpenMobileHierarchy,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Hierarchy", style = MaterialTheme.typography.labelMedium)
                             }
                         }
 
@@ -94,23 +106,28 @@ fun DocumentEditorPane(
                             Surface(
                                 color = section.accent.containerColor(),
                                 contentColor = section.accent.contentColor(),
-                                shape = RoundedCornerShape(10.dp)
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f, fill = false)
                             ) {
                                 Text(
                                     text = "${notebook.title}  ›  ${section.title}",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                 )
                             }
                         }
                     }
 
-                    Text(
-                        text = if (isCompactMobile) "Mobile Single-Screen Fit" else "Word Studio View",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (!isCompactMobile) {
+                        Text(
+                            text = "Word Studio View",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -121,6 +138,7 @@ fun DocumentEditorPane(
                         onInsertHeading = onInsertHeading,
                         onInsertParagraph = onInsertParagraph,
                         onInsertChecklist = onInsertChecklist,
+                        onInsertBulletList = onInsertBulletList,
                         onInsertTable = onInsertTable,
                         onInsertCallout = onInsertCallout,
                         onInsertCode = onInsertCode,
@@ -182,7 +200,12 @@ fun DocumentEditorPane(
                                     onToggleParagraphStyle = { style -> onToggleParagraphStyle(block.id, style) },
                                     onToggleChecklistItem = { itemId -> onToggleChecklistItem(block.id, itemId) },
                                     onAddChecklistItem = { text -> onAddChecklistItem(block.id, text) },
-                                    onDeleteBlock = { onDeleteBlock(block.id) }
+                                    onDeleteBlock = { onDeleteBlock(block.id) },
+                                    modifier = Modifier.animateItem(placementSpec = allNotesSpring()),
+                                    onUpdateHeadingLevel = { lvl -> onUpdateHeadingLevel(block.id, lvl) },
+                                    onAddBulletListItem = { text -> onAddBulletListItem(block.id, text) },
+                                    onUpdateTableCell = { r, c, txt -> onUpdateTableCell(block.id, r, c, txt) },
+                                    onAddTableRow = { onAddTableRow(block.id) }
                                 )
                             }
                         }
@@ -196,6 +219,7 @@ fun DocumentEditorPane(
                     onInsertHeading = onInsertHeading,
                     onInsertParagraph = onInsertParagraph,
                     onInsertChecklist = onInsertChecklist,
+                    onInsertBulletList = onInsertBulletList,
                     onInsertTable = onInsertTable,
                     onInsertCallout = onInsertCallout,
                     modifier = Modifier

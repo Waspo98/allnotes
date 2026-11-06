@@ -26,6 +26,10 @@ private val LightColors = lightColorScheme(
     onTertiary = Color(0xFFFFFFFF),
     tertiaryContainer = Color(0xFF9EF2E2),
     onTertiaryContainer = Color(0xFF00201B),
+    error = Color(0xFFBA1A1A),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
     background = Color(0xFFFAF8FF),
     onBackground = Color(0xFF1A1B21),
     surface = Color(0xFFFAF8FF),
@@ -37,8 +41,12 @@ private val LightColors = lightColorScheme(
     surfaceContainer = Color(0xFFEEEDF4),
     surfaceContainerHigh = Color(0xFFE8E7EF),
     surfaceContainerHighest = Color(0xFFE3E1E9),
+    inverseSurface = Color(0xFF2F3036),
+    inverseOnSurface = Color(0xFFF1F0F7),
+    inversePrimary = Color(0xFFB8C3FF),
     outline = Color(0xFF767680),
-    outlineVariant = Color(0xFFC6C5D0)
+    outlineVariant = Color(0xFFC6C5D0),
+    scrim = Color(0xFF000000)
 )
 
 private val DarkColors = darkColorScheme(
@@ -54,6 +62,10 @@ private val DarkColors = darkColorScheme(
     onTertiary = Color(0xFF003730),
     tertiaryContainer = Color(0xFF005046),
     onTertiaryContainer = Color(0xFF9EF2E2),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
     background = Color(0xFF121318),
     onBackground = Color(0xFFE3E1E9),
     surface = Color(0xFF121318),
@@ -65,8 +77,12 @@ private val DarkColors = darkColorScheme(
     surfaceContainer = Color(0xFF1E1F25),
     surfaceContainerHigh = Color(0xFF292A30),
     surfaceContainerHighest = Color(0xFF34343B),
+    inverseSurface = Color(0xFFE3E1E9),
+    inverseOnSurface = Color(0xFF2F3036),
+    inversePrimary = Color(0xFF3949AB),
     outline = Color(0xFF90909A),
-    outlineVariant = Color(0xFF45464F)
+    outlineVariant = Color(0xFF45464F),
+    scrim = Color(0xFF000000)
 )
 
 fun <T> allNotesSpring() = spring<T>(
@@ -97,6 +113,19 @@ fun SectionAccentKey.contentColor(): Color {
         SectionAccentKey.ROSE -> scheme.onErrorContainer
         SectionAccentKey.TEAL -> scheme.onTertiaryContainer
         SectionAccentKey.VIOLET -> scheme.onPrimaryContainer
+    }
+}
+
+@Composable
+fun SectionAccentKey.accentColor(): Color {
+    val scheme: ColorScheme = MaterialTheme.colorScheme
+    return when (this) {
+        SectionAccentKey.INDIGO -> scheme.primary
+        SectionAccentKey.EMERALD -> scheme.tertiary
+        SectionAccentKey.AMBER -> scheme.secondary
+        SectionAccentKey.ROSE -> scheme.error
+        SectionAccentKey.TEAL -> scheme.inversePrimary
+        SectionAccentKey.VIOLET -> scheme.primary
     }
 }
 

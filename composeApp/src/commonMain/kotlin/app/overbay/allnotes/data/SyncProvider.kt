@@ -11,13 +11,21 @@ enum class SyncStatus(val label: String) {
 
 interface SyncProvider {
     val endpointUrl: String
+    suspend fun pullSnapshot(): Result<WorkspaceSnapshot>
     suspend fun pushSnapshot(snapshot: WorkspaceSnapshot): Result<WorkspaceSnapshot>
 }
 
 class LocalLoopbackSyncProvider(
-    override val endpointUrl: String = "https://notes.overbay.app/api/v1/sync"
+    override val endpointUrl: String = "https://notes.overbay.app/api/v1/sync",
+    private var currentSnapshot: WorkspaceSnapshot = SampleWorkspaceFactory.createStarterSnapshot()
 ) : SyncProvider {
+    override suspend fun pullSnapshot(): Result<WorkspaceSnapshot> {
+        return Result.success(currentSnapshot)
+    }
+
     override suspend fun pushSnapshot(snapshot: WorkspaceSnapshot): Result<WorkspaceSnapshot> {
-        return Result.success(snapshot.copy(revision = snapshot.revision + 1))
+        val bumped = snapshot.copy(revision = snapshot.revision + 1)
+        currentSnapshot = bumped
+        return Result.success(bumped)
     }
 }

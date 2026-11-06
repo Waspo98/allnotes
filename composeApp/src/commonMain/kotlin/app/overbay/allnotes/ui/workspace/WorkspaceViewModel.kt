@@ -32,6 +32,7 @@ data class WorkspaceUiState(
     val selectedNotebookId: String = "",
     val selectedSectionId: String = "",
     val selectedPageId: String = "",
+    val activeBlockId: String? = null,
     val searchQuery: String = "",
     val isSidebarOpen: Boolean = true,
     val isMobileHierarchySheetOpen: Boolean = false,
@@ -95,27 +96,8 @@ class WorkspaceViewModel(
 
     init {
         scope.launch {
-            repository.snapshot.collect { snap ->
-                _uiState.update { current ->
-                    val nbId = current.selectedNotebookId.takeIf { id -> snap.notebooks.any { it.id == id } }
-                        ?: snap.notebooks.firstOrNull()?.id.orEmpty()
-                    val secId = current.selectedSectionId.takeIf { id ->
-                        snap.sections.any { it.id == id && it.notebookId == nbId }
-                    } ?: snap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
-                    val pageId = current.selectedPageId.takeIf { id ->
-                        snap.pages.any { it.id == id && it.sectionId == secId }
-                    } ?: snap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
-
-                    current.copy(
-                        notebooks = snap.notebooks,
-                        sections = snap.sections,
-                        pages = snap.pages,
-                        selectedNotebookId = nbId,
-                        selectedSectionId = secId,
-                        selectedPageId = pageId,
-                        revision = snap.revision
-                    )
-                }
+            repository.snapshot.collect {
+                syncStateFromRepository()
             }
         }
     }
@@ -136,6 +118,77 @@ class WorkspaceViewModel(
         )
     }
 
+    fun syncStateFromRepository(
+        targetNotebookId: String? = null,
+        targetSectionId: String? = null,
+        targetPageId: String? = null
+    ) {
+        val snap = repository.snapshot.value
+        _uiState.update { current ->
+            var nbId = targetNotebookId ?: current.selectedNotebookId
+            var secId = targetSectionId ?: current.selectedSectionId
+            var pageId = targetPageId ?: current.selectedPageId
+
+            if (targetPageId != null) {
+                val matchedPage = snap.pages.firstOrNull { it.id == targetPageId }
+                if (matchedPage != null) {
+                    pageId = matchedPage.id
+                    secId = matchedPage.sectionId
+                    val matchedSec = snap.sections.firstOrNull { it.id == secId }
+                    if (matchedSec != null) {
+                        nbId = matchedSec.notebookId
+                    }
+                }
+            } else if (targetSectionId != null) {
+                val matchedSec = snap.sections.firstOrNull { it.id == targetSectionId }
+                if (matchedSec != null) {
+                    secId = matchedSec.id
+                    nbId = matchedSec.notebookId
+                    pageId = snap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
+                }
+            } else if (targetNotebookId != null) {
+                val matchedNb = snap.notebooks.firstOrNull { it.id == targetNotebookId }
+                if (matchedNb != null) {
+                    nbId = matchedNb.id
+                    secId = snap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
+                    pageId = snap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
+                }
+            }
+
+            if (snap.notebooks.none { it.id == nbId }) {
+                nbId = snap.notebooks.firstOrNull()?.id.orEmpty()
+            }
+            if (snap.sections.none { it.id == secId && it.notebookId == nbId }) {
+                secId = snap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
+            }
+            if (snap.pages.none { it.id == pageId && it.sectionId == secId }) {
+                pageId = snap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
+            }
+
+            val retainedActiveBlockId = if (pageId != current.selectedPageId) {
+                null
+            } else {
+                val activePageBlocks = snap.pages.firstOrNull { it.id == pageId }?.blocks.orEmpty()
+                if (activePageBlocks.any { it.id == current.activeBlockId }) {
+                    current.activeBlockId
+                } else {
+                    null
+                }
+            }
+
+            current.copy(
+                notebooks = snap.notebooks,
+                sections = snap.sections,
+                pages = snap.pages,
+                selectedNotebookId = nbId,
+                selectedSectionId = secId,
+                selectedPageId = pageId,
+                activeBlockId = retainedActiveBlockId,
+                revision = snap.revision
+            )
+        }
+    }
+
     private fun nextBlockId(): String {
         blockSeq += 1
         return "blk-${_uiState.value.revision}-$blockSeq"
@@ -143,51 +196,31 @@ class WorkspaceViewModel(
 
     fun selectNotebook(notebookId: String) {
         val snap = repository.snapshot.value
-        _uiState.update { state ->
-            val firstSec = snap.sections.firstOrNull { it.notebookId == notebookId }?.id.orEmpty()
-            val firstPage = snap.pages.firstOrNull { it.sectionId == firstSec }?.id.orEmpty()
-            state.copy(
-                notebooks = snap.notebooks,
-                sections = snap.sections,
-                pages = snap.pages,
-                revision = snap.revision,
-                selectedNotebookId = notebookId,
-                selectedSectionId = firstSec,
-                selectedPageId = firstPage
-            )
-        }
+        val firstSec = snap.sections.firstOrNull { it.notebookId == notebookId }?.id.orEmpty()
+        val firstPage = snap.pages.firstOrNull { it.sectionId == firstSec }?.id.orEmpty()
+        syncStateFromRepository(
+            targetNotebookId = notebookId,
+            targetSectionId = firstSec,
+            targetPageId = firstPage
+        )
     }
 
     fun selectSection(sectionId: String) {
         val snap = repository.snapshot.value
-        _uiState.update { state ->
-            val firstPage = snap.pages.firstOrNull { it.sectionId == sectionId }?.id.orEmpty()
-            state.copy(
-                notebooks = snap.notebooks,
-                sections = snap.sections,
-                pages = snap.pages,
-                revision = snap.revision,
-                selectedSectionId = sectionId,
-                selectedPageId = firstPage
-            )
-        }
+        val firstPage = snap.pages.firstOrNull { it.sectionId == sectionId }?.id.orEmpty()
+        syncStateFromRepository(
+            targetSectionId = sectionId,
+            targetPageId = firstPage
+        )
     }
 
     fun selectPage(pageId: String) {
-        val snap = repository.snapshot.value
-        _uiState.update {
-            it.copy(
-                notebooks = snap.notebooks,
-                sections = snap.sections,
-                pages = snap.pages,
-                revision = snap.revision,
-                selectedPageId = pageId,
-                isMobileHierarchySheetOpen = false
-            )
-        }
+        syncStateFromRepository(targetPageId = pageId)
+        _uiState.update { it.copy(isMobileHierarchySheetOpen = false) }
     }
 
     fun setSearchQuery(query: String) {
+        syncStateFromRepository()
         _uiState.update { it.copy(searchQuery = query) }
     }
 
@@ -225,26 +258,33 @@ class WorkspaceViewModel(
         val created = repository.createPage(secId, title)
         _uiState.update {
             it.copy(
-                selectedPageId = created.id,
                 activeDialog = ActiveDialog.NONE,
                 isMobileHierarchySheetOpen = false
             )
         }
+        selectPage(created.id)
+    }
+
+    fun setActiveBlockId(blockId: String?) {
+        _uiState.update { it.copy(activeBlockId = blockId) }
     }
 
     fun deleteActivePage() {
         val pageId = _uiState.value.activePage?.id ?: return
         repository.deletePage(pageId)
+        syncStateFromRepository()
     }
 
     fun toggleActivePagePin() {
         val pageId = _uiState.value.activePage?.id ?: return
         repository.togglePagePin(pageId)
+        syncStateFromRepository()
     }
 
     fun updateActivePageTitle(newTitle: String) {
         val pageId = _uiState.value.activePage?.id ?: return
         repository.updatePageTitle(pageId, newTitle)
+        syncStateFromRepository()
     }
 
     fun updateBlockText(blockId: String, newText: String) {
@@ -259,6 +299,8 @@ class WorkspaceViewModel(
             }
         }
         repository.updatePageBlocks(page.id, updatedBlocks)
+        syncStateFromRepository()
+        _uiState.update { it.copy(activeBlockId = blockId) }
     }
 
     fun toggleParagraphStyle(blockId: String, style: String) {
@@ -277,31 +319,69 @@ class WorkspaceViewModel(
             }
         }
         repository.updatePageBlocks(page.id, updatedBlocks)
+        syncStateFromRepository()
+        _uiState.update { it.copy(activeBlockId = blockId) }
     }
 
     fun deleteBlock(blockId: String) {
         val page = _uiState.value.activePage ?: return
         repository.updatePageBlocks(page.id, page.blocks.filterNot { it.id == blockId })
+        syncStateFromRepository()
+        if (_uiState.value.activeBlockId == blockId) {
+            _uiState.update { it.copy(activeBlockId = null) }
+        }
     }
 
     fun toggleChecklistItem(blockId: String, itemId: String) {
         val page = _uiState.value.activePage ?: return
         repository.toggleChecklistItem(page.id, blockId, itemId)
+        syncStateFromRepository()
     }
 
     fun addChecklistItem(blockId: String, text: String) {
         val page = _uiState.value.activePage ?: return
         repository.addChecklistItem(page.id, blockId, text)
+        syncStateFromRepository()
+    }
+
+    fun updateHeadingLevel(blockId: String, level: Int) {
+        val page = _uiState.value.activePage ?: return
+        val clamped = level.coerceIn(1, 3)
+        val updatedBlocks = page.blocks.map { block ->
+            if (block.id == blockId && block is DocumentBlock.Heading) {
+                block.copy(level = clamped)
+            } else {
+                block
+            }
+        }
+        repository.updatePageBlocks(page.id, updatedBlocks)
+        syncStateFromRepository()
+    }
+
+    fun toggleActiveParagraphStyle(style: String) {
+        val page = _uiState.value.activePage ?: return
+        val activeId = _uiState.value.activeBlockId
+        val targetedParagraph = if (activeId != null) {
+            page.blocks.firstOrNull { it.id == activeId } as? DocumentBlock.Paragraph
+        } else null
+
+        val paragraph = targetedParagraph
+            ?: page.blocks.filterIsInstance<DocumentBlock.Paragraph>().lastOrNull()
+            ?: return
+
+        toggleParagraphStyle(paragraph.id, style)
     }
 
     fun insertHeadingBlock(level: Int = 2) {
         val page = _uiState.value.activePage ?: return
         repository.appendBlock(page.id, DocumentBlock.Heading(id = nextBlockId(), text = "New Section Heading", level = level))
+        syncStateFromRepository()
     }
 
     fun insertParagraphBlock() {
         val page = _uiState.value.activePage ?: return
         repository.appendBlock(page.id, DocumentBlock.Paragraph(id = nextBlockId(), text = ""))
+        syncStateFromRepository()
     }
 
     fun insertChecklistBlock() {
@@ -314,6 +394,7 @@ class WorkspaceViewModel(
                 items = listOf(ChecklistItem(id = nextBlockId(), text = "First task", isChecked = false))
             )
         )
+        syncStateFromRepository()
     }
 
     fun insertTableBlock() {
@@ -329,6 +410,7 @@ class WorkspaceViewModel(
                 )
             )
         )
+        syncStateFromRepository()
     }
 
     fun insertCalloutBlock() {
@@ -342,6 +424,7 @@ class WorkspaceViewModel(
                 tone = CalloutTone.TIP
             )
         )
+        syncStateFromRepository()
     }
 
     fun insertCodeBlock() {
@@ -354,6 +437,90 @@ class WorkspaceViewModel(
                 code = "// Add snippet or command here"
             )
         )
+        syncStateFromRepository()
+    }
+
+    fun insertBulletListBlock(isNumbered: Boolean = false) {
+        val page = _uiState.value.activePage ?: return
+        repository.appendBlock(
+            page.id,
+            DocumentBlock.BulletList(
+                id = nextBlockId(),
+                isNumbered = isNumbered,
+                items = listOf("First item", "Second item")
+            )
+        )
+        syncStateFromRepository()
+    }
+
+    fun addBulletListItem(blockId: String, text: String) {
+        val clean = text.trim()
+        if (clean.isEmpty()) return
+        val page = _uiState.value.activePage ?: return
+        val updatedBlocks = page.blocks.map { block ->
+            if (block.id == blockId && block is DocumentBlock.BulletList) {
+                block.copy(items = block.items + clean)
+            } else {
+                block
+            }
+        }
+        repository.updatePageBlocks(page.id, updatedBlocks)
+        syncStateFromRepository()
+    }
+
+    fun updateTableCell(blockId: String, rowIndex: Int, colIndex: Int, text: String) {
+        val page = _uiState.value.activePage ?: return
+        val updatedBlocks = page.blocks.map { block ->
+            if (block.id == blockId && block is DocumentBlock.Table) {
+                val updatedRows = block.rows.mapIndexed { rIdx, row ->
+                    if (rIdx == rowIndex) {
+                        row.mapIndexed { cIdx, cell ->
+                            if (cIdx == colIndex) text else cell
+                        }
+                    } else {
+                        row
+                    }
+                }
+                block.copy(rows = updatedRows)
+            } else {
+                block
+            }
+        }
+        repository.updatePageBlocks(page.id, updatedBlocks)
+        syncStateFromRepository()
+    }
+
+    fun addTableRow(blockId: String, rowData: List<String> = emptyList()) {
+        val page = _uiState.value.activePage ?: return
+        val updatedBlocks = page.blocks.map { block ->
+            if (block.id == blockId && block is DocumentBlock.Table) {
+                val newRow = if (rowData.isNotEmpty()) {
+                    rowData
+                } else {
+                    List(block.headers.size) { "" }
+                }
+                block.copy(rows = block.rows + listOf(newRow))
+            } else {
+                block
+            }
+        }
+        repository.updatePageBlocks(page.id, updatedBlocks)
+        syncStateFromRepository()
+    }
+
+    fun addTableColumn(blockId: String, headerTitle: String, defaultCellText: String = "") {
+        val page = _uiState.value.activePage ?: return
+        val updatedBlocks = page.blocks.map { block ->
+            if (block.id == blockId && block is DocumentBlock.Table) {
+                val newHeaders = block.headers + headerTitle
+                val newRows = block.rows.map { row -> row + defaultCellText }
+                block.copy(headers = newHeaders, rows = newRows)
+            } else {
+                block
+            }
+        }
+        repository.updatePageBlocks(page.id, updatedBlocks)
+        syncStateFromRepository()
     }
 
     fun triggerManualSync() {
