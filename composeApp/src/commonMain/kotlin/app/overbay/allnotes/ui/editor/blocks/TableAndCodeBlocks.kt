@@ -152,31 +152,34 @@ internal fun ResponsiveTableBlockContent(
                         }
                     }
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                if (rIdx < block.rows.lastIndex || isActive) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                }
             }
 
-            // Table Footer Actions
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = { onAction(WorkspaceAction.AddTableRow(block.id)) }) {
-                    Text("+ Row", style = MaterialTheme.typography.labelSmall)
-                }
-                TextButton(
-                    onClick = {
-                        onAction(
-                            WorkspaceAction.AddTableColumn(
-                                blockId = block.id,
-                                headerTitle = "Col ${block.headers.size + 1}"
-                            )
-                        )
-                    }
+            if (isActive) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("+ Column", style = MaterialTheme.typography.labelSmall)
+                    TextButton(onClick = { onAction(WorkspaceAction.AddTableRow(block.id)) }) {
+                        Text("+ Row", style = MaterialTheme.typography.labelSmall)
+                    }
+                    TextButton(
+                        onClick = {
+                            onAction(
+                                WorkspaceAction.AddTableColumn(
+                                    blockId = block.id,
+                                    headerTitle = "Col ${block.headers.size + 1}"
+                                )
+                            )
+                        }
+                    ) {
+                        Text("+ Column", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         }
@@ -186,13 +189,15 @@ internal fun ResponsiveTableBlockContent(
 @Composable
 internal fun CodeSnippetBlockContent(
     block: DocumentBlock.CodeSnippet,
+    isActive: Boolean,
     onAction: (WorkspaceAction) -> Unit
 ) {
+    val languages = listOf("kotlin", "python", "bash", "sql", "json", "yaml")
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -215,11 +220,17 @@ internal fun CodeSnippetBlockContent(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                Text(
-                    text = "${block.code.lines().size} lines",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (isActive) {
+                    TextButton(
+                        onClick = {
+                            val currentIdx = languages.indexOfFirst { it.equals(block.language, ignoreCase = true) }
+                            val nextLang = languages[(currentIdx + 1) % languages.size]
+                            onAction(WorkspaceAction.UpdateCodeLanguage(block.id, nextLang))
+                        }
+                    ) {
+                        Text("Change Language", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Box(modifier = Modifier.fillMaxWidth()) {

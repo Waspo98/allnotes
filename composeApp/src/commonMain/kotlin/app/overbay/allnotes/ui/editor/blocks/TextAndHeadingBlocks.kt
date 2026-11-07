@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -53,26 +52,20 @@ internal fun HeadingBlockContent(
         )
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            if (block.text.isEmpty()) {
-                Text(
-                    text = "Heading ${block.level}…",
-                    style = headingStyle.copy(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                )
-            }
-            BasicTextField(
-                value = block.text,
-                onValueChange = { onAction(WorkspaceAction.UpdateBlockText(block.id, it)) },
-                textStyle = headingStyle,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth()
+    Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp)) {
+        if (block.text.isEmpty()) {
+            Text(
+                text = "Heading ${block.level}…",
+                style = headingStyle.copy(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f))
             )
         }
-        if (block.level == 1) {
-            Spacer(modifier = Modifier.height(6.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        }
+        BasicTextField(
+            value = block.text,
+            onValueChange = { onAction(WorkspaceAction.UpdateBlockText(block.id, it)) },
+            textStyle = headingStyle,
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
@@ -157,29 +150,23 @@ internal fun CalloutBlockContent(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = container,
+        color = container.copy(alpha = 0.65f),
         contentColor = content,
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = AllNotesIcons.Callout,
-                    contentDescription = null,
-                    tint = badge,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "${block.tone.label.uppercase()} · ",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = badge
-                )
-                Box(modifier = Modifier.weight(1f)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = AllNotesIcons.Callout,
+                contentDescription = null,
+                tint = badge,
+                modifier = Modifier.padding(top = 2.dp).size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     if (block.title.isEmpty()) {
                         Text(
                             text = "Callout title…",
@@ -194,28 +181,27 @@ internal fun CalloutBlockContent(
                             fontWeight = FontWeight.Bold,
                             color = content
                         ),
-                        singleLine = true,
                         cursorBrush = SolidColor(badge),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(modifier = Modifier.fillMaxWidth()) {
-                if (block.text.isEmpty()) {
-                    Text(
-                        text = "Add callout details…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = content.copy(alpha = 0.6f)
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    if (block.text.isEmpty()) {
+                        Text(
+                            text = "Add callout details…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = content.copy(alpha = 0.6f)
+                        )
+                    }
+                    BasicTextField(
+                        value = block.text,
+                        onValueChange = { onAction(WorkspaceAction.UpdateBlockText(block.id, it)) },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = content),
+                        cursorBrush = SolidColor(badge),
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
-                BasicTextField(
-                    value = block.text,
-                    onValueChange = { onAction(WorkspaceAction.UpdateBlockText(block.id, it)) },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = content),
-                    cursorBrush = SolidColor(badge),
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         }
     }

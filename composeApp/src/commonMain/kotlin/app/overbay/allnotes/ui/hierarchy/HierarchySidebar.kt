@@ -1,8 +1,10 @@
 package app.overbay.allnotes.ui.hierarchy
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,12 +19,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AssistChip
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,70 +58,100 @@ fun HierarchySidebar(
         ) {
             // Top Brand & Sync Bar
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusable(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "AllNotes",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable { onAction(WorkspaceAction.OpenDialog(ActiveDialog.SYNC_SETTINGS)) }
-                            .padding(vertical = 2.dp)
-                    ) {
-                        Icon(
-                            AllNotesIcons.Sync,
-                            contentDescription = "Sync status",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = state.syncStatus.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                AssistChip(
-                    onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_NOTEBOOK)) },
-                    leadingIcon = { Icon(AllNotesIcons.Add, contentDescription = null, modifier = Modifier.size(15.dp)) },
-                    label = { Text("Notebook") }
+                Text(
+                    text = "AllNotes",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { onAction(WorkspaceAction.OpenDialog(ActiveDialog.SYNC_SETTINGS)) }
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        AllNotesIcons.Sync,
+                        contentDescription = "Sync status",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = state.syncStatus.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Instant Local Search Field
-            OutlinedTextField(
-                value = state.searchQuery,
-                onValueChange = { onAction(WorkspaceAction.SetSearchQuery(it)) },
-                placeholder = { Text("Search pages & blocks…") },
-                leadingIcon = {
-                    Icon(AllNotesIcons.Search, contentDescription = "Search", modifier = Modifier.size(18.dp))
-                },
-                trailingIcon = {
+            // Compact Tonal Search Pill
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        AllNotesIcons.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (state.searchQuery.isEmpty()) {
+                            Text(
+                                text = "Search notes…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                maxLines = 1
+                            )
+                        }
+                        BasicTextField(
+                            value = state.searchQuery,
+                            onValueChange = { onAction(WorkspaceAction.SetSearchQuery(it)) },
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            singleLine = true,
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     if (state.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { onAction(WorkspaceAction.SetSearchQuery("")) }) {
-                            Icon(AllNotesIcons.Close, contentDescription = "Clear search", modifier = Modifier.size(16.dp))
+                        IconButton(
+                            onClick = { onAction(WorkspaceAction.SetSearchQuery("")) },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                AllNotesIcons.Close,
+                                contentDescription = "Clear search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
                         }
                     }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            )
+                }
+            }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Notebooks Header & Pills
             Row(
@@ -128,26 +160,34 @@ fun HierarchySidebar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "NOTEBOOKS (${state.notebooks.size})",
+                    text = "NOTEBOOKS",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (state.activeNotebook != null) {
-                    IconButton(
-                        onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.EDIT_NOTEBOOK)) },
-                        modifier = Modifier.size(26.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (state.activeNotebook != null) {
+                        IconButton(
+                            onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.EDIT_NOTEBOOK)) },
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                AllNotesIcons.Edit,
+                                contentDescription = "Edit active notebook",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                    TextButton(
+                        onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_NOTEBOOK)) },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                     ) {
-                        Icon(
-                            AllNotesIcons.Edit,
-                            contentDescription = "Edit active notebook",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(14.dp)
-                        )
+                        Text("+ Notebook")
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             Row(
                 modifier = Modifier
@@ -164,18 +204,7 @@ fun HierarchySidebar(
                 }
             }
 
-            state.activeNotebook?.subtitle?.takeIf { it.isNotBlank() }?.let { sub ->
-                Text(
-                    text = sub,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Sections Header & Color-Coded Tabs
             Row(
@@ -184,7 +213,7 @@ fun HierarchySidebar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "SECTIONS (${state.sectionsForNotebook.size})",
+                    text = "SECTIONS",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -227,8 +256,8 @@ fun HierarchySidebar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             Spacer(modifier = Modifier.height(6.dp))
 
             // Pages & Subpages Tree Header
@@ -238,7 +267,7 @@ fun HierarchySidebar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "PAGES (${state.pagesForSection.size})",
+                    text = "PAGES",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

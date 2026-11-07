@@ -1,6 +1,7 @@
 package app.overbay.allnotes.ui.workspace
 
 import app.overbay.allnotes.model.CalloutTone
+import app.overbay.allnotes.model.ChecklistItem
 import app.overbay.allnotes.model.DocumentBlock
 
 /**
@@ -121,6 +122,25 @@ object BlockMutationEngine {
             }
         }
 
+    fun insertChecklistItemAfter(
+        blocks: List<DocumentBlock>,
+        blockId: String,
+        newItem: ChecklistItem,
+        afterItemId: String? = null
+    ): List<DocumentBlock> = blocks.map { block ->
+        if (block.id == blockId && block is DocumentBlock.Checklist) {
+            val idx = if (afterItemId != null) block.items.indexOfFirst { it.id == afterItemId } else -1
+            val updated = if (idx >= 0) {
+                block.items.toMutableList().apply { add(idx + 1, newItem) }
+            } else {
+                block.items + newItem
+            }
+            block.copy(items = updated)
+        } else {
+            block
+        }
+    }
+
     fun toggleBulletListKind(blocks: List<DocumentBlock>, blockId: String): List<DocumentBlock> =
         blocks.map { block ->
             if (block.id == blockId && block is DocumentBlock.BulletList) {
@@ -138,6 +158,23 @@ object BlockMutationEngine {
                 block
             }
         }
+
+    fun insertBulletListItemAfter(
+        blocks: List<DocumentBlock>,
+        blockId: String,
+        afterItemIndex: Int? = null
+    ): List<DocumentBlock> = blocks.map { block ->
+        if (block.id == blockId && block is DocumentBlock.BulletList) {
+            val updated = if (afterItemIndex != null && afterItemIndex in block.items.indices) {
+                block.items.toMutableList().apply { add(afterItemIndex + 1, "") }
+            } else {
+                block.items + ""
+            }
+            block.copy(items = updated)
+        } else {
+            block
+        }
+    }
 
     fun updateBulletListItem(
         blocks: List<DocumentBlock>,

@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,32 +50,32 @@ internal fun NotebookPill(
         targetValue = if (isSelected) notebook.accent.contentColor() else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = allNotesSpring()
     )
-    FilterChip(
-        selected = isSelected,
+    Surface(
         onClick = onClick,
-        leadingIcon = {
+        color = bg,
+        contentColor = fg,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier
                     .size(8.dp)
                     .clip(CircleShape)
                     .background(notebook.accent.accentColor())
             )
-        },
-        label = {
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = notebook.title,
+                style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
             )
-        },
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = bg,
-            labelColor = fg,
-            selectedContainerColor = bg,
-            selectedLabelColor = fg
-        )
-    )
+        }
+    }
 }
 
 @Composable

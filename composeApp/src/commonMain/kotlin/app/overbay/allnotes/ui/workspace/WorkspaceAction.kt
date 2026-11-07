@@ -55,12 +55,14 @@ sealed interface WorkspaceAction {
     data class UpdateChecklistTitle(val blockId: String, val title: String) : WorkspaceAction
     data class ToggleChecklistItem(val blockId: String, val itemId: String) : WorkspaceAction
     data class AddChecklistItem(val blockId: String, val text: String) : WorkspaceAction
+    data class InsertChecklistItemAfter(val blockId: String, val afterItemId: String? = null) : WorkspaceAction
     data class UpdateChecklistItemText(val blockId: String, val itemId: String, val text: String) : WorkspaceAction
     data class DeleteChecklistItem(val blockId: String, val itemId: String) : WorkspaceAction
 
     // Bullet / Numbered List Mutations
     data class ToggleBulletListKind(val blockId: String) : WorkspaceAction
     data class AddBulletListItem(val blockId: String, val text: String) : WorkspaceAction
+    data class InsertBulletListItemAfter(val blockId: String, val afterItemIndex: Int? = null) : WorkspaceAction
     data class UpdateBulletListItem(val blockId: String, val itemIndex: Int, val text: String) : WorkspaceAction
     data class DeleteBulletListItem(val blockId: String, val itemIndex: Int) : WorkspaceAction
 

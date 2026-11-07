@@ -44,6 +44,106 @@ object AllNotesIcons {
         }
     }
 
+    val Menu: ImageVector by lazy {
+        strokedIcon("Menu") {
+            moveTo(4f, 7f)
+            lineTo(20f, 7f)
+            moveTo(4f, 12f)
+            lineTo(20f, 12f)
+            moveTo(4f, 17f)
+            lineTo(20f, 17f)
+        }
+    }
+
+    val MoreVert: ImageVector by lazy {
+        strokedIcon("MoreVert") {
+            moveTo(12f, 5.5f)
+            lineTo(12.01f, 5.5f)
+            moveTo(12f, 12f)
+            lineTo(12.01f, 12f)
+            moveTo(12f, 18.5f)
+            lineTo(12.01f, 18.5f)
+        }
+    }
+
+    val FormatBold: ImageVector by lazy {
+        strokedIcon("FormatBold") {
+            moveTo(7f, 5f)
+            lineTo(13.5f, 5f)
+            arcTo(3.5f, 3.5f, 0f, false, true, 13.5f, 12f)
+            lineTo(7f, 12f)
+            moveTo(7f, 12f)
+            lineTo(14.5f, 12f)
+            arcTo(3.5f, 3.5f, 0f, false, true, 14.5f, 19f)
+            lineTo(7f, 19f)
+            lineTo(7f, 5f)
+        }
+    }
+
+    val FormatItalic: ImageVector by lazy {
+        strokedIcon("FormatItalic") {
+            moveTo(10f, 5f)
+            lineTo(18f, 5f)
+            moveTo(6f, 19f)
+            lineTo(14f, 19f)
+            moveTo(14f, 5f)
+            lineTo(10f, 19f)
+        }
+    }
+
+    val FormatUnderlined: ImageVector by lazy {
+        strokedIcon("FormatUnderlined") {
+            moveTo(7f, 5f)
+            lineTo(7f, 11f)
+            arcTo(5f, 5f, 0f, false, false, 17f, 11f)
+            lineTo(17f, 5f)
+            moveTo(5f, 20f)
+            lineTo(19f, 20f)
+        }
+    }
+
+    val FormatStrikethrough: ImageVector by lazy {
+        strokedIcon("FormatStrikethrough") {
+            moveTo(4f, 12f)
+            lineTo(20f, 12f)
+            moveTo(16f, 6.5f)
+            lineTo(9.5f, 6.5f)
+            arcTo(2.5f, 2.5f, 0f, false, false, 9.5f, 11.5f)
+            lineTo(14.5f, 12.5f)
+            arcTo(2.5f, 2.5f, 0f, false, true, 14.5f, 17.5f)
+            lineTo(8f, 17.5f)
+        }
+    }
+
+    val Highlight: ImageVector by lazy {
+        strokedIcon("Highlight") {
+            moveTo(9f, 14f)
+            lineTo(15f, 8f)
+            lineTo(18f, 11f)
+            lineTo(12f, 17f)
+            close()
+            moveTo(6f, 20f)
+            lineTo(18f, 20f)
+        }
+    }
+
+    val NumberedList: ImageVector by lazy {
+        strokedIcon("NumberedList") {
+            moveTo(10f, 6f)
+            lineTo(20f, 6f)
+            moveTo(10f, 12f)
+            lineTo(20f, 12f)
+            moveTo(10f, 18f)
+            lineTo(20f, 18f)
+            moveTo(5f, 5f)
+            lineTo(5f, 9f)
+            moveTo(4f, 14f)
+            lineTo(6f, 14f)
+            lineTo(4f, 19f)
+            lineTo(6f, 19f)
+        }
+    }
+
     val Search: ImageVector by lazy {
         strokedIcon("Search") {
             moveTo(11f, 4f)

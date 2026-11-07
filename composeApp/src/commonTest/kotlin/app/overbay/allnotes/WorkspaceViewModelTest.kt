@@ -520,5 +520,18 @@ class WorkspaceViewModelTest {
         vm.moveBlock(lastId, -1)
         val blocksAfterMove = vm.uiState.value.activePage!!.blocks
         assertEquals(lastId, blocksAfterMove[blocksAfterMove.lastIndex - 1].id)
+
+        // Inline Enter-key item insertion after active checklist and bullet list items
+        val chkBefore = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Checklist>().first()
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.InsertChecklistItemAfter(chkBefore.id, chkBefore.items.first().id))
+        val chkAfter = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Checklist>().first()
+        assertEquals(chkBefore.items.size + 1, chkAfter.items.size)
+        assertEquals("", chkAfter.items[1].text)
+
+        val blBefore = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.BulletList>().first()
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.InsertBulletListItemAfter(blBefore.id, 0))
+        val blAfter = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.BulletList>().first()
+        assertEquals(blBefore.items.size + 1, blAfter.items.size)
+        assertEquals("", blAfter.items[1])
     }
 }

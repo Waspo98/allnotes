@@ -102,11 +102,13 @@ class WorkspaceViewModel(
             is WorkspaceAction.UpdateChecklistTitle -> updateChecklistTitle(action.blockId, action.title)
             is WorkspaceAction.ToggleChecklistItem -> toggleChecklistItem(action.blockId, action.itemId)
             is WorkspaceAction.AddChecklistItem -> addChecklistItem(action.blockId, action.text)
+            is WorkspaceAction.InsertChecklistItemAfter -> insertChecklistItemAfter(action.blockId, action.afterItemId)
             is WorkspaceAction.UpdateChecklistItemText -> updateChecklistItemText(action.blockId, action.itemId, action.text)
             is WorkspaceAction.DeleteChecklistItem -> deleteChecklistItem(action.blockId, action.itemId)
 
             is WorkspaceAction.ToggleBulletListKind -> toggleBulletListKind(action.blockId)
             is WorkspaceAction.AddBulletListItem -> addBulletListItem(action.blockId, action.text)
+            is WorkspaceAction.InsertBulletListItemAfter -> insertBulletListItemAfter(action.blockId, action.afterItemIndex)
             is WorkspaceAction.UpdateBulletListItem -> updateBulletListItem(action.blockId, action.itemIndex, action.text)
             is WorkspaceAction.DeleteBulletListItem -> deleteBulletListItem(action.blockId, action.itemIndex)
 
@@ -310,6 +312,13 @@ class WorkspaceViewModel(
         syncStateFromRepository()
     }
 
+    fun insertChecklistItemAfter(blockId: String, afterItemId: String? = null) {
+        val newItem = ChecklistItem(id = nextBlockId(), text = "", isChecked = false)
+        mutateActivePageBlocks(blockId) {
+            BlockMutationEngine.insertChecklistItemAfter(it, blockId, newItem, afterItemId)
+        }
+    }
+
     fun updateChecklistTitle(blockId: String, title: String) = mutateActivePageBlocks(blockId) {
         BlockMutationEngine.updateChecklistTitle(it, blockId, title)
     }
@@ -415,6 +424,10 @@ class WorkspaceViewModel(
         mutateActivePageBlocks(blockId) {
             BlockMutationEngine.addBulletListItem(it, blockId, clean)
         }
+    }
+
+    fun insertBulletListItemAfter(blockId: String, afterItemIndex: Int? = null) = mutateActivePageBlocks(blockId) {
+        BlockMutationEngine.insertBulletListItemAfter(it, blockId, afterItemIndex)
     }
 
     fun updateBulletListItem(blockId: String, itemIndex: Int, text: String) = mutateActivePageBlocks(blockId) {
