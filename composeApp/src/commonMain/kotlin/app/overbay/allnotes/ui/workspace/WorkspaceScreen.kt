@@ -33,9 +33,12 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.ui.editor.DocumentEditorPane
+import app.overbay.allnotes.ui.hierarchy.CollapsedWorkspaceRail
 import app.overbay.allnotes.ui.hierarchy.HierarchySidebar
 import app.overbay.allnotes.ui.theme.allNotesSpring
+import app.overbay.allnotes.ui.workspace.dialogs.WorkspaceDialogsHost
 import kotlinx.coroutines.launch
 
 @Composable
@@ -54,20 +57,46 @@ fun WorkspaceScreen(
                 if (event.type == KeyEventType.KeyDown && (event.isCtrlPressed || event.isMetaPressed)) {
                     when (event.key) {
                         Key.B -> {
-                            viewModel.dispatch(WorkspaceAction.ToggleActiveParagraphStyle("bold"))
+                            viewModel.dispatch(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.BOLD))
                             true
                         }
                         Key.I -> {
-                            viewModel.dispatch(WorkspaceAction.ToggleActiveParagraphStyle("italic"))
+                            viewModel.dispatch(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.ITALIC))
                             true
                         }
                         Key.U -> {
-                            viewModel.dispatch(WorkspaceAction.ToggleActiveParagraphStyle("underline"))
+                            viewModel.dispatch(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.UNDERLINE))
+                            true
+                        }
+                        Key.K -> {
+                            viewModel.dispatch(WorkspaceAction.OpenDialog(ActiveDialog.INSERT_LINK))
+                            true
+                        }
+                        Key.Z -> {
+                            if (event.isShiftPressed) {
+                                viewModel.dispatch(WorkspaceAction.Redo)
+                            } else {
+                                viewModel.dispatch(WorkspaceAction.Undo)
+                            }
+                            true
+                        }
+                        Key.Y -> {
+                            viewModel.dispatch(WorkspaceAction.Redo)
+                            true
+                        }
+                        Key.N -> {
+                            viewModel.dispatch(WorkspaceAction.OpenDialog(ActiveDialog.NEW_PAGE))
                             true
                         }
                         Key.L -> {
                             if (event.isShiftPressed) {
                                 viewModel.dispatch(WorkspaceAction.InsertChecklist(state.activeBlockId))
+                                true
+                            } else false
+                        }
+                        Key.M -> {
+                            if (event.isShiftPressed && state.activePage != null) {
+                                viewModel.dispatch(WorkspaceAction.OpenDialog(ActiveDialog.MARKDOWN_EXPORT))
                                 true
                             } else false
                         }
@@ -79,7 +108,7 @@ fun WorkspaceScreen(
                         }
                         Key.S -> {
                             if (event.isShiftPressed) {
-                                viewModel.dispatch(WorkspaceAction.ToggleActiveParagraphStyle("strikethrough"))
+                                viewModel.dispatch(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.STRIKETHROUGH))
                             } else {
                                 viewModel.dispatch(WorkspaceAction.TriggerSync)
                             }
@@ -158,6 +187,20 @@ fun WorkspaceScreen(
                             state = state,
                             onAction = viewModel::dispatch,
                             modifier = Modifier.width(320.dp)
+                        )
+                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = !state.isSidebarOpen,
+                    enter = expandHorizontally(animationSpec = allNotesSpring()) + fadeIn(animationSpec = allNotesSpring()),
+                    exit = shrinkHorizontally(animationSpec = allNotesSpring()) + fadeOut(animationSpec = allNotesSpring())
+                ) {
+                    Row(modifier = Modifier.fillMaxHeight()) {
+                        CollapsedWorkspaceRail(
+                            state = state,
+                            onAction = viewModel::dispatch
                         )
                         VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     }

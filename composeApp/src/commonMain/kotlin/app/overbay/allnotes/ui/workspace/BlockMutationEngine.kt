@@ -3,6 +3,7 @@ package app.overbay.allnotes.ui.workspace
 import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.ChecklistItem
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 
 /**
  * Pure, stateless document block transformation engine.
@@ -22,6 +23,9 @@ object BlockMutationEngine {
             block.text.lowercase().contains(query)
         is DocumentBlock.CodeSnippet -> block.code.lowercase().contains(query) ||
             block.language.lowercase().contains(query)
+        is DocumentBlock.Divider -> false
+        is DocumentBlock.Attachment -> block.fileName.lowercase().contains(query) ||
+            block.caption.lowercase().contains(query)
     }
 
     fun insertBlock(
@@ -53,10 +57,22 @@ object BlockMutationEngine {
             if (block.id != blockId) return@map block
             when (block) {
                 is DocumentBlock.Heading -> block.copy(text = newText)
-                is DocumentBlock.Paragraph -> block.copy(text = newText)
+                is DocumentBlock.Paragraph -> block.copy(
+                    text = newText,
+                    spans = RichSpanEngine.adjustSpansAfterEdit(block.text, newText, block.spans)
+                )
                 is DocumentBlock.Callout -> block.copy(text = newText)
                 is DocumentBlock.CodeSnippet -> block.copy(code = newText)
                 else -> block
+            }
+        }
+
+    fun updateAttachmentCaption(blocks: List<DocumentBlock>, blockId: String, caption: String): List<DocumentBlock> =
+        blocks.map { block ->
+            if (block.id == blockId && block is DocumentBlock.Attachment) {
+                block.copy(caption = caption)
+            } else {
+                block
             }
         }
 
@@ -330,4 +346,32 @@ object BlockMutationEngine {
                 block
             }
         }
+
+    fun defaultHeading(id: String, level: Int) =
+        DocumentBlock.Heading(id = id, text = "New Section Heading", level = level.coerceIn(1, 3))
+
+    fun defaultChecklist(id: String, itemId: String) = DocumentBlock.Checklist(
+        id = id,
+        title = "Action Items",
+        items = listOf(ChecklistItem(id = itemId, text = "First task", isChecked = false))
+    )
+
+    fun defaultTable(id: String) = DocumentBlock.Table(
+        id = id,
+        headers = listOf("Column 1", "Column 2", "Status"),
+        rows = listOf(listOf("Item A", "Details", "Ready"), listOf("Item B", "Notes", "In Progress"))
+    )
+
+    fun defaultCallout(id: String) = DocumentBlock.Callout(
+        id = id,
+        title = "Key Takeaway",
+        text = "Summarize important decisions or reminders here.",
+        tone = CalloutTone.TIP
+    )
+
+    fun defaultCode(id: String) =
+        DocumentBlock.CodeSnippet(id = id, language = "kotlin", code = "// Add snippet or command here")
+
+    fun defaultBulletList(id: String, isNumbered: Boolean) =
+        DocumentBlock.BulletList(id = id, isNumbered = isNumbered, items = listOf("First item", "Second item"))
 }

@@ -1,0 +1,135 @@
+package app.overbay.allnotes.ui.workspace.dialogs
+
+import androidx.compose.runtime.Composable
+import app.overbay.allnotes.data.markdown.MarkdownCodec
+import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.model.RichSpanKind
+import app.overbay.allnotes.model.SectionAccentKey
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
+import app.overbay.allnotes.ui.workspace.ActiveDialog
+import app.overbay.allnotes.ui.workspace.WorkspaceAction
+import app.overbay.allnotes.ui.workspace.WorkspaceUiState
+
+@Composable
+fun WorkspaceDialogsHost(
+    state: WorkspaceUiState,
+    onAction: (WorkspaceAction) -> Unit
+) {
+    when (state.activeDialog) {
+        ActiveDialog.NONE -> Unit
+        ActiveDialog.NEW_NOTEBOOK -> NotebookDialog(
+            initialTitle = "",
+            initialSubtitle = "",
+            initialAccent = SectionAccentKey.INDIGO,
+            isEdit = false,
+            canReorder = false,
+            onReorder = {},
+            onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+            onConfirm = { t, s, a -> onAction(WorkspaceAction.CreateNotebook(t, s, a)) },
+            onRequestDelete = null
+        )
+        ActiveDialog.EDIT_NOTEBOOK -> {
+            val nb = state.activeNotebook ?: return
+            NotebookDialog(
+                initialTitle = nb.title,
+                initialSubtitle = nb.subtitle,
+                initialAccent = nb.accent,
+                isEdit = true,
+                canReorder = state.notebooks.size > 1,
+                onReorder = { delta -> onAction(WorkspaceAction.ReorderActiveNotebook(delta)) },
+                onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+                onConfirm = { t, s, a -> onAction(WorkspaceAction.UpdateActiveNotebook(t, s, a)) },
+                onRequestDelete = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.CONFIRM_DELETE_NOTEBOOK)) }
+            )
+        }
+        ActiveDialog.CONFIRM_DELETE_NOTEBOOK -> {
+            val nb = state.activeNotebook ?: return
+            val secIds = state.sections.filter { it.notebookId == nb.id }.map { it.id }.toSet()
+            val pageCount = state.pages.count { it.sectionId in secIds }
+            ConfirmDeleteHierarchyDialog(
+                title = "Delete \"${nb.title}\"?",
+                message = "This permanently deletes ${secIds.size} section(s) and $pageCount page(s) across synced devices.",
+                onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+                onConfirmDelete = { onAction(WorkspaceAction.DeleteActiveNotebook) }
+            )
+        }
+        ActiveDialog.NEW_SECTION -> SectionDialog(
+            initialTitle = "",
+            initialAccent = SectionAccentKey.EMERALD,
+            isEdit = false,
+            canReorder = false,
+            onReorder = {},
+            onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+            onConfirm = { t, a -> onAction(WorkspaceAction.CreateSection(t, a)) },
+            onRequestDelete = null
+        )
+        ActiveDialog.EDIT_SECTION -> {
+            val sec = state.activeSection ?: return
+            SectionDialog(
+                initialTitle = sec.title,
+                initialAccent = sec.accent,
+                isEdit = true,
+                canReorder = state.sectionsForNotebook.size > 1,
+                onReorder = { delta -> onAction(WorkspaceAction.ReorderActiveSection(delta)) },
+                onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+                onConfirm = { t, a -> onAction(WorkspaceAction.UpdateActiveSection(t, a)) },
+                onRequestDelete = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.CONFIRM_DELETE_SECTION)) }
+            )
+        }
+        ActiveDialog.CONFIRM_DELETE_SECTION -> {
+            val sec = state.activeSection ?: return
+            val pageCount = state.pages.count { it.sectionId == sec.id }
+            ConfirmDeleteHierarchyDialog(
+                title = "Delete \"${sec.title}\"?",
+                message = "This permanently deletes $pageCount page(s) inside this section across synced devices.",
+                onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+                onConfirmDelete = { onAction(WorkspaceAction.DeleteActiveSection) }
+            )
+        }
+        ActiveDialog.NEW_PAGE -> CreatePageDialog(
+            hasActivePage = state.activePage != null,
+            onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+            onCreate = { title, asSubpage -> onAction(WorkspaceAction.CreatePage(title, asSubpage)) }
+        )
+        ActiveDialog.MOVE_PAGE -> {
+            val page = state.activePage ?: return
+            MovePageDialog(
+                pageTitle = page.title,
+                currentSectionId = page.sectionId,
+                notebooks = state.notebooks,
+                sections = state.sections,
+                onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+                onMoveToSection = { targetSecId -> onAction(WorkspaceAction.MoveActivePageToSection(targetSecId)) }
+            )
+        }
+        ActiveDialog.INSERT_LINK -> {
+            val activeParagraph = state.activeBlock as? DocumentBlock.Paragraph
+            val existingUrl = if (activeParagraph != null) {
+                RichSpanEngine.activeLinkAtSelection(activeParagraph, state.selectionStart, state.selectionEnd)?.url.orEmpty()
+            } else ""
+            InsertLinkDialog(
+                initialUrl = existingUrl,
+                onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+                onApplyLink = { url -> onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.LINK, url = url)) }
+            )
+        }
+        ActiveDialog.MARKDOWN_EXPORT -> {
+            val page = state.activePage ?: return
+            MarkdownExportDialog(
+                pageTitle = page.title,
+                markdown = MarkdownCodec.exportPageToMarkdown(page),
+                onCopied = { onAction(WorkspaceAction.ShowStatusBanner("Markdown copied to clipboard")) },
+                onDismiss = { onAction(WorkspaceAction.DismissDialog) }
+            )
+        }
+        ActiveDialog.MARKDOWN_IMPORT -> MarkdownImportDialog(
+            onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+            onImport = { md -> onAction(WorkspaceAction.ImportMarkdownPage(md)) }
+        )
+        ActiveDialog.SYNC_SETTINGS -> WorkspaceSettingsDialog(
+            state = state,
+            onAction = onAction,
+            onDismiss = { onAction(WorkspaceAction.DismissDialog) }
+        )
+    }
+}

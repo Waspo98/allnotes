@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -126,6 +127,9 @@ internal fun PageHierarchyItem(
     page: NotePage,
     isSelected: Boolean,
     onClick: () -> Unit,
+    hasChildren: Boolean = false,
+    isCollapsed: Boolean = false,
+    onToggleCollapse: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isSubpage = page.parentPageId != null
@@ -146,6 +150,10 @@ internal fun PageHierarchyItem(
             is DocumentBlock.Heading -> block.text.takeIf { it.isNotBlank() }
             is DocumentBlock.Callout -> block.text.takeIf { it.isNotBlank() }
             is DocumentBlock.Checklist -> block.title.takeIf { it.isNotBlank() }
+                ?: block.items.firstOrNull { it.text.isNotBlank() }?.text
+            is DocumentBlock.BulletList -> block.items.firstOrNull { it.isNotBlank() }
+            is DocumentBlock.Attachment -> block.caption.ifBlank { block.fileName }.takeIf { it.isNotBlank() }
+            is DocumentBlock.Divider -> null
             else -> null
         }
     } ?: "${page.blocks.size} blocks"
@@ -165,6 +173,19 @@ internal fun PageHierarchyItem(
                     .background(MaterialTheme.colorScheme.outlineVariant)
             )
             Spacer(modifier = Modifier.width(8.dp))
+        } else if (hasChildren && onToggleCollapse != null) {
+            IconButton(
+                onClick = onToggleCollapse,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = if (isCollapsed) AllNotesIcons.ChevronRight else AllNotesIcons.ChevronDown,
+                    contentDescription = if (isCollapsed) "Expand subpages" else "Collapse subpages",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(2.dp))
         }
 
         Surface(

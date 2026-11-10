@@ -22,14 +22,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.model.RichSpanKind
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 
 @Composable
 fun DesktopFormattingRibbon(
     state: WorkspaceUiState,
+    onRequestMediaPicker: () -> Unit,
     onAction: (WorkspaceAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -37,6 +42,9 @@ fun DesktopFormattingRibbon(
     val activeBlock = state.activeBlock
     val activeParagraph = activeBlock as? DocumentBlock.Paragraph
     val activeHeading = activeBlock as? DocumentBlock.Heading
+    val activeCallout = activeBlock as? DocumentBlock.Callout
+    val s = state.selectionStart
+    val e = state.selectionEnd
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -54,32 +62,50 @@ fun DesktopFormattingRibbon(
             ToolbarToggleIcon(
                 icon = AllNotesIcons.FormatBold,
                 contentDescription = "Bold (Ctrl+B)",
-                selected = activeParagraph?.isBold == true,
-                onClick = { onAction(WorkspaceAction.ToggleActiveParagraphStyle("bold")) }
+                selected = activeParagraph != null && RichSpanEngine.hasActiveStyle(activeParagraph, s, e, RichSpanKind.BOLD),
+                onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.BOLD)) }
             )
             ToolbarToggleIcon(
                 icon = AllNotesIcons.FormatItalic,
                 contentDescription = "Italic (Ctrl+I)",
-                selected = activeParagraph?.isItalic == true,
-                onClick = { onAction(WorkspaceAction.ToggleActiveParagraphStyle("italic")) }
+                selected = activeParagraph != null && RichSpanEngine.hasActiveStyle(activeParagraph, s, e, RichSpanKind.ITALIC),
+                onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.ITALIC)) }
             )
             ToolbarToggleIcon(
                 icon = AllNotesIcons.FormatUnderlined,
                 contentDescription = "Underline (Ctrl+U)",
-                selected = activeParagraph?.isUnderlined == true,
-                onClick = { onAction(WorkspaceAction.ToggleActiveParagraphStyle("underline")) }
+                selected = activeParagraph != null && RichSpanEngine.hasActiveStyle(activeParagraph, s, e, RichSpanKind.UNDERLINE),
+                onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.UNDERLINE)) }
             )
             ToolbarToggleIcon(
                 icon = AllNotesIcons.FormatStrikethrough,
                 contentDescription = "Strikethrough (Ctrl+Shift+S)",
-                selected = activeParagraph?.isStrikethrough == true,
-                onClick = { onAction(WorkspaceAction.ToggleActiveParagraphStyle("strikethrough")) }
+                selected = activeParagraph != null && RichSpanEngine.hasActiveStyle(activeParagraph, s, e, RichSpanKind.STRIKETHROUGH),
+                onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.STRIKETHROUGH)) }
             )
             ToolbarToggleIcon(
                 icon = AllNotesIcons.Highlight,
                 contentDescription = "Highlight",
-                selected = activeParagraph?.isHighlighted == true,
-                onClick = { onAction(WorkspaceAction.ToggleActiveParagraphStyle("highlight")) }
+                selected = activeParagraph != null && RichSpanEngine.hasActiveStyle(activeParagraph, s, e, RichSpanKind.HIGHLIGHT),
+                onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.HIGHLIGHT)) }
+            )
+            ToolbarToggleIcon(
+                icon = AllNotesIcons.Code,
+                contentDescription = "Inline Code",
+                selected = activeParagraph != null && RichSpanEngine.hasActiveStyle(activeParagraph, s, e, RichSpanKind.INLINE_CODE),
+                onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.INLINE_CODE)) }
+            )
+            ToolbarToggleIcon(
+                icon = AllNotesIcons.Palette,
+                contentDescription = "Accent Text Color",
+                selected = activeParagraph != null && RichSpanEngine.hasActiveStyle(activeParagraph, s, e, RichSpanKind.COLOR_ACCENT),
+                onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.COLOR_ACCENT)) }
+            )
+            ToolbarToggleIcon(
+                icon = AllNotesIcons.Link,
+                contentDescription = "Insert Link (Ctrl+K)",
+                selected = activeParagraph != null && RichSpanEngine.hasActiveStyle(activeParagraph, s, e, RichSpanKind.LINK),
+                onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.INSERT_LINK)) }
             )
 
             if (activeHeading != null) {
@@ -100,78 +126,69 @@ fun DesktopFormattingRibbon(
                         )
                     }
                 }
+            } else if (activeCallout != null) {
+                VerticalDivider(modifier = Modifier.height(20.dp).padding(horizontal = 4.dp))
+                CalloutTone.entries.forEach { tone ->
+                    val selected = activeCallout.tone == tone
+                    Surface(
+                        onClick = { onAction(WorkspaceAction.UpdateCalloutTone(activeCallout.id, tone)) },
+                        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                        contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = tone.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                        )
+                    }
+                }
             }
 
             VerticalDivider(modifier = Modifier.height(20.dp).padding(horizontal = 4.dp))
 
-            IconButton(
-                onClick = { onAction(WorkspaceAction.InsertHeading(2, state.activeBlockId)) },
-                modifier = Modifier.size(34.dp)
-            ) {
+            IconButton(onClick = { onAction(WorkspaceAction.InsertHeading(2, state.activeBlockId)) }, modifier = Modifier.size(34.dp)) {
                 Icon(AllNotesIcons.Heading, contentDescription = "Insert Heading", modifier = Modifier.size(18.dp))
             }
-            IconButton(
-                onClick = { onAction(WorkspaceAction.InsertParagraph(state.activeBlockId)) },
-                modifier = Modifier.size(34.dp)
-            ) {
+            IconButton(onClick = { onAction(WorkspaceAction.InsertParagraph(state.activeBlockId)) }, modifier = Modifier.size(34.dp)) {
                 Icon(AllNotesIcons.Paragraph, contentDescription = "Insert Paragraph", modifier = Modifier.size(18.dp))
             }
-            IconButton(
-                onClick = { onAction(WorkspaceAction.InsertChecklist(state.activeBlockId)) },
-                modifier = Modifier.size(34.dp)
-            ) {
+            IconButton(onClick = { onAction(WorkspaceAction.InsertChecklist(state.activeBlockId)) }, modifier = Modifier.size(34.dp)) {
                 Icon(AllNotesIcons.Checklist, contentDescription = "Insert Checklist", modifier = Modifier.size(18.dp))
             }
-            IconButton(
-                onClick = { onAction(WorkspaceAction.InsertBulletList(isNumbered = false, afterBlockId = state.activeBlockId)) },
-                modifier = Modifier.size(34.dp)
-            ) {
+            IconButton(onClick = { onAction(WorkspaceAction.InsertBulletList(false, state.activeBlockId)) }, modifier = Modifier.size(34.dp)) {
                 Icon(AllNotesIcons.BulletList, contentDescription = "Insert Bullet List", modifier = Modifier.size(18.dp))
             }
-            IconButton(
-                onClick = { onAction(WorkspaceAction.InsertBulletList(isNumbered = true, afterBlockId = state.activeBlockId)) },
-                modifier = Modifier.size(34.dp)
-            ) {
+            IconButton(onClick = { onAction(WorkspaceAction.InsertBulletList(true, state.activeBlockId)) }, modifier = Modifier.size(34.dp)) {
                 Icon(AllNotesIcons.NumberedList, contentDescription = "Insert Numbered List", modifier = Modifier.size(18.dp))
             }
-            IconButton(
-                onClick = { onAction(WorkspaceAction.InsertTable(state.activeBlockId)) },
-                modifier = Modifier.size(34.dp)
-            ) {
+            IconButton(onClick = { onAction(WorkspaceAction.InsertTable(state.activeBlockId)) }, modifier = Modifier.size(34.dp)) {
                 Icon(AllNotesIcons.Table, contentDescription = "Insert Table", modifier = Modifier.size(18.dp))
             }
-            IconButton(
-                onClick = { onAction(WorkspaceAction.InsertCallout(state.activeBlockId)) },
-                modifier = Modifier.size(34.dp)
-            ) {
+            IconButton(onClick = { onAction(WorkspaceAction.InsertCallout(state.activeBlockId)) }, modifier = Modifier.size(34.dp)) {
                 Icon(AllNotesIcons.Callout, contentDescription = "Insert Callout", modifier = Modifier.size(18.dp))
             }
-            IconButton(
-                onClick = { onAction(WorkspaceAction.InsertCode(state.activeBlockId)) },
-                modifier = Modifier.size(34.dp)
-            ) {
+            IconButton(onClick = { onAction(WorkspaceAction.InsertCode(state.activeBlockId)) }, modifier = Modifier.size(34.dp)) {
                 Icon(AllNotesIcons.Code, contentDescription = "Insert Code Block", modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = { onAction(WorkspaceAction.InsertDivider(state.activeBlockId)) }, modifier = Modifier.size(34.dp)) {
+                Icon(AllNotesIcons.Divider, contentDescription = "Insert Divider", modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = onRequestMediaPicker, modifier = Modifier.size(34.dp)) {
+                Icon(AllNotesIcons.Image, contentDescription = "Attach Image or File", modifier = Modifier.size(18.dp))
             }
 
             if (activeBlock != null) {
                 Spacer(modifier = Modifier.weight(1f))
                 VerticalDivider(modifier = Modifier.height(20.dp).padding(horizontal = 4.dp))
-                IconButton(
-                    onClick = { onAction(WorkspaceAction.MoveBlock(activeBlock.id, -1)) },
-                    modifier = Modifier.size(34.dp)
-                ) {
+                IconButton(onClick = { onAction(WorkspaceAction.MoveBlock(activeBlock.id, -1)) }, modifier = Modifier.size(34.dp)) {
                     Icon(AllNotesIcons.ArrowUp, contentDescription = "Move block up", modifier = Modifier.size(17.dp))
                 }
-                IconButton(
-                    onClick = { onAction(WorkspaceAction.MoveBlock(activeBlock.id, 1)) },
-                    modifier = Modifier.size(34.dp)
-                ) {
+                IconButton(onClick = { onAction(WorkspaceAction.MoveBlock(activeBlock.id, 1)) }, modifier = Modifier.size(34.dp)) {
                     Icon(AllNotesIcons.ArrowDown, contentDescription = "Move block down", modifier = Modifier.size(17.dp))
                 }
-                IconButton(
-                    onClick = { onAction(WorkspaceAction.DeleteBlock(activeBlock.id)) },
-                    modifier = Modifier.size(34.dp)
-                ) {
+                IconButton(onClick = { onAction(WorkspaceAction.DeleteBlock(activeBlock.id)) }, modifier = Modifier.size(34.dp)) {
                     Icon(
                         AllNotesIcons.Delete,
                         contentDescription = "Delete block",

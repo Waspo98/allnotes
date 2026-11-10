@@ -1,4 +1,4 @@
-package app.overbay.allnotes.ui.workspace
+package app.overbay.allnotes.ui.workspace.dialogs
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -9,16 +9,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,83 +34,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.overbay.allnotes.model.NoteSection
+import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.ui.theme.accentColor
 
 @Composable
-fun WorkspaceDialogsHost(
-    state: WorkspaceUiState,
-    onAction: (WorkspaceAction) -> Unit
-) {
-    when (state.activeDialog) {
-        ActiveDialog.NONE -> Unit
-        ActiveDialog.NEW_NOTEBOOK -> NotebookDialog(
-            initialTitle = "",
-            initialSubtitle = "",
-            initialAccent = SectionAccentKey.INDIGO,
-            isEdit = false,
-            onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-            onConfirm = { t, s, a -> onAction(WorkspaceAction.CreateNotebook(t, s, a)) },
-            onDelete = null
-        )
-        ActiveDialog.EDIT_NOTEBOOK -> {
-            val nb = state.activeNotebook ?: return
-            NotebookDialog(
-                initialTitle = nb.title,
-                initialSubtitle = nb.subtitle,
-                initialAccent = nb.accent,
-                isEdit = true,
-                onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-                onConfirm = { t, s, a -> onAction(WorkspaceAction.UpdateActiveNotebook(t, s, a)) },
-                onDelete = { onAction(WorkspaceAction.DeleteActiveNotebook) }
-            )
-        }
-        ActiveDialog.NEW_SECTION -> SectionDialog(
-            initialTitle = "",
-            initialAccent = SectionAccentKey.EMERALD,
-            isEdit = false,
-            onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-            onConfirm = { t, a -> onAction(WorkspaceAction.CreateSection(t, a)) },
-            onDelete = null
-        )
-        ActiveDialog.EDIT_SECTION -> {
-            val sec = state.activeSection ?: return
-            SectionDialog(
-                initialTitle = sec.title,
-                initialAccent = sec.accent,
-                isEdit = true,
-                onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-                onConfirm = { t, a -> onAction(WorkspaceAction.UpdateActiveSection(t, a)) },
-                onDelete = { onAction(WorkspaceAction.DeleteActiveSection) }
-            )
-        }
-        ActiveDialog.NEW_PAGE -> CreatePageDialog(
-            hasActivePage = state.activePage != null,
-            onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-            onCreate = { title, asSubpage -> onAction(WorkspaceAction.CreatePage(title, asSubpage)) }
-        )
-        ActiveDialog.SYNC_SETTINGS -> SyncSettingsDialog(
-            initialEndpoint = state.syncEndpointUrl,
-            initialUseHttp = state.useRemoteHttpSync,
-            syncStatusLabel = state.syncStatus.label,
-            onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-            onSaveAndSync = { url, useHttp ->
-                onAction(WorkspaceAction.ConfigureSyncServer(url, useHttp))
-            }
-        )
-    }
-}
-
-@Composable
-private fun NotebookDialog(
+internal fun NotebookDialog(
     initialTitle: String,
     initialSubtitle: String,
     initialAccent: SectionAccentKey,
     isEdit: Boolean,
+    canReorder: Boolean,
+    onReorder: (Int) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (String, String, SectionAccentKey) -> Unit,
-    onDelete: (() -> Unit)?
+    onRequestDelete: (() -> Unit)?
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var subtitle by remember { mutableStateOf(initialSubtitle) }
@@ -133,6 +79,18 @@ private fun NotebookDialog(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 AccentPickerRow(selected = accent, onSelect = { accent = it })
+
+                if (isEdit && canReorder) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { onReorder(-1) }, modifier = Modifier.weight(1f)) {
+                            Text("Move Left")
+                        }
+                        OutlinedButton(onClick = { onReorder(1) }, modifier = Modifier.weight(1f)) {
+                            Text("Move Right")
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -142,9 +100,9 @@ private fun NotebookDialog(
         },
         dismissButton = {
             Row {
-                if (onDelete != null) {
-                    TextButton(onClick = onDelete) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                if (onRequestDelete != null) {
+                    TextButton(onClick = onRequestDelete) {
+                        Text("Delete…", color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                 }
@@ -157,13 +115,15 @@ private fun NotebookDialog(
 }
 
 @Composable
-private fun SectionDialog(
+internal fun SectionDialog(
     initialTitle: String,
     initialAccent: SectionAccentKey,
     isEdit: Boolean,
+    canReorder: Boolean,
+    onReorder: (Int) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (String, SectionAccentKey) -> Unit,
-    onDelete: (() -> Unit)?
+    onRequestDelete: (() -> Unit)?
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var accent by remember { mutableStateOf(initialAccent) }
@@ -182,6 +142,18 @@ private fun SectionDialog(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 AccentPickerRow(selected = accent, onSelect = { accent = it })
+
+                if (isEdit && canReorder) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { onReorder(-1) }, modifier = Modifier.weight(1f)) {
+                            Text("Move Left")
+                        }
+                        OutlinedButton(onClick = { onReorder(1) }, modifier = Modifier.weight(1f)) {
+                            Text("Move Right")
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -191,9 +163,9 @@ private fun SectionDialog(
         },
         dismissButton = {
             Row {
-                if (onDelete != null) {
-                    TextButton(onClick = onDelete) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                if (onRequestDelete != null) {
+                    TextButton(onClick = onRequestDelete) {
+                        Text("Delete…", color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                 }
@@ -206,7 +178,31 @@ private fun SectionDialog(
 }
 
 @Composable
-private fun CreatePageDialog(
+internal fun ConfirmDeleteHierarchyDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit,
+    onConfirmDelete: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, color = MaterialTheme.colorScheme.error) },
+        text = { Text(message, style = MaterialTheme.typography.bodyMedium) },
+        confirmButton = {
+            TextButton(onClick = onConfirmDelete) {
+                Text("Delete Permanently", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun CreatePageDialog(
     hasActivePage: Boolean,
     onDismiss: () -> Unit,
     onCreate: (String, Boolean) -> Unit
@@ -255,60 +251,109 @@ private fun CreatePageDialog(
 }
 
 @Composable
-private fun SyncSettingsDialog(
-    initialEndpoint: String,
-    initialUseHttp: Boolean,
-    syncStatusLabel: String,
+internal fun MovePageDialog(
+    pageTitle: String,
+    currentSectionId: String,
+    notebooks: List<Notebook>,
+    sections: List<NoteSection>,
     onDismiss: () -> Unit,
-    onSaveAndSync: (String, Boolean) -> Unit
+    onMoveToSection: (String) -> Unit
 ) {
-    var endpoint by remember { mutableStateOf(initialEndpoint) }
-    var useHttp by remember { mutableStateOf(initialUseHttp) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Overbay.app Sync Settings") },
+        title = { Text("Move \"${pageTitle.ifBlank { "Untitled Page" }}\"") },
         text = {
-            Column {
-                Text(
-                    text = "Status: $syncStatusLabel",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = endpoint,
-                    onValueChange = { endpoint = it },
-                    label = { Text("Sync Server Endpoint") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Connect to Remote HTTP Server",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Switch(
-                        checked = useHttp,
-                        onCheckedChange = { useHttp = it }
-                    )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                notebooks.forEach { nb ->
+                    val nbSections = sections.filter { it.notebookId == nb.id }.sortedBy { it.sortOrder }
+                    if (nbSections.isNotEmpty()) {
+                        Text(
+                            text = nb.title,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        nbSections.forEach { sec ->
+                            val isCurrent = sec.id == currentSectionId
+                            Surface(
+                                onClick = { if (!isCurrent) onMoveToSection(sec.id) },
+                                color = if (isCurrent) MaterialTheme.colorScheme.secondaryContainer
+                                else MaterialTheme.colorScheme.surfaceContainer,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(sec.accent.accentColor())
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (isCurrent) "${sec.title} (Current)" else sec.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@Composable
+internal fun InsertLinkDialog(
+    initialUrl: String,
+    onDismiss: () -> Unit,
+    onApplyLink: (String) -> Unit
+) {
+    var url by remember { mutableStateOf(initialUrl.ifBlank { "https://" }) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Insert or Edit Link") },
+        text = {
+            Column {
+                Text(
+                    text = "Applies hyperlink styling to the selected words (or current word under cursor).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("URL") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
         confirmButton = {
-            TextButton(onClick = { onSaveAndSync(endpoint, useHttp) }) {
-                Text("Sync Now")
+            TextButton(
+                onClick = { if (url.isNotBlank()) onApplyLink(url.trim()) }
+            ) {
+                Text("Apply Link")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }

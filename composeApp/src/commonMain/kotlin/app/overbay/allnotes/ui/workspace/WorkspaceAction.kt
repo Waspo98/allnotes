@@ -1,7 +1,9 @@
 package app.overbay.allnotes.ui.workspace
 
 import app.overbay.allnotes.model.CalloutTone
+import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
+import app.overbay.allnotes.model.ThemeMode
 
 sealed interface WorkspaceAction {
     // Navigation & UI Chrome
@@ -11,30 +13,59 @@ sealed interface WorkspaceAction {
     data class SetSearchQuery(val query: String) : WorkspaceAction
     data object ToggleSidebar : WorkspaceAction
     data class SetMobileHierarchySheetOpen(val open: Boolean) : WorkspaceAction
+    data class SetPageMenuOpen(val open: Boolean) : WorkspaceAction
+    data class SetMobileInsertMenuOpen(val open: Boolean) : WorkspaceAction
     data class OpenDialog(val dialog: ActiveDialog) : WorkspaceAction
     data object DismissDialog : WorkspaceAction
+    data class ShowStatusBanner(val message: String) : WorkspaceAction
+    data object DismissStatusBanner : WorkspaceAction
     data object TriggerSync : WorkspaceAction
     data class ConfigureSyncServer(val endpointUrl: String, val useRemoteHttp: Boolean) : WorkspaceAction
+    data class SaveSyncAndAuthSettings(
+        val endpointUrl: String,
+        val useRemoteHttp: Boolean,
+        val authToken: String,
+        val autoSync: Boolean
+    ) : WorkspaceAction
+    data class UpdateThemeSettings(val themeMode: ThemeMode, val useDynamicColor: Boolean) : WorkspaceAction
 
-    // Hierarchy CRUD
+    // Hierarchy CRUD, Reordering & Organization
     data class CreateNotebook(val title: String, val subtitle: String, val accent: SectionAccentKey) : WorkspaceAction
     data class UpdateActiveNotebook(val title: String, val subtitle: String, val accent: SectionAccentKey) : WorkspaceAction
+    data class ReorderActiveNotebook(val delta: Int) : WorkspaceAction
     data object DeleteActiveNotebook : WorkspaceAction
     data class CreateSection(val title: String, val accent: SectionAccentKey) : WorkspaceAction
     data class UpdateActiveSection(val title: String, val accent: SectionAccentKey) : WorkspaceAction
+    data class ReorderActiveSection(val delta: Int) : WorkspaceAction
     data object DeleteActiveSection : WorkspaceAction
     data class CreatePage(val title: String, val asSubpageOfActive: Boolean = false) : WorkspaceAction
     data class TogglePageSubpageIndent(val pageId: String) : WorkspaceAction
+    data class ToggleSubpageCollapse(val parentPageId: String) : WorkspaceAction
+    data class MoveActivePageToSection(val targetSectionId: String) : WorkspaceAction
+    data class ImportMarkdownPage(val markdown: String) : WorkspaceAction
 
-    // Active Page Metadata
+    // Active Page Metadata & History
     data class UpdateActivePageTitle(val newTitle: String) : WorkspaceAction
     data object ToggleActivePagePin : WorkspaceAction
     data object DeleteActivePage : WorkspaceAction
+    data object Undo : WorkspaceAction
+    data object Redo : WorkspaceAction
 
-    // Block Selection & Ordering
+    // Block Selection, Cursor Focus & Ordering
     data class SetActiveBlock(val blockId: String?) : WorkspaceAction
+    data class UpdateActiveSelection(val blockId: String, val selectionStart: Int, val selectionEnd: Int) : WorkspaceAction
+    data class ConsumeFocusRequest(val requestToken: Long) : WorkspaceAction
+    data object FocusOrAppendTrailingParagraph : WorkspaceAction
     data class MoveBlock(val blockId: String, val delta: Int) : WorkspaceAction
     data class DeleteBlock(val blockId: String) : WorkspaceAction
+
+    // Word-Style Keyboard Flow & Slash Commands
+    data class EditParagraphText(val blockId: String, val newText: String, val cursorOffset: Int) : WorkspaceAction
+    data class SplitBlockAtCursor(val blockId: String, val cursorOffset: Int) : WorkspaceAction
+    data class BackspaceAtBlockStart(val blockId: String) : WorkspaceAction
+    data class ListEnterAtItem(val blockId: String, val itemIndex: Int) : WorkspaceAction
+    data class ListBackspaceOnEmptyItem(val blockId: String, val itemIndex: Int) : WorkspaceAction
+    data class ExecuteSlashCommand(val blockId: String, val command: SlashCommandKind) : WorkspaceAction
 
     // Block Insertion
     data class InsertHeading(val level: Int = 2, val afterBlockId: String? = null) : WorkspaceAction
@@ -44,9 +75,25 @@ sealed interface WorkspaceAction {
     data class InsertTable(val afterBlockId: String? = null) : WorkspaceAction
     data class InsertCallout(val afterBlockId: String? = null) : WorkspaceAction
     data class InsertCode(val afterBlockId: String? = null) : WorkspaceAction
+    data class InsertDivider(val afterBlockId: String? = null) : WorkspaceAction
+    data class InsertAttachment(
+        val fileName: String,
+        val mimeType: String,
+        val sizeBytes: Long,
+        val dataBase64: String,
+        val afterBlockId: String? = null
+    ) : WorkspaceAction
 
-    // Block Content & Formatting Mutations
+    // Rich Spans & Block Formatting Mutations
     data class UpdateBlockText(val blockId: String, val newText: String) : WorkspaceAction
+    data class UpdateAttachmentCaption(val blockId: String, val caption: String) : WorkspaceAction
+    data class ToggleSelectionSpan(
+        val kind: RichSpanKind,
+        val url: String? = null,
+        val blockId: String? = null,
+        val selStart: Int? = null,
+        val selEnd: Int? = null
+    ) : WorkspaceAction
     data class ToggleParagraphStyle(val blockId: String, val style: String) : WorkspaceAction
     data class ToggleActiveParagraphStyle(val style: String) : WorkspaceAction
     data class UpdateHeadingLevel(val blockId: String, val level: Int) : WorkspaceAction

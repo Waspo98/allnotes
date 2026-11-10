@@ -369,4 +369,19 @@ object AllNotesIcons {
             lineTo(10.5f, 18f)
         }
     }
+
+    val Link: ImageVector get() = AllNotesStudioIcons.Link
+    val Undo: ImageVector get() = AllNotesStudioIcons.Undo
+    val Redo: ImageVector get() = AllNotesStudioIcons.Redo
+    val Attach: ImageVector get() = AllNotesStudioIcons.Attach
+    val Image: ImageVector get() = AllNotesStudioIcons.Image
+    val Divider: ImageVector get() = AllNotesStudioIcons.Divider
+    val Copy: ImageVector get() = AllNotesStudioIcons.Copy
+    val Settings: ImageVector get() = AllNotesStudioIcons.Settings
+    val Markdown: ImageVector get() = AllNotesStudioIcons.Markdown
+    val ChevronRight: ImageVector get() = AllNotesStudioIcons.ChevronRight
+    val ChevronDown: ImageVector get() = AllNotesStudioIcons.ChevronDown
+    val Palette: ImageVector get() = AllNotesStudioIcons.Palette
+    val FolderMove: ImageVector get() = AllNotesStudioIcons.FolderMove
+    val Check: ImageVector get() = AllNotesStudioIcons.Check
 }

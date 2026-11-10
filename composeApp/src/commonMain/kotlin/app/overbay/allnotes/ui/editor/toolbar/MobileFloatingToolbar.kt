@@ -1,16 +1,14 @@
 package app.overbay.allnotes.ui.editor.toolbar
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
@@ -20,10 +18,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +27,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.model.RichSpanKind
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 
@@ -41,142 +38,74 @@ import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 @Composable
 fun MobileFloatingToolbar(
     state: WorkspaceUiState,
+    onRequestMediaPicker: () -> Unit,
     onAction: (WorkspaceAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val activeBlock = state.activeBlock
-    var isInsertMenuOpen by remember { mutableStateOf(false) }
 
     HorizontalFloatingToolbar(
         expanded = true,
         modifier = modifier
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 4.dp),
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Primary '+' Insert Block Menu
-            Box {
-                IconButton(
-                    onClick = { isInsertMenuOpen = true },
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Icon(
-                        AllNotesIcons.Add,
-                        contentDescription = "Insert block",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = isInsertMenuOpen,
-                    onDismissRequest = { isInsertMenuOpen = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Paragraph") },
-                        leadingIcon = { Icon(AllNotesIcons.Paragraph, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = {
-                            isInsertMenuOpen = false
-                            onAction(WorkspaceAction.InsertParagraph(state.activeBlockId))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Heading") },
-                        leadingIcon = { Icon(AllNotesIcons.Heading, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = {
-                            isInsertMenuOpen = false
-                            onAction(WorkspaceAction.InsertHeading(2, state.activeBlockId))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Checklist") },
-                        leadingIcon = { Icon(AllNotesIcons.Checklist, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = {
-                            isInsertMenuOpen = false
-                            onAction(WorkspaceAction.InsertChecklist(state.activeBlockId))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Bullet List") },
-                        leadingIcon = { Icon(AllNotesIcons.BulletList, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = {
-                            isInsertMenuOpen = false
-                            onAction(WorkspaceAction.InsertBulletList(false, state.activeBlockId))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Numbered List") },
-                        leadingIcon = { Icon(AllNotesIcons.NumberedList, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = {
-                            isInsertMenuOpen = false
-                            onAction(WorkspaceAction.InsertBulletList(true, state.activeBlockId))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Table") },
-                        leadingIcon = { Icon(AllNotesIcons.Table, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = {
-                            isInsertMenuOpen = false
-                            onAction(WorkspaceAction.InsertTable(state.activeBlockId))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Callout") },
-                        leadingIcon = { Icon(AllNotesIcons.Callout, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = {
-                            isInsertMenuOpen = false
-                            onAction(WorkspaceAction.InsertCallout(state.activeBlockId))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Code Block") },
-                        leadingIcon = { Icon(AllNotesIcons.Code, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = {
-                            isInsertMenuOpen = false
-                            onAction(WorkspaceAction.InsertCode(state.activeBlockId))
-                        }
-                    )
-                }
-            }
-
-            VerticalDivider(modifier = Modifier.height(22.dp).padding(horizontal = 4.dp))
-
             when (activeBlock) {
                 is DocumentBlock.Paragraph -> {
+                    val s = state.selectionStart
+                    val e = state.selectionEnd
                     ToolbarToggleIcon(
                         icon = AllNotesIcons.FormatBold,
                         contentDescription = "Bold",
-                        selected = activeBlock.isBold,
-                        onClick = { onAction(WorkspaceAction.ToggleParagraphStyle(activeBlock.id, "bold")) }
+                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.BOLD),
+                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.BOLD)) }
                     )
                     ToolbarToggleIcon(
                         icon = AllNotesIcons.FormatItalic,
                         contentDescription = "Italic",
-                        selected = activeBlock.isItalic,
-                        onClick = { onAction(WorkspaceAction.ToggleParagraphStyle(activeBlock.id, "italic")) }
+                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.ITALIC),
+                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.ITALIC)) }
                     )
                     ToolbarToggleIcon(
                         icon = AllNotesIcons.FormatUnderlined,
                         contentDescription = "Underline",
-                        selected = activeBlock.isUnderlined,
-                        onClick = { onAction(WorkspaceAction.ToggleParagraphStyle(activeBlock.id, "underline")) }
+                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.UNDERLINE),
+                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.UNDERLINE)) }
                     )
                     ToolbarToggleIcon(
                         icon = AllNotesIcons.FormatStrikethrough,
                         contentDescription = "Strikethrough",
-                        selected = activeBlock.isStrikethrough,
-                        onClick = { onAction(WorkspaceAction.ToggleParagraphStyle(activeBlock.id, "strikethrough")) }
+                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.STRIKETHROUGH),
+                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.STRIKETHROUGH)) }
                     )
                     ToolbarToggleIcon(
                         icon = AllNotesIcons.Highlight,
                         contentDescription = "Highlight",
-                        selected = activeBlock.isHighlighted,
-                        onClick = { onAction(WorkspaceAction.ToggleParagraphStyle(activeBlock.id, "highlight")) }
+                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.HIGHLIGHT),
+                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.HIGHLIGHT)) }
+                    )
+                    ToolbarToggleIcon(
+                        icon = AllNotesIcons.Code,
+                        contentDescription = "Inline Code",
+                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.INLINE_CODE),
+                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.INLINE_CODE)) }
+                    )
+                    ToolbarToggleIcon(
+                        icon = AllNotesIcons.Palette,
+                        contentDescription = "Accent Color",
+                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.COLOR_ACCENT),
+                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.COLOR_ACCENT)) }
+                    )
+                    ToolbarToggleIcon(
+                        icon = AllNotesIcons.Link,
+                        contentDescription = "Insert Link",
+                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.LINK),
+                        onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.INSERT_LINK)) }
                     )
                 }
                 is DocumentBlock.Heading -> {
@@ -243,16 +172,16 @@ fun MobileFloatingToolbar(
                         Icon(AllNotesIcons.Checklist, contentDescription = "Insert Checklist", modifier = Modifier.size(18.dp))
                     }
                     IconButton(
-                        onClick = { onAction(WorkspaceAction.InsertBulletList(false, state.activeBlockId)) },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(AllNotesIcons.BulletList, contentDescription = "Insert List", modifier = Modifier.size(18.dp))
-                    }
-                    IconButton(
                         onClick = { onAction(WorkspaceAction.InsertTable(state.activeBlockId)) },
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(AllNotesIcons.Table, contentDescription = "Insert Table", modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(
+                        onClick = onRequestMediaPicker,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(AllNotesIcons.Image, contentDescription = "Attach Image or File", modifier = Modifier.size(18.dp))
                     }
                 }
             }
