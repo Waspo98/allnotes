@@ -1,11 +1,14 @@
 package app.overbay.allnotes.data
 
 import app.overbay.allnotes.db.AllNotesDatabase
+import app.overbay.allnotes.model.DeletedEntity
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.model.EntityKind
 import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.NoteSection
 import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.SectionAccentKey
+import app.overbay.allnotes.model.WorkspacePreferences
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -77,17 +80,27 @@ class SqlDelightNoteStore(
             )
         }
 
+        val tombstones = queries.selectAllDeletedEntities().executeAsList().mapNotNull { row ->
+            val kind = runCatching { EntityKind.valueOf(row.kind) }.getOrNull() ?: return@mapNotNull null
+            DeletedEntity(
+                id = row.id,
+                kind = kind,
+                deletedAtEpochMs = row.deleted_at_epoch_ms
+            )
+        }
+
         return WorkspaceSnapshot(
             notebooks = notebooks,
             sections = sections,
             pages = pages,
-            revision = meta?.revision ?: 1L
+            revision = meta?.revision ?: 1L,
+            tombstones = tombstones
         )
     }
 
     /**
      * Atomically persists the complete workspace snapshot within a single database transaction.
-     * Safely updates all notebooks, sections, pages (with polymorphic blocks as JSON), and revision.
+     * Safely updates all notebooks, sections, pages (with polymorphic blocks as JSON), tombstones, and revision.
      */
     override fun saveSnapshot(snapshot: WorkspaceSnapshot) {
         database.transaction {
@@ -95,6 +108,7 @@ class SqlDelightNoteStore(
             queries.deleteAllPages()
             queries.deleteAllSections()
             queries.deleteAllNotebooks()
+            queries.deleteAllDeletedEntities()
 
             // Insert notebooks
             for (notebook in snapshot.notebooks) {
@@ -143,6 +157,15 @@ class SqlDelightNoteStore(
                 }
             }
 
+            // Insert deletion tombstones
+            for (tombstone in snapshot.tombstones) {
+                queries.upsertDeletedEntity(
+                    id = tombstone.id,
+                    kind = tombstone.kind.name,
+                    deletedAtEpochMs = tombstone.deletedAtEpochMs
+                )
+            }
+
             // Update workspace revision metadata
             queries.updateMetaRevision(
                 revision = snapshot.revision,
@@ -154,6 +177,7 @@ class SqlDelightNoteStore(
     override fun savePage(page: NotePage, revision: Long) {
         database.transaction {
             savePage(page)
+            queries.deleteTombstone(id = page.id, kind = EntityKind.PAGE.name)
             queries.updateMetaRevision(
                 revision = revision,
                 updatedAtEpochMs = page.updatedAtEpochMs
@@ -161,14 +185,31 @@ class SqlDelightNoteStore(
         }
     }
 
-    override fun deletePage(pageId: String, revision: Long) {
+    override fun deletePage(pageId: String, revision: Long, deletedAtEpochMs: Long) {
         database.transaction {
             queries.deletePage(pageId)
+            if (deletedAtEpochMs > 0L) {
+                queries.upsertDeletedEntity(
+                    id = pageId,
+                    kind = EntityKind.PAGE.name,
+                    deletedAtEpochMs = deletedAtEpochMs
+                )
+            }
             queries.updateMetaRevision(
                 revision = revision,
-                updatedAtEpochMs = 0L
+                updatedAtEpochMs = deletedAtEpochMs
             )
         }
+    }
+
+    override fun loadPreferences(): WorkspacePreferences {
+        val raw = queries.getWorkspacePreferences().executeAsOneOrNull() ?: return WorkspacePreferences()
+        return runCatching { json.decodeFromString<WorkspacePreferences>(raw) }
+            .getOrDefault(WorkspacePreferences())
+    }
+
+    override fun savePreferences(preferences: WorkspacePreferences) {
+        queries.upsertWorkspacePreferences(prefsJson = json.encodeToString(preferences))
     }
 
     /**

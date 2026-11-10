@@ -1,6 +1,9 @@
 package app.overbay.allnotes.data
 
+import app.overbay.allnotes.model.DeletedEntity
+import app.overbay.allnotes.model.EntityKind
 import app.overbay.allnotes.model.NotePage
+import app.overbay.allnotes.model.WorkspacePreferences
 import app.overbay.allnotes.model.WorkspaceSnapshot
 
 interface NoteStorageBackend {
@@ -14,18 +17,38 @@ interface NoteStorageBackend {
         } else {
             listOf(page) + current.pages
         }
-        saveSnapshot(current.copy(pages = updatedPages, revision = revision))
+        val cleanedTombstones = current.tombstones.filterNot {
+            it.id == page.id && it.kind == EntityKind.PAGE
+        }
+        saveSnapshot(current.copy(pages = updatedPages, revision = revision, tombstones = cleanedTombstones))
     }
 
-    fun deletePage(pageId: String, revision: Long) {
+    fun deletePage(pageId: String, revision: Long, deletedAtEpochMs: Long = 0L) {
         val current = loadSnapshot() ?: return
-        saveSnapshot(current.copy(pages = current.pages.filterNot { it.id == pageId }, revision = revision))
+        val updatedTombstones = if (deletedAtEpochMs > 0L) {
+            current.tombstones.filterNot { it.id == pageId && it.kind == EntityKind.PAGE } +
+                DeletedEntity(id = pageId, kind = EntityKind.PAGE, deletedAtEpochMs = deletedAtEpochMs)
+        } else {
+            current.tombstones
+        }
+        saveSnapshot(
+            current.copy(
+                pages = current.pages.filterNot { it.id == pageId },
+                revision = revision,
+                tombstones = updatedTombstones
+            )
+        )
     }
+
+    fun loadPreferences(): WorkspacePreferences = WorkspacePreferences()
+    fun savePreferences(preferences: WorkspacePreferences) {}
 }
 
 expect class PlatformNoteStore() : NoteStorageBackend {
     override fun loadSnapshot(): WorkspaceSnapshot?
     override fun saveSnapshot(snapshot: WorkspaceSnapshot)
     override fun savePage(page: NotePage, revision: Long)
-    override fun deletePage(pageId: String, revision: Long)
+    override fun deletePage(pageId: String, revision: Long, deletedAtEpochMs: Long)
+    override fun loadPreferences(): WorkspacePreferences
+    override fun savePreferences(preferences: WorkspacePreferences)
 }

@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS deleted_entity (
+    id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    deleted_at_epoch_ms INTEGER NOT NULL,
+    PRIMARY KEY (id, kind)
+);
+
+CREATE TABLE IF NOT EXISTS workspace_preferences (
+    id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
+    prefs_json TEXT NOT NULL
+);

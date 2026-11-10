@@ -8,12 +8,15 @@ import kotlinx.coroutines.withContext
 class AndroidHttpTransport(
     private val timeoutMs: Int = 8000
 ) : HttpTransport {
-    override suspend fun get(url: String): HttpResponseData = withContext(Dispatchers.IO) {
+    override suspend fun get(url: String): HttpResponseData = get(url, emptyMap())
+
+    override suspend fun get(url: String, headers: Map<String, String>): HttpResponseData = withContext(Dispatchers.IO) {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = timeoutMs
             readTimeout = timeoutMs
             setRequestProperty("Accept", "application/json")
+            headers.forEach { (k, v) -> setRequestProperty(k, v) }
         }
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
@@ -21,7 +24,9 @@ class AndroidHttpTransport(
         HttpResponseData(code, body)
     }
 
-    override suspend fun post(url: String, jsonBody: String): HttpResponseData = withContext(Dispatchers.IO) {
+    override suspend fun post(url: String, jsonBody: String): HttpResponseData = post(url, jsonBody, emptyMap())
+
+    override suspend fun post(url: String, jsonBody: String, headers: Map<String, String>): HttpResponseData = withContext(Dispatchers.IO) {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
@@ -29,6 +34,7 @@ class AndroidHttpTransport(
             readTimeout = timeoutMs
             setRequestProperty("Content-Type", "application/json; charset=utf-8")
             setRequestProperty("Accept", "application/json")
+            headers.forEach { (k, v) -> setRequestProperty(k, v) }
         }
         conn.outputStream.use { it.write(jsonBody.toByteArray(Charsets.UTF_8)) }
         val code = conn.responseCode

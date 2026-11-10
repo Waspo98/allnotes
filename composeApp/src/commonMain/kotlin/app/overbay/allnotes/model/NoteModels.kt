@@ -21,6 +21,38 @@ enum class CalloutTone(val label: String) {
 }
 
 @Serializable
+enum class EntityKind {
+    NOTEBOOK,
+    SECTION,
+    PAGE
+}
+
+@Serializable
+data class DeletedEntity(
+    val id: String,
+    val kind: EntityKind,
+    val deletedAtEpochMs: Long
+)
+
+@Serializable
+enum class ThemeMode(val label: String) {
+    SYSTEM("System"),
+    LIGHT("Light"),
+    DARK("Dark")
+}
+
+@Serializable
+data class WorkspacePreferences(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val useDynamicColor: Boolean = true,
+    val syncEndpointUrl: String = "https://notes.overbay.app/api/v1/sync",
+    val useRemoteHttpSync: Boolean = false,
+    val syncAuthToken: String = "",
+    val autoSyncOnEdit: Boolean = false,
+    val lastSyncedEpochMs: Long = 0L
+)
+
+@Serializable
 data class Notebook(
     val id: String,
     val title: String,
@@ -129,5 +161,6 @@ data class WorkspaceSnapshot(
     val notebooks: List<Notebook> = emptyList(),
     val sections: List<NoteSection> = emptyList(),
     val pages: List<NotePage> = emptyList(),
-    val revision: Long = 1L
+    val revision: Long = 1L,
+    val tombstones: List<DeletedEntity> = emptyList()
 )

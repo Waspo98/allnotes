@@ -2,6 +2,7 @@ package app.overbay.allnotes.data
 
 import app.overbay.allnotes.db.AllNotesDatabase
 import app.overbay.allnotes.model.NotePage
+import app.overbay.allnotes.model.WorkspacePreferences
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import java.io.File
 import kotlinx.serialization.json.Json
@@ -66,9 +67,24 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
         }
     }
 
-    actual override fun deletePage(pageId: String, revision: Long) {
+    actual override fun deletePage(pageId: String, revision: Long, deletedAtEpochMs: Long) {
         try {
-            sqlStore.deletePage(pageId, revision)
+            sqlStore.deletePage(pageId, revision, deletedAtEpochMs)
+        } catch (_: Exception) {
+        }
+    }
+
+    actual override fun loadPreferences(): WorkspacePreferences {
+        return try {
+            sqlStore.loadPreferences()
+        } catch (_: Exception) {
+            WorkspacePreferences()
+        }
+    }
+
+    actual override fun savePreferences(preferences: WorkspacePreferences) {
+        try {
+            sqlStore.savePreferences(preferences)
         } catch (_: Exception) {
         }
     }

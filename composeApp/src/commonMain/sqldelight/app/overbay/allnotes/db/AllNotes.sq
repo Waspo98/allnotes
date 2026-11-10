@@ -41,6 +41,18 @@ CREATE TABLE workspace_meta (
     updated_at_epoch_ms INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE deleted_entity (
+    id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    deleted_at_epoch_ms INTEGER NOT NULL,
+    PRIMARY KEY (id, kind)
+);
+
+CREATE TABLE workspace_preferences (
+    id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
+    prefs_json TEXT NOT NULL
+);
+
 -- ========================================================
 -- Notebook Queries
 -- ========================================================
@@ -258,3 +270,44 @@ INSERT OR REPLACE INTO workspace_meta (
 
 deleteAllWorkspaceMeta:
 DELETE FROM workspace_meta;
+
+-- ========================================================
+-- Tombstones & Preferences Queries
+-- ========================================================
+
+selectAllDeletedEntities:
+SELECT *
+FROM deleted_entity
+ORDER BY deleted_at_epoch_ms DESC;
+
+upsertDeletedEntity:
+INSERT OR REPLACE INTO deleted_entity (
+    id,
+    kind,
+    deleted_at_epoch_ms
+) VALUES (
+    :id,
+    :kind,
+    :deletedAtEpochMs
+);
+
+deleteTombstone:
+DELETE FROM deleted_entity
+WHERE id = :id AND kind = :kind;
+
+deleteAllDeletedEntities:
+DELETE FROM deleted_entity;
+
+getWorkspacePreferences:
+SELECT prefs_json
+FROM workspace_preferences
+WHERE id = 1;
+
+upsertWorkspacePreferences:
+INSERT OR REPLACE INTO workspace_preferences (
+    id,
+    prefs_json
+) VALUES (
+    1,
+    :prefsJson
+);
