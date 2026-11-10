@@ -144,4 +144,48 @@ class ApplicationTest {
         assertEquals(200, wasmConn.responseCode)
         assertEquals("application/wasm", wasmConn.getHeaderField("Content-Type"))
     }
+
+    @Test
+    fun testAuthTokenProtectsSyncEndpointAndRejectsSpoofedHeaders() {
+        val authDir = Files.createTempDirectory("allnotes_auth_test").toFile()
+        val protectedServer = AllNotesServer(
+            port = 0,
+            dataDir = authDir,
+            webDistDir = webDir,
+            authToken = "overbay-secret-token-42",
+            trustAuthentikForwardAuth = false
+        )
+        protectedServer.start()
+        val authBase = "http://127.0.0.1:${protectedServer.boundPort}"
+        try {
+            // 1. Missing Authorization header -> 401
+            val unauthConn = (URL("$authBase/api/v1/sync").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+            }
+            assertEquals(401, unauthConn.responseCode)
+
+            // 2. Spoofed X-authentik-username when trustAuthentikForwardAuth=false -> 401
+            val spoofConn = (URL("$authBase/api/v1/sync").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("X-authentik-username", "neal")
+            }
+            assertEquals(401, spoofConn.responseCode)
+
+            // 3. Valid Bearer token -> 200
+            val validConn = (URL("$authBase/api/v1/sync").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("Authorization", "Bearer overbay-secret-token-42")
+            }
+            assertEquals(200, validConn.responseCode)
+
+            // 4. Health check remains accessible for Docker health probes -> 200
+            val healthConn = (URL("$authBase/api/v1/health").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+            }
+            assertEquals(200, healthConn.responseCode)
+        } finally {
+            protectedServer.stop(0)
+            authDir.deleteRecursively()
+        }
+    }
 }
