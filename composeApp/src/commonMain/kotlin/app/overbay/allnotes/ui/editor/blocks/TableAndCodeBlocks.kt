@@ -22,13 +22,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 
@@ -36,125 +40,33 @@ import app.overbay.allnotes.ui.workspace.WorkspaceAction
 internal fun ResponsiveTableBlockContent(
     block: DocumentBlock.Table,
     isActive: Boolean,
+    isCompactMobile: Boolean,
+    searchQuery: String,
     onAction: (WorkspaceAction) -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val searchVisual = remember(searchQuery, colorScheme) {
+        VisualTransformation { raw ->
+            TransformedText(
+                RichSpanEngine.buildSearchHighlightedString(raw.text, colorScheme, searchQuery),
+                OffsetMapping.Identity
+            )
+        }
+    }
+
+    val useMobileStackedCards = isCompactMobile && block.headers.size >= 4
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = colorScheme.surfaceContainerLow,
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = BorderStroke(1.dp, colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Table Header Row (Editable column headers)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                block.headers.forEachIndexed { colIndex, header ->
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (header.isEmpty()) {
-                                Text(
-                                    text = "Column ${colIndex + 1}",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                )
-                            }
-                            BasicTextField(
-                                value = header,
-                                onValueChange = { updated ->
-                                    onAction(WorkspaceAction.UpdateTableHeader(block.id, colIndex, updated))
-                                },
-                                textStyle = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                ),
-                                singleLine = true,
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        if (isActive && block.headers.size > 1) {
-                            IconButton(
-                                onClick = { onAction(WorkspaceAction.DeleteTableColumn(block.id, colIndex)) },
-                                modifier = Modifier.size(20.dp)
-                            ) {
-                                Icon(
-                                    AllNotesIcons.Close,
-                                    contentDescription = "Delete column",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-                if (isActive && block.rows.size > 1) {
-                    Spacer(modifier = Modifier.width(24.dp))
-                }
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            // Table Body Rows
-            block.rows.forEachIndexed { rIdx, row ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    row.forEachIndexed { cIdx, cell ->
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 4.dp)
-                        ) {
-                            if (cell.isEmpty()) {
-                                Text(
-                                    text = "—",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                )
-                            }
-                            BasicTextField(
-                                value = cell,
-                                onValueChange = { updated ->
-                                    onAction(WorkspaceAction.UpdateTableCell(block.id, rIdx, cIdx, updated))
-                                },
-                                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                    color = MaterialTheme.colorScheme.onSurface
-                                ),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-                    if (isActive && block.rows.size > 1) {
-                        IconButton(
-                            onClick = { onAction(WorkspaceAction.DeleteTableRow(block.id, rIdx)) },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                AllNotesIcons.Close,
-                                contentDescription = "Delete row",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
-                    }
-                }
-                if (rIdx < block.rows.lastIndex || isActive) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-                }
+            if (useMobileStackedCards) {
+                MobileStackedTableView(block, isActive, searchVisual, onAction)
+            } else {
+                StandardGridTableView(block, isActive, searchVisual, onAction)
             }
 
             if (isActive) {
@@ -187,71 +99,214 @@ internal fun ResponsiveTableBlockContent(
 }
 
 @Composable
-internal fun CodeSnippetBlockContent(
-    block: DocumentBlock.CodeSnippet,
+private fun MobileStackedTableView(
+    block: DocumentBlock.Table,
     isActive: Boolean,
+    searchVisual: VisualTransformation,
     onAction: (WorkspaceAction) -> Unit
 ) {
-    val languages = listOf("kotlin", "python", "bash", "sql", "json", "yaml")
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+    val colorScheme = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        AllNotesIcons.Code,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
+        if (isActive) {
+            Text(
+                text = "COLUMNS (${block.headers.size})",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = colorScheme.primary
+            )
+            block.headers.forEachIndexed { colIndex, header ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicTextField(
+                        value = header,
+                        onValueChange = { onAction(WorkspaceAction.UpdateTableHeader(block.id, colIndex, it)) },
+                        textStyle = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = colorScheme.onSurface
+                        ),
+                        singleLine = true,
+                        visualTransformation = searchVisual,
+                        cursorBrush = SolidColor(colorScheme.primary),
+                        modifier = Modifier.weight(1f)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = block.language.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                if (isActive) {
-                    TextButton(
-                        onClick = {
-                            val currentIdx = languages.indexOfFirst { it.equals(block.language, ignoreCase = true) }
-                            val nextLang = languages[(currentIdx + 1) % languages.size]
-                            onAction(WorkspaceAction.UpdateCodeLanguage(block.id, nextLang))
+                    if (block.headers.size > 1) {
+                        IconButton(
+                            onClick = { onAction(WorkspaceAction.DeleteTableColumn(block.id, colIndex)) },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(AllNotesIcons.Close, contentDescription = "Delete column", modifier = Modifier.size(12.dp))
                         }
-                    ) {
-                        Text("Change Language", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(modifier = Modifier.fillMaxWidth()) {
-                if (block.code.isEmpty()) {
-                    Text(
-                        text = "// Write or paste code…",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            HorizontalDivider(color = colorScheme.outlineVariant)
+        }
+
+        block.rows.forEachIndexed { rIdx, row ->
+            Surface(
+                color = colorScheme.surfaceContainer,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (isActive && block.rows.size > 1) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Row ${rIdx + 1}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colorScheme.onSurfaceVariant
+                            )
+                            IconButton(
+                                onClick = { onAction(WorkspaceAction.DeleteTableRow(block.id, rIdx)) },
+                                modifier = Modifier.size(22.dp)
+                            ) {
+                                Icon(AllNotesIcons.Close, contentDescription = "Delete row", modifier = Modifier.size(12.dp))
+                            }
+                        }
+                    }
+                    block.headers.forEachIndexed { cIdx, header ->
+                        val cellValue = row.getOrElse(cIdx) { "" }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Text(
+                                text = header.ifBlank { "Col ${cIdx + 1}" },
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(104.dp).padding(end = 8.dp)
+                            )
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (cellValue.isEmpty()) {
+                                    Text(
+                                        text = "—",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    )
+                                }
+                                BasicTextField(
+                                    value = cellValue,
+                                    onValueChange = { onAction(WorkspaceAction.UpdateTableCell(block.id, rIdx, cIdx, it)) },
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = colorScheme.onSurface),
+                                    visualTransformation = searchVisual,
+                                    cursorBrush = SolidColor(colorScheme.primary),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StandardGridTableView(
+    block: DocumentBlock.Table,
+    isActive: Boolean,
+    searchVisual: VisualTransformation,
+    onAction: (WorkspaceAction) -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        block.headers.forEachIndexed { colIndex, header ->
+            Row(
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    if (header.isEmpty()) {
+                        Text(
+                            text = "Column ${colIndex + 1}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                    BasicTextField(
+                        value = header,
+                        onValueChange = { onAction(WorkspaceAction.UpdateTableHeader(block.id, colIndex, it)) },
+                        textStyle = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = colorScheme.onSurface
+                        ),
+                        singleLine = true,
+                        visualTransformation = searchVisual,
+                        cursorBrush = SolidColor(colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
-                BasicTextField(
-                    value = block.code,
-                    onValueChange = { onAction(WorkspaceAction.UpdateBlockText(block.id, it)) },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (isActive && block.headers.size > 1) {
+                    IconButton(
+                        onClick = { onAction(WorkspaceAction.DeleteTableColumn(block.id, colIndex)) },
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Icon(AllNotesIcons.Close, contentDescription = "Delete column", tint = colorScheme.onSurfaceVariant, modifier = Modifier.size(12.dp))
+                    }
+                }
             }
+        }
+        if (isActive && block.rows.size > 1) {
+            Spacer(modifier = Modifier.width(24.dp))
+        }
+    }
+
+    HorizontalDivider(color = colorScheme.outlineVariant)
+
+    block.rows.forEachIndexed { rIdx, row ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            row.forEachIndexed { cIdx, cell ->
+                Box(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
+                    if (cell.isEmpty()) {
+                        Text(
+                            text = "—",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+                    }
+                    BasicTextField(
+                        value = cell,
+                        onValueChange = { onAction(WorkspaceAction.UpdateTableCell(block.id, rIdx, cIdx, it)) },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = colorScheme.onSurface),
+                        visualTransformation = searchVisual,
+                        cursorBrush = SolidColor(colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+            if (isActive && block.rows.size > 1) {
+                IconButton(
+                    onClick = { onAction(WorkspaceAction.DeleteTableRow(block.id, rIdx)) },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(AllNotesIcons.Close, contentDescription = "Delete row", tint = colorScheme.onSurfaceVariant, modifier = Modifier.size(13.dp))
+                }
+            }
+        }
+        if (rIdx < block.rows.lastIndex || isActive) {
+            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.35f))
         }
     }
 }

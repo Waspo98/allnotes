@@ -18,28 +18,101 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.workspace.EditorFocusRequest
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 
 @Composable
 internal fun ChecklistBlockContent(
     block: DocumentBlock.Checklist,
     isActive: Boolean,
+    searchQuery: String,
+    focusRequest: EditorFocusRequest?,
     onAction: (WorkspaceAction) -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val searchVisual = remember(searchQuery, colorScheme) {
+        VisualTransformation { raw ->
+            TransformedText(
+                RichSpanEngine.buildSearchHighlightedString(raw.text, colorScheme, searchQuery),
+                OffsetMapping.Identity
+            )
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        block.items.forEach { item ->
+        if (block.title.isNotEmpty() || isActive) {
+            Box(modifier = Modifier.fillMaxWidth().padding(start = 6.dp, bottom = 2.dp)) {
+                if (block.title.isEmpty()) {
+                    Text(
+                        text = "Checklist heading (optional)…",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                    )
+                }
+                BasicTextField(
+                    value = block.title,
+                    onValueChange = { onAction(WorkspaceAction.UpdateChecklistTitle(block.id, it)) },
+                    textStyle = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.primary
+                    ),
+                    singleLine = true,
+                    visualTransformation = searchVisual,
+                    cursorBrush = SolidColor(colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        block.items.forEachIndexed { index, item ->
+            val requester = remember(item.id) { FocusRequester() }
+            var fieldValue by remember(item.id) {
+                mutableStateOf(TextFieldValue(text = item.text, selection = TextRange(item.text.length)))
+            }
+            if (fieldValue.text != item.text) {
+                val pos = fieldValue.selection.start.coerceIn(0, item.text.length)
+                fieldValue = TextFieldValue(text = item.text, selection = TextRange(pos))
+            }
+
+            LaunchedEffect(focusRequest?.requestToken) {
+                if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex == index) {
+                    val pos = focusRequest.cursorOffset.coerceIn(0, item.text.length)
+                    fieldValue = fieldValue.copy(selection = TextRange(pos))
+                    runCatching { requester.requestFocus() }
+                    onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -51,40 +124,56 @@ internal fun ChecklistBlockContent(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Box(modifier = Modifier.weight(1f).padding(vertical = 4.dp)) {
-                    if (item.text.isEmpty()) {
+                    if (fieldValue.text.isEmpty()) {
                         Text(
                             text = "To-do item…",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                         )
                     }
                     BasicTextField(
-                        value = item.text,
-                        onValueChange = { newText ->
-                            if (newText.contains('\n')) {
-                                val cleaned = newText.replace("\n", "")
+                        value = fieldValue,
+                        onValueChange = { updated ->
+                            if (updated.text.contains('\n')) {
+                                val cleaned = updated.text.replace("\n", "")
+                                fieldValue = updated.copy(text = cleaned)
                                 onAction(WorkspaceAction.UpdateChecklistItemText(block.id, item.id, cleaned))
-                                onAction(WorkspaceAction.InsertChecklistItemAfter(block.id, item.id))
+                                onAction(WorkspaceAction.ListEnterAtItem(block.id, index))
                             } else {
-                                onAction(WorkspaceAction.UpdateChecklistItemText(block.id, item.id, newText))
+                                val changed = updated.text != fieldValue.text
+                                fieldValue = updated
+                                if (changed) {
+                                    onAction(WorkspaceAction.UpdateChecklistItemText(block.id, item.id, updated.text))
+                                }
                             }
                         },
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             textDecoration = if (item.isChecked) TextDecoration.LineThrough else TextDecoration.None,
-                            color = if (item.isChecked) {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            }
+                            color = if (item.isChecked) colorScheme.onSurfaceVariant else colorScheme.onSurface
                         ),
+                        visualTransformation = searchVisual,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         keyboardActions = KeyboardActions(
-                            onNext = {
-                                onAction(WorkspaceAction.InsertChecklistItemAfter(block.id, item.id))
-                            }
+                            onNext = { onAction(WorkspaceAction.ListEnterAtItem(block.id, index)) }
                         ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.fillMaxWidth()
+                        cursorBrush = SolidColor(colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(requester)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when {
+                                    event.key == Key.Enter -> {
+                                        onAction(WorkspaceAction.ListEnterAtItem(block.id, index))
+                                        true
+                                    }
+                                    event.key == Key.Backspace && fieldValue.text.isEmpty() -> {
+                                        onAction(WorkspaceAction.ListBackspaceOnEmptyItem(block.id, index))
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            }
                     )
                 }
                 if (isActive && block.items.size > 1) {
@@ -95,7 +184,7 @@ internal fun ChecklistBlockContent(
                         Icon(
                             AllNotesIcons.Close,
                             contentDescription = "Delete item",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                            tint = colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -109,8 +198,20 @@ internal fun ChecklistBlockContent(
 internal fun BulletListBlockContent(
     block: DocumentBlock.BulletList,
     isActive: Boolean,
+    searchQuery: String,
+    focusRequest: EditorFocusRequest?,
     onAction: (WorkspaceAction) -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val searchVisual = remember(searchQuery, colorScheme) {
+        VisualTransformation { raw ->
+            TransformedText(
+                RichSpanEngine.buildSearchHighlightedString(raw.text, colorScheme, searchQuery),
+                OffsetMapping.Identity
+            )
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -118,6 +219,24 @@ internal fun BulletListBlockContent(
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         block.items.forEachIndexed { index, item ->
+            val requester = remember(block.id, index) { FocusRequester() }
+            var fieldValue by remember(block.id, index) {
+                mutableStateOf(TextFieldValue(text = item, selection = TextRange(item.length)))
+            }
+            if (fieldValue.text != item) {
+                val pos = fieldValue.selection.start.coerceIn(0, item.length)
+                fieldValue = TextFieldValue(text = item, selection = TextRange(pos))
+            }
+
+            LaunchedEffect(focusRequest?.requestToken) {
+                if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex == index) {
+                    val pos = focusRequest.cursorOffset.coerceIn(0, item.length)
+                    fieldValue = fieldValue.copy(selection = TextRange(pos))
+                    runCatching { requester.requestFocus() }
+                    onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))
+                }
+            }
+
             val prefix = if (block.isNumbered) "${index + 1}." else "•"
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -127,39 +246,59 @@ internal fun BulletListBlockContent(
                     text = prefix,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = colorScheme.primary,
                     modifier = Modifier.width(24.dp).padding(top = 1.dp)
                 )
                 Box(modifier = Modifier.weight(1f)) {
-                    if (item.isEmpty()) {
+                    if (fieldValue.text.isEmpty()) {
                         Text(
                             text = "List item…",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                         )
                     }
                     BasicTextField(
-                        value = item,
-                        onValueChange = { newText ->
-                            if (newText.contains('\n')) {
-                                val cleaned = newText.replace("\n", "")
+                        value = fieldValue,
+                        onValueChange = { updated ->
+                            if (updated.text.contains('\n')) {
+                                val cleaned = updated.text.replace("\n", "")
+                                fieldValue = updated.copy(text = cleaned)
                                 onAction(WorkspaceAction.UpdateBulletListItem(block.id, index, cleaned))
-                                onAction(WorkspaceAction.InsertBulletListItemAfter(block.id, index))
+                                onAction(WorkspaceAction.ListEnterAtItem(block.id, index))
                             } else {
-                                onAction(WorkspaceAction.UpdateBulletListItem(block.id, index, newText))
+                                val changed = updated.text != fieldValue.text
+                                fieldValue = updated
+                                if (changed) {
+                                    onAction(WorkspaceAction.UpdateBulletListItem(block.id, index, updated.text))
+                                }
                             }
                         },
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = colorScheme.onSurface
                         ),
+                        visualTransformation = searchVisual,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         keyboardActions = KeyboardActions(
-                            onNext = {
-                                onAction(WorkspaceAction.InsertBulletListItemAfter(block.id, index))
-                            }
+                            onNext = { onAction(WorkspaceAction.ListEnterAtItem(block.id, index)) }
                         ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.fillMaxWidth()
+                        cursorBrush = SolidColor(colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(requester)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when {
+                                    event.key == Key.Enter -> {
+                                        onAction(WorkspaceAction.ListEnterAtItem(block.id, index))
+                                        true
+                                    }
+                                    event.key == Key.Backspace && fieldValue.text.isEmpty() -> {
+                                        onAction(WorkspaceAction.ListBackspaceOnEmptyItem(block.id, index))
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            }
                     )
                 }
                 if (isActive && block.items.size > 1) {
@@ -170,7 +309,7 @@ internal fun BulletListBlockContent(
                         Icon(
                             AllNotesIcons.Close,
                             contentDescription = "Remove list item",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                            tint = colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                             modifier = Modifier.size(14.dp)
                         )
                     }

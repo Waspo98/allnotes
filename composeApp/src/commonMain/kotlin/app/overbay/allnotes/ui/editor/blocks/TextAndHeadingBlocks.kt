@@ -1,6 +1,5 @@
 package app.overbay.allnotes.ui.editor.blocks
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,54 +16,129 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
-import app.overbay.allnotes.ui.theme.allNotesSpring
+import app.overbay.allnotes.ui.workspace.EditorFocusRequest
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 
 @Composable
 internal fun HeadingBlockContent(
     block: DocumentBlock.Heading,
+    searchQuery: String,
+    focusRequest: EditorFocusRequest?,
     onAction: (WorkspaceAction) -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val focusRequester = remember(block.id) { FocusRequester() }
+    var fieldValue by remember(block.id) {
+        mutableStateOf(TextFieldValue(text = block.text, selection = TextRange(block.text.length)))
+    }
+    if (fieldValue.text != block.text) {
+        val pos = fieldValue.selection.start.coerceIn(0, block.text.length)
+        fieldValue = TextFieldValue(text = block.text, selection = TextRange(pos))
+    }
+
+    LaunchedEffect(focusRequest?.requestToken) {
+        if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
+            val pos = focusRequest.cursorOffset.coerceIn(0, block.text.length)
+            fieldValue = fieldValue.copy(selection = TextRange(pos))
+            runCatching { focusRequester.requestFocus() }
+            onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))
+        }
+    }
+
     val headingStyle = when (block.level) {
         1 -> MaterialTheme.typography.headlineMedium.copy(
             fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = colorScheme.onSurface
         )
         2 -> MaterialTheme.typography.headlineSmall.copy(
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = colorScheme.onSurface
         )
         else -> MaterialTheme.typography.titleLarge.copy(
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary
+            color = colorScheme.primary
         )
     }
 
+    val searchVisual = remember(searchQuery, colorScheme) {
+        VisualTransformation { raw ->
+            TransformedText(
+                RichSpanEngine.buildSearchHighlightedString(raw.text, colorScheme, searchQuery),
+                OffsetMapping.Identity
+            )
+        }
+    }
+
     Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp)) {
-        if (block.text.isEmpty()) {
+        if (fieldValue.text.isEmpty()) {
             Text(
                 text = "Heading ${block.level}…",
-                style = headingStyle.copy(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f))
+                style = headingStyle.copy(color = colorScheme.onSurfaceVariant.copy(alpha = 0.45f))
             )
         }
         BasicTextField(
-            value = block.text,
-            onValueChange = { onAction(WorkspaceAction.UpdateBlockText(block.id, it)) },
+            value = fieldValue,
+            onValueChange = { updated ->
+                if (updated.text.length == fieldValue.text.length + 1 && updated.composition == null) {
+                    val idx = updated.selection.start - 1
+                    if (idx in updated.text.indices && updated.text[idx] == '\n') {
+                        onAction(WorkspaceAction.SplitBlockAtCursor(block.id, idx))
+                        return@BasicTextField
+                    }
+                }
+                val textChanged = updated.text != fieldValue.text
+                fieldValue = updated
+                if (textChanged) {
+                    onAction(WorkspaceAction.UpdateBlockText(block.id, updated.text.replace("\n", " ")))
+                }
+            },
             textStyle = headingStyle,
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier.fillMaxWidth()
+            visualTransformation = searchVisual,
+            cursorBrush = SolidColor(colorScheme.primary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester)
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when {
+                        event.key == Key.Enter && !event.isShiftPressed -> {
+                            onAction(WorkspaceAction.SplitBlockAtCursor(block.id, fieldValue.selection.min))
+                            true
+                        }
+                        event.key == Key.Backspace && fieldValue.selection.collapsed && fieldValue.selection.start == 0 -> {
+                            onAction(WorkspaceAction.BackspaceAtBlockStart(block.id))
+                            true
+                        }
+                        else -> false
+                    }
+                }
         )
     }
 }
@@ -72,80 +146,76 @@ internal fun HeadingBlockContent(
 @Composable
 internal fun ParagraphBlockContent(
     block: DocumentBlock.Paragraph,
+    isActive: Boolean,
+    searchQuery: String,
+    focusRequest: EditorFocusRequest?,
     onAction: (WorkspaceAction) -> Unit
 ) {
-    val targetBg = if (block.isHighlighted) {
-        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
-    } else {
-        Color.Transparent
-    }
-    val bg by animateColorAsState(targetValue = targetBg, animationSpec = allNotesSpring())
-
-    val decorations = buildList {
-        if (block.isUnderlined) add(TextDecoration.Underline)
-        if (block.isStrikethrough) add(TextDecoration.LineThrough)
-    }
-    val combinedDecoration = if (decorations.isEmpty()) TextDecoration.None else TextDecoration.combine(decorations)
-
-    val textStyle = MaterialTheme.typography.bodyLarge.copy(
-        color = MaterialTheme.colorScheme.onSurface,
-        fontWeight = if (block.isBold) FontWeight.Bold else FontWeight.Normal,
-        fontStyle = if (block.isItalic) FontStyle.Italic else FontStyle.Normal,
-        textDecoration = combinedDecoration
+    RichParagraphField(
+        block = block,
+        isActive = isActive,
+        searchQuery = searchQuery,
+        focusRequest = focusRequest,
+        onAction = onAction
     )
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = bg,
-        shape = RoundedCornerShape(10.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = if (block.isHighlighted) 12.dp else 2.dp,
-                    vertical = if (block.isHighlighted) 10.dp else 4.dp
-                )
-        ) {
-            if (block.text.isEmpty()) {
-                Text(
-                    text = "Type paragraph text…",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-                )
-            }
-            BasicTextField(
-                value = block.text,
-                onValueChange = { onAction(WorkspaceAction.UpdateBlockText(block.id, it)) },
-                textStyle = textStyle,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
 }
 
 @Composable
 internal fun CalloutBlockContent(
     block: DocumentBlock.Callout,
+    searchQuery: String,
+    focusRequest: EditorFocusRequest?,
     onAction: (WorkspaceAction) -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val bodyFocusRequester = remember(block.id) { FocusRequester() }
+    var titleField by remember(block.id) {
+        mutableStateOf(TextFieldValue(text = block.title, selection = TextRange(block.title.length)))
+    }
+    var bodyField by remember(block.id) {
+        mutableStateOf(TextFieldValue(text = block.text, selection = TextRange(block.text.length)))
+    }
+    if (titleField.text != block.title) {
+        titleField = TextFieldValue(block.title, TextRange(titleField.selection.start.coerceIn(0, block.title.length)))
+    }
+    if (bodyField.text != block.text) {
+        bodyField = TextFieldValue(block.text, TextRange(bodyField.selection.start.coerceIn(0, block.text.length)))
+    }
+
+    LaunchedEffect(focusRequest?.requestToken) {
+        if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
+            val pos = focusRequest.cursorOffset.coerceIn(0, block.text.length)
+            bodyField = bodyField.copy(selection = TextRange(pos))
+            runCatching { bodyFocusRequester.requestFocus() }
+            onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))
+        }
+    }
+
     val (container, content, badge) = when (block.tone) {
         CalloutTone.INFO -> Triple(
-            MaterialTheme.colorScheme.secondaryContainer,
-            MaterialTheme.colorScheme.onSecondaryContainer,
-            MaterialTheme.colorScheme.secondary
+            colorScheme.secondaryContainer,
+            colorScheme.onSecondaryContainer,
+            colorScheme.secondary
         )
         CalloutTone.TIP -> Triple(
-            MaterialTheme.colorScheme.tertiaryContainer,
-            MaterialTheme.colorScheme.onTertiaryContainer,
-            MaterialTheme.colorScheme.tertiary
+            colorScheme.tertiaryContainer,
+            colorScheme.onTertiaryContainer,
+            colorScheme.tertiary
         )
         CalloutTone.IMPORTANT -> Triple(
-            MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,
-            MaterialTheme.colorScheme.primary
+            colorScheme.primaryContainer,
+            colorScheme.onPrimaryContainer,
+            colorScheme.primary
         )
+    }
+
+    val searchVisual = remember(searchQuery, colorScheme) {
+        VisualTransformation { raw ->
+            TransformedText(
+                RichSpanEngine.buildSearchHighlightedString(raw.text, colorScheme, searchQuery),
+                OffsetMapping.Identity
+            )
+        }
     }
 
     Surface(
@@ -167,7 +237,7 @@ internal fun CalloutBlockContent(
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    if (block.title.isEmpty()) {
+                    if (titleField.text.isEmpty()) {
                         Text(
                             text = "Callout title…",
                             style = MaterialTheme.typography.titleSmall,
@@ -175,19 +245,27 @@ internal fun CalloutBlockContent(
                         )
                     }
                     BasicTextField(
-                        value = block.title,
-                        onValueChange = { onAction(WorkspaceAction.UpdateCalloutTitle(block.id, it)) },
+                        value = titleField,
+                        onValueChange = { updated ->
+                            val changed = updated.text != titleField.text
+                            titleField = updated
+                            if (changed) {
+                                onAction(WorkspaceAction.UpdateCalloutTitle(block.id, updated.text))
+                            }
+                        },
                         textStyle = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = content
                         ),
+                        singleLine = true,
+                        visualTransformation = searchVisual,
                         cursorBrush = SolidColor(badge),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    if (block.text.isEmpty()) {
+                    if (bodyField.text.isEmpty()) {
                         Text(
                             text = "Add callout details…",
                             style = MaterialTheme.typography.bodyMedium,
@@ -195,11 +273,32 @@ internal fun CalloutBlockContent(
                         )
                     }
                     BasicTextField(
-                        value = block.text,
-                        onValueChange = { onAction(WorkspaceAction.UpdateBlockText(block.id, it)) },
+                        value = bodyField,
+                        onValueChange = { updated ->
+                            val changed = updated.text != bodyField.text
+                            bodyField = updated
+                            if (changed) {
+                                onAction(WorkspaceAction.UpdateBlockText(block.id, updated.text))
+                            }
+                        },
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = content),
+                        visualTransformation = searchVisual,
                         cursorBrush = SolidColor(badge),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(bodyFocusRequester)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    event.key == Key.Backspace &&
+                                    bodyField.text.isEmpty() &&
+                                    titleField.text.isEmpty()
+                                ) {
+                                    onAction(WorkspaceAction.BackspaceAtBlockStart(block.id))
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
                     )
                 }
             }

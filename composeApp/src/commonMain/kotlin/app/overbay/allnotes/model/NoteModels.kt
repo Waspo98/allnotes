@@ -80,6 +80,28 @@ data class ChecklistItem(
 )
 
 @Serializable
+enum class RichSpanKind {
+    BOLD,
+    ITALIC,
+    UNDERLINE,
+    STRIKETHROUGH,
+    HIGHLIGHT,
+    INLINE_CODE,
+    COLOR_ACCENT,
+    COLOR_TERTIARY,
+    COLOR_ERROR,
+    LINK
+}
+
+@Serializable
+data class RichTextSpan(
+    val start: Int,
+    val end: Int,
+    val kind: RichSpanKind,
+    val url: String? = null
+)
+
+@Serializable
 sealed interface DocumentBlock {
     val id: String
 
@@ -100,8 +122,37 @@ sealed interface DocumentBlock {
         val isItalic: Boolean = false,
         val isUnderlined: Boolean = false,
         val isStrikethrough: Boolean = false,
-        val isHighlighted: Boolean = false
-    ) : DocumentBlock
+        val isHighlighted: Boolean = false,
+        val spans: List<RichTextSpan> = emptyList()
+    ) : DocumentBlock {
+        fun effectiveSpans(): List<RichTextSpan> {
+            val len = text.length
+            if (len == 0) return emptyList()
+            val clamped = spans.mapNotNull { span ->
+                val s = span.start.coerceIn(0, len)
+                val e = span.end.coerceIn(0, len)
+                if (s < e) span.copy(start = s, end = e) else null
+            }
+            val wholeBlock = buildList {
+                if (isBold && clamped.none { it.kind == RichSpanKind.BOLD && it.start == 0 && it.end == len }) {
+                    add(RichTextSpan(0, len, RichSpanKind.BOLD))
+                }
+                if (isItalic && clamped.none { it.kind == RichSpanKind.ITALIC && it.start == 0 && it.end == len }) {
+                    add(RichTextSpan(0, len, RichSpanKind.ITALIC))
+                }
+                if (isUnderlined && clamped.none { it.kind == RichSpanKind.UNDERLINE && it.start == 0 && it.end == len }) {
+                    add(RichTextSpan(0, len, RichSpanKind.UNDERLINE))
+                }
+                if (isStrikethrough && clamped.none { it.kind == RichSpanKind.STRIKETHROUGH && it.start == 0 && it.end == len }) {
+                    add(RichTextSpan(0, len, RichSpanKind.STRIKETHROUGH))
+                }
+                if (isHighlighted && clamped.none { it.kind == RichSpanKind.HIGHLIGHT && it.start == 0 && it.end == len }) {
+                    add(RichTextSpan(0, len, RichSpanKind.HIGHLIGHT))
+                }
+            }
+            return clamped + wholeBlock
+        }
+    }
 
     @Serializable
     @SerialName("checklist")
@@ -142,6 +193,23 @@ sealed interface DocumentBlock {
         override val id: String,
         val language: String = "kotlin",
         val code: String
+    ) : DocumentBlock
+
+    @Serializable
+    @SerialName("divider")
+    data class Divider(
+        override val id: String
+    ) : DocumentBlock
+
+    @Serializable
+    @SerialName("attachment")
+    data class Attachment(
+        override val id: String,
+        val fileName: String,
+        val mimeType: String,
+        val sizeBytes: Long = 0L,
+        val caption: String = "",
+        val dataBase64: String = ""
     ) : DocumentBlock
 }
 
