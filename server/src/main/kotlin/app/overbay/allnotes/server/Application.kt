@@ -9,6 +9,7 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.util.concurrent.Executors
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -22,7 +23,9 @@ val serverJson = Json {
 class AllNotesServer(
     val port: Int = System.getenv("PORT")?.toIntOrNull() ?: 8094,
     val dataDir: File = File(System.getenv("DATA_DIR") ?: "./data").apply { mkdirs() },
-    val webDistDir: File = File(System.getenv("WEB_DIR") ?: System.getenv("WEB_DIST_DIR") ?: "./web")
+    val webDistDir: File = File(System.getenv("WEB_DIR") ?: System.getenv("WEB_DIST_DIR") ?: "./web"),
+    val authToken: String = System.getenv("ALLNOTES_AUTH_TOKEN")?.trim().orEmpty(),
+    val trustAuthentikForwardAuth: Boolean = System.getenv("TRUST_AUTHENTIK_HEADERS")?.toBoolean() == true
 ) {
     private var httpServer: HttpServer? = null
     private val snapshotLock = Any()
@@ -53,8 +56,17 @@ class AllNotesServer(
         }
 
         server.createContext("/api/v1/sync") { exchange ->
-            when (exchange.requestMethod.uppercase()) {
-                "OPTIONS" -> sendNoContent(exchange)
+            val method = exchange.requestMethod.uppercase()
+            if (method == "OPTIONS") {
+                sendNoContent(exchange)
+                return@createContext
+            }
+            if (!isAuthorized(exchange)) {
+                exchange.responseHeaders.set("WWW-Authenticate", "Bearer realm=\"notes.overbay.app\"")
+                sendJson(exchange, 401, """{"error":"Unauthorized"}""")
+                return@createContext
+            }
+            when (method) {
                 "GET" -> {
                     val payload = synchronized(snapshotLock) {
                         if (snapshotFile.exists()) {
@@ -109,6 +121,21 @@ class AllNotesServer(
         return server
     }
 
+    private fun isAuthorized(exchange: HttpExchange): Boolean {
+        if (authToken.isEmpty()) return true
+        if (trustAuthentikForwardAuth) {
+            val authentikUser = exchange.requestHeaders.getFirst("X-authentik-username")?.trim().orEmpty()
+            if (authentikUser.isNotEmpty()) return true
+        }
+        val header = exchange.requestHeaders.getFirst("Authorization")?.trim().orEmpty()
+        if (!header.startsWith("Bearer ", ignoreCase = true)) return false
+        val provided = header.substring(7).trim()
+        return MessageDigest.isEqual(
+            provided.toByteArray(Charsets.UTF_8),
+            authToken.toByteArray(Charsets.UTF_8)
+        )
+    }
+
     fun stop(delaySeconds: Int = 0) {
         httpServer?.stop(delaySeconds)
         httpServer = null
@@ -149,6 +176,7 @@ class AllNotesServer(
         fileName.endsWith(".js") -> "application/javascript; charset=utf-8"
         fileName.endsWith(".wasm") -> "application/wasm"
         fileName.endsWith(".css") -> "text/css; charset=utf-8"
+        fileName.endsWith(".webmanifest") -> "application/manifest+json; charset=utf-8"
         fileName.endsWith(".json") -> "application/json; charset=utf-8"
         fileName.endsWith(".svg") -> "image/svg+xml"
         fileName.endsWith(".png") -> "image/png"

@@ -1,9 +1,18 @@
 {
   "name": "AllNotes — Overbay.app",
   "short_name": "AllNotes",
-  "start_url": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#121318",
-  "theme_color": "#121318",
-  "description": "Adaptive Word-Style Note Taking & OneNote Workspace"
+  "theme_color": "#1E2B7B",
+  "description": "Adaptive Word-Style Note Taking & OneNote Workspace",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }

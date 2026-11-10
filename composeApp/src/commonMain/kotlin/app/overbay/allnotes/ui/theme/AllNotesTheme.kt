@@ -3,6 +3,7 @@ package app.overbay.allnotes.ui.theme
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.darkColorScheme
@@ -13,8 +14,9 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import app.overbay.allnotes.model.SectionAccentKey
+import app.overbay.allnotes.model.ThemeMode
 
-private val LightColors = lightColorScheme(
+internal val AllNotesLightColorScheme = lightColorScheme(
     primary = Color(0xFF3949AB),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFDDE1FF),
@@ -50,7 +52,7 @@ private val LightColors = lightColorScheme(
     scrim = Color(0xFF000000)
 )
 
-private val DarkColors = darkColorScheme(
+internal val AllNotesDarkColorScheme = darkColorScheme(
     primary = Color(0xFFB8C3FF),
     onPrimary = Color(0xFF00228B),
     primaryContainer = Color(0xFF1E3093),
@@ -142,15 +144,28 @@ fun SectionAccentKey.contentColor(): Color = resolvePalette(LocalIsDarkTheme.cur
 @Composable
 fun SectionAccentKey.accentColor(): Color = resolvePalette(LocalIsDarkTheme.current).accent
 
+@Composable
+internal expect fun resolvePlatformColorScheme(darkTheme: Boolean, useDynamicColor: Boolean): ColorScheme
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AllNotesTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    useDynamicColor: Boolean = true,
+    darkThemeOverride: Boolean? = null,
     content: @Composable () -> Unit
 ) {
+    val systemDark = isSystemInDarkTheme()
+    val darkTheme = darkThemeOverride ?: when (themeMode) {
+        ThemeMode.SYSTEM -> systemDark
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
+    val colorScheme = resolvePlatformColorScheme(darkTheme = darkTheme, useDynamicColor = useDynamicColor)
+
     CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
         MaterialExpressiveTheme(
-            colorScheme = if (darkTheme) DarkColors else LightColors,
+            colorScheme = colorScheme,
             content = content
         )
     }
