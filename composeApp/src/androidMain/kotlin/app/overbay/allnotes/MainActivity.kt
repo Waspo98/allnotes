@@ -43,10 +43,7 @@ class MainActivity : ComponentActivity() {
             val vm = getOrCreateViewModel()
             handleLaunchIntent(intent, vm)
             setContent {
-                AllNotesApp(
-                    viewModel = vm,
-                    modifier = Modifier.safeDrawingPadding()
-                )
+                AllNotesApp(viewModel = vm)
             }
         } catch (t: Throwable) {
             android.util.Log.e("AllNotes", "Startup error", t)
@@ -93,7 +90,7 @@ class MainActivity : ComponentActivity() {
                 intent.action = Intent.ACTION_MAIN
             }
             ACTION_SEARCH_NOTES -> {
-                vm.dispatch(WorkspaceAction.SetMobileHierarchySheetOpen(true))
+                vm.dispatch(WorkspaceAction.RequestSearchFocus)
                 intent.action = Intent.ACTION_MAIN
             }
         }

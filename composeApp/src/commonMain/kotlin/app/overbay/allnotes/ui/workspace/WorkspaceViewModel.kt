@@ -161,6 +161,7 @@ class WorkspaceViewModel(
     internal fun requestSearchFocus() = _uiState.update {
         it.copy(
             isSidebarOpen = true,
+            isMobileHierarchySheetOpen = true,
             searchFocusRequestToken = nextFocusToken()
         )
     }

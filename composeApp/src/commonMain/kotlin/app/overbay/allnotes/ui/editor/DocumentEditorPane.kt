@@ -12,13 +12,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -93,6 +101,12 @@ fun DocumentEditorPane(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(
+                            WindowInsetsSides.Top +
+                                if (isCompactMobile) WindowInsetsSides.Horizontal else WindowInsetsSides.End
+                        )
+                    )
                     .widthIn(max = if (isCompactMobile) 680.dp else 900.dp)
                     .padding(
                         horizontal = if (isCompactMobile) 0.dp else 24.dp,
@@ -153,7 +167,10 @@ fun DocumentEditorPane(
                     ) {
                         LazyColumn(
                             state = listState,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .navigationBarsPadding()
+                                .imePadding(),
                             contentPadding = PaddingValues(
                                 start = if (isCompactMobile) 20.dp else 44.dp,
                                 end = if (isCompactMobile) 20.dp else 44.dp,
@@ -241,6 +258,7 @@ fun DocumentEditorPane(
                 exit = fadeOut(allNotesSpring()),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
+                    .statusBarsPadding()
                     .padding(top = 56.dp)
             ) {
                 Surface(
@@ -262,6 +280,8 @@ fun DocumentEditorPane(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .imePadding()
                         .padding(bottom = 14.dp, start = 12.dp, end = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.Bottom

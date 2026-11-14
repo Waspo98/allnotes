@@ -8,9 +8,11 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
@@ -23,7 +25,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -49,11 +50,57 @@ fun WorkspaceScreen(
     val state by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
+    fun dismissActiveOverlayOrSearch(): Boolean = when {
+        state.previewAttachment != null -> {
+            viewModel.dispatch(WorkspaceAction.DismissAttachmentPreview)
+            true
+        }
+        state.activeDialog != ActiveDialog.NONE -> {
+            viewModel.dispatch(WorkspaceAction.DismissDialog)
+            true
+        }
+        state.isMobileInsertMenuOpen -> {
+            viewModel.dispatch(WorkspaceAction.SetMobileInsertMenuOpen(false))
+            true
+        }
+        state.isMobileHierarchySheetOpen -> {
+            viewModel.dispatch(WorkspaceAction.SetMobileHierarchySheetOpen(false))
+            true
+        }
+        state.isPageMenuOpen -> {
+            viewModel.dispatch(WorkspaceAction.SetPageMenuOpen(false))
+            true
+        }
+        state.searchQuery.isNotEmpty() -> {
+            viewModel.dispatch(WorkspaceAction.SetSearchQuery(""))
+            true
+        }
+        else -> false
+    }
+
+    PlatformBackHandler(
+        enabled = state.previewAttachment != null ||
+            state.activeDialog != ActiveDialog.NONE ||
+            state.isMobileInsertMenuOpen ||
+            state.isMobileHierarchySheetOpen ||
+            state.isPageMenuOpen ||
+            state.searchQuery.isNotEmpty()
+    ) {
+        dismissActiveOverlayOrSearch()
+    }
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .focusable()
             .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    !event.isCtrlPressed &&
+                    !event.isMetaPressed &&
+                    event.key == Key.Escape
+                ) {
+                    return@onPreviewKeyEvent dismissActiveOverlayOrSearch()
+                }
                 if (event.type == KeyEventType.KeyDown && (event.isCtrlPressed || event.isMetaPressed)) {
                     when (event.key) {
                         Key.B -> {
@@ -101,9 +148,7 @@ fun WorkspaceScreen(
                             } else false
                         }
                         Key.F -> {
-                            if (!state.isSidebarOpen) {
-                                viewModel.dispatch(WorkspaceAction.ToggleSidebar)
-                            }
+                            viewModel.dispatch(WorkspaceAction.RequestSearchFocus)
                             true
                         }
                         Key.S -> {
@@ -147,9 +192,10 @@ fun WorkspaceScreen(
                 drawerState = drawerState,
                 drawerContent = {
                     ModalDrawerSheet(
-                        modifier = Modifier.width(310.dp),
-                        drawerShape = RectangleShape,
-                        drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        modifier = Modifier.width(316.dp),
+                        drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
+                        drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        windowInsets = WindowInsets(0, 0, 0, 0)
                     ) {
                         HierarchySidebar(
                             state = state,

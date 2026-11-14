@@ -1,7 +1,12 @@
 package app.overbay.allnotes.ui.editor.toolbar
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonMenu
@@ -55,58 +60,66 @@ fun ExpressiveInsertFabMenu(
             }
         }
     ) {
-        FloatingActionButtonMenuItem(
-            onClick = {
-                onAction(WorkspaceAction.SetMobileInsertMenuOpen(false))
-                onRequestMediaPicker()
-            },
-            icon = { Icon(AllNotesIcons.Image, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Image or File") }
-        )
-        FloatingActionButtonMenuItem(
-            onClick = { onAction(WorkspaceAction.InsertDivider(afterId)) },
-            icon = { Icon(AllNotesIcons.Divider, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Divider") }
-        )
-        FloatingActionButtonMenuItem(
-            onClick = { onAction(WorkspaceAction.InsertCode(afterId)) },
-            icon = { Icon(AllNotesIcons.Code, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Code Block") }
-        )
-        FloatingActionButtonMenuItem(
-            onClick = { onAction(WorkspaceAction.InsertCallout(afterId)) },
-            icon = { Icon(AllNotesIcons.Callout, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Callout") }
-        )
-        FloatingActionButtonMenuItem(
-            onClick = { onAction(WorkspaceAction.InsertTable(afterId)) },
-            icon = { Icon(AllNotesIcons.Table, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Table") }
-        )
-        FloatingActionButtonMenuItem(
-            onClick = { onAction(WorkspaceAction.InsertBulletList(true, afterId)) },
-            icon = { Icon(AllNotesIcons.NumberedList, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Numbered List") }
-        )
-        FloatingActionButtonMenuItem(
-            onClick = { onAction(WorkspaceAction.InsertBulletList(false, afterId)) },
-            icon = { Icon(AllNotesIcons.BulletList, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Bullet List") }
-        )
-        FloatingActionButtonMenuItem(
-            onClick = { onAction(WorkspaceAction.InsertChecklist(afterId)) },
-            icon = { Icon(AllNotesIcons.Checklist, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Checklist") }
-        )
-        FloatingActionButtonMenuItem(
-            onClick = { onAction(WorkspaceAction.InsertHeading(2, afterId)) },
-            icon = { Icon(AllNotesIcons.Heading, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Heading") }
-        )
-        FloatingActionButtonMenuItem(
-            onClick = { onAction(WorkspaceAction.InsertParagraph(afterId)) },
-            icon = { Icon(AllNotesIcons.Paragraph, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            text = { Text("Paragraph") }
-        )
+        Column(
+            modifier = Modifier
+                .heightIn(max = 320.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FloatingActionButtonMenuItem(
+                onClick = {
+                    onAction(WorkspaceAction.SetMobileInsertMenuOpen(false))
+                    onRequestMediaPicker()
+                },
+                icon = { Icon(AllNotesIcons.Image, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Image or File") }
+            )
+            FloatingActionButtonMenuItem(
+                onClick = { onAction(WorkspaceAction.InsertDivider(afterId)) },
+                icon = { Icon(AllNotesIcons.Divider, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Divider") }
+            )
+            FloatingActionButtonMenuItem(
+                onClick = { onAction(WorkspaceAction.InsertCode(afterId)) },
+                icon = { Icon(AllNotesIcons.Code, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Code Block") }
+            )
+            FloatingActionButtonMenuItem(
+                onClick = { onAction(WorkspaceAction.InsertCallout(afterId)) },
+                icon = { Icon(AllNotesIcons.Callout, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Callout") }
+            )
+            FloatingActionButtonMenuItem(
+                onClick = { onAction(WorkspaceAction.InsertTable(afterId)) },
+                icon = { Icon(AllNotesIcons.Table, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Table") }
+            )
+            FloatingActionButtonMenuItem(
+                onClick = { onAction(WorkspaceAction.InsertBulletList(true, afterId)) },
+                icon = { Icon(AllNotesIcons.NumberedList, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Numbered List") }
+            )
+            FloatingActionButtonMenuItem(
+                onClick = { onAction(WorkspaceAction.InsertBulletList(false, afterId)) },
+                icon = { Icon(AllNotesIcons.BulletList, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Bullet List") }
+            )
+            FloatingActionButtonMenuItem(
+                onClick = { onAction(WorkspaceAction.InsertChecklist(afterId)) },
+                icon = { Icon(AllNotesIcons.Checklist, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Checklist") }
+            )
+            FloatingActionButtonMenuItem(
+                onClick = { onAction(WorkspaceAction.InsertHeading(2, afterId)) },
+                icon = { Icon(AllNotesIcons.Heading, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Heading") }
+            )
+            FloatingActionButtonMenuItem(
+                onClick = { onAction(WorkspaceAction.InsertParagraph(afterId)) },
+                icon = { Icon(AllNotesIcons.Paragraph, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Paragraph") }
+            )
+        }
     }
 }

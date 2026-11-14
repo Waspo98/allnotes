@@ -654,6 +654,7 @@ class WorkspaceViewModelTest {
         val tok = vm.uiState.value.searchFocusRequestToken
         assertTrue(tok > 0L)
         assertTrue(vm.uiState.value.isSidebarOpen)
+        assertTrue(vm.uiState.value.isMobileHierarchySheetOpen)
         vm.dispatch(WorkspaceAction.ConsumeSearchFocusRequest(tok))
         assertEquals(0L, vm.uiState.value.searchFocusRequestToken)
 

@@ -1,6 +1,5 @@
 package app.overbay.allnotes.ui.editor.toolbar
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -20,17 +19,12 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.DocumentBlock
-import app.overbay.allnotes.model.RichSpanKind
-import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
-import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 
@@ -55,57 +49,18 @@ fun MobileFloatingToolbar(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            BlockTypeConverterPill(
+                activeBlock = activeBlock,
+                onAction = onAction
+            )
             when (activeBlock) {
                 is DocumentBlock.Paragraph -> {
-                    val s = state.selectionStart
-                    val e = state.selectionEnd
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.FormatBold,
-                        contentDescription = "Bold",
-                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.BOLD),
-                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.BOLD)) }
-                    )
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.FormatItalic,
-                        contentDescription = "Italic",
-                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.ITALIC),
-                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.ITALIC)) }
-                    )
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.FormatUnderlined,
-                        contentDescription = "Underline",
-                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.UNDERLINE),
-                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.UNDERLINE)) }
-                    )
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.FormatStrikethrough,
-                        contentDescription = "Strikethrough",
-                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.STRIKETHROUGH),
-                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.STRIKETHROUGH)) }
-                    )
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.Highlight,
-                        contentDescription = "Highlight",
-                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.HIGHLIGHT),
-                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.HIGHLIGHT)) }
-                    )
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.Code,
-                        contentDescription = "Inline Code",
-                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.INLINE_CODE),
-                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.INLINE_CODE)) }
-                    )
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.Palette,
-                        contentDescription = "Accent Color",
-                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.COLOR_ACCENT),
-                        onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.COLOR_ACCENT)) }
-                    )
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.Link,
-                        contentDescription = "Insert Link",
-                        selected = RichSpanEngine.hasActiveStyle(activeBlock, s, e, RichSpanKind.LINK),
-                        onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.INSERT_LINK)) }
+                    ParagraphInlineFormatButtons(
+                        activeParagraph = activeBlock,
+                        selectionStart = state.selectionStart,
+                        selectionEnd = state.selectionEnd,
+                        showShortcuts = false,
+                        onAction = onAction
                     )
                 }
                 is DocumentBlock.Heading -> {
@@ -213,28 +168,5 @@ fun MobileFloatingToolbar(
                 }
             }
         }
-    }
-}
-
-@Composable
-internal fun ToolbarToggleIcon(
-    icon: ImageVector,
-    contentDescription: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp)
-        )
     }
 }

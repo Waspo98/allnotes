@@ -177,6 +177,7 @@ internal fun MarkdownExportDialog(
     onCopied: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
     AlertDialog(
         onDismissRequest = onDismiss,

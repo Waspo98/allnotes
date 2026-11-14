@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,11 +32,13 @@ import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.NoteSection
 import app.overbay.allnotes.model.Notebook
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.theme.accentColor
 import app.overbay.allnotes.ui.theme.allNotesSpring
 import app.overbay.allnotes.ui.theme.containerColor
 import app.overbay.allnotes.ui.theme.contentColor
+import app.overbay.allnotes.ui.workspace.GlobalSearchHit
 
 @Composable
 internal fun NotebookPill(
@@ -130,6 +133,9 @@ internal fun PageHierarchyItem(
     hasChildren: Boolean = false,
     isCollapsed: Boolean = false,
     onToggleCollapse: (() -> Unit)? = null,
+    searchQuery: String = "",
+    onTogglePin: (() -> Unit)? = null,
+    onRequestDelete: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isSubpage = page.parentPageId != null
@@ -158,6 +164,17 @@ internal fun PageHierarchyItem(
         }
     } ?: "${page.blocks.size} blocks"
 
+    val titleAnnotated = RichSpanEngine.buildSearchHighlightedString(
+        text = page.title.ifBlank { "Untitled Page" },
+        colorScheme = MaterialTheme.colorScheme,
+        searchQuery = searchQuery
+    )
+    val snippetAnnotated = RichSpanEngine.buildSearchHighlightedString(
+        text = snippet,
+        colorScheme = MaterialTheme.colorScheme,
+        searchQuery = searchQuery
+    )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -176,13 +193,13 @@ internal fun PageHierarchyItem(
         } else if (hasChildren && onToggleCollapse != null) {
             IconButton(
                 onClick = onToggleCollapse,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = if (isCollapsed) AllNotesIcons.ChevronRight else AllNotesIcons.ChevronDown,
                     contentDescription = if (isCollapsed) "Expand subpages" else "Collapse subpages",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
             Spacer(modifier = Modifier.width(2.dp))
@@ -204,21 +221,49 @@ internal fun PageHierarchyItem(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = page.title.ifBlank { "Untitled Page" },
+                        text = titleAnnotated,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = snippet,
+                        text = snippetAnnotated,
                         style = MaterialTheme.typography.labelSmall,
                         color = contentColor.copy(alpha = 0.72f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (page.isPinned) {
+                if (isSelected && (onTogglePin != null || onRequestDelete != null)) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    if (onTogglePin != null) {
+                        IconButton(
+                            onClick = onTogglePin,
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = AllNotesIcons.Pin,
+                                contentDescription = if (page.isPinned) "Unpin Page" else "Pin Page",
+                                tint = if (page.isPinned) MaterialTheme.colorScheme.primary else contentColor.copy(alpha = 0.7f),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+                    if (onRequestDelete != null) {
+                        IconButton(
+                            onClick = onRequestDelete,
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = AllNotesIcons.Delete,
+                                contentDescription = "Delete Page",
+                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+                } else if (page.isPinned) {
                     Spacer(modifier = Modifier.width(6.dp))
                     Icon(
                         imageVector = AllNotesIcons.Pin,
@@ -227,6 +272,100 @@ internal fun PageHierarchyItem(
                         modifier = Modifier.size(15.dp)
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun GlobalSearchResultCard(
+    hit: GlobalSearchHit,
+    searchQuery: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
+            Text(
+                text = RichSpanEngine.buildSearchHighlightedString(
+                    text = hit.page.title.ifBlank { "Untitled Page" },
+                    colorScheme = MaterialTheme.colorScheme,
+                    searchQuery = searchQuery
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            val matchSnippet = hit.matchSnippet
+            if (!matchSnippet.isNullOrBlank()) {
+                Text(
+                    text = RichSpanEngine.buildSearchHighlightedString(
+                        text = matchSnippet,
+                        colorScheme = MaterialTheme.colorScheme,
+                        searchQuery = searchQuery
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(3.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(hit.sectionAccent.accentColor())
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "${hit.notebookTitle} › ${hit.sectionTitle}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun EmptyPagesPlaceholder(
+    hasSearchQuery: Boolean,
+    onClearSearch: () -> Unit,
+    onNewPage: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = if (hasSearchQuery) "No matching pages in this section" else "No pages in this section yet",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            FilledTonalButton(
+                onClick = if (hasSearchQuery) onClearSearch else onNewPage
+            ) {
+                Text(if (hasSearchQuery) "Clear Search" else "+ New Page")
             }
         }
     }
