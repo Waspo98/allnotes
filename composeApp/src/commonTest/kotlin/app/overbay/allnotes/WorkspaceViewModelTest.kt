@@ -5,14 +5,23 @@ import app.overbay.allnotes.data.NoteStorageBackend
 import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.ChecklistItem
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.model.NotePage
+import app.overbay.allnotes.model.NoteSection
+import app.overbay.allnotes.model.Notebook
+import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.WorkspaceSnapshot
+import app.overbay.allnotes.ui.workspace.ActiveDialog
+import app.overbay.allnotes.ui.workspace.SlashCommandKind
+import app.overbay.allnotes.ui.workspace.WorkspaceAction
+import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 import app.overbay.allnotes.ui.workspace.WorkspaceViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private class InMemoryNoteStorage : NoteStorageBackend {
@@ -554,5 +563,104 @@ class WorkspaceViewModelTest {
         assertEquals(2048L, attachment.sizeBytes)
         assertEquals(payload, attachment.dataBase64)
         assertEquals("Architecture diagram", attachment.caption)
+    }
+
+    @Test
+    fun requestDeletePageOpensConfirmationPromotesSubpagesAndClosesMenus() {
+        val (vm, repo) = createTestFixture()
+        val secId = vm.uiState.value.activeSection!!.id
+        val parent = repo.createPage(secId, "Parent Spec")
+        val child = repo.createPage(secId, "Child Spec", parentPageId = parent.id)
+        vm.selectPage(parent.id)
+        vm.dispatch(WorkspaceAction.SetPageMenuOpen(true))
+        vm.dispatch(WorkspaceAction.SetMobileHierarchySheetOpen(true))
+
+        vm.dispatch(WorkspaceAction.RequestDeletePage(parent.id))
+        val confirming = vm.uiState.value
+        assertEquals(ActiveDialog.CONFIRM_DELETE_PAGE, confirming.activeDialog)
+        assertEquals(parent.id, confirming.pendingDeletePageId)
+        assertFalse(confirming.isPageMenuOpen)
+        assertFalse(confirming.isMobileHierarchySheetOpen)
+
+        vm.dispatch(WorkspaceAction.DeletePage(parent.id))
+        val afterDelete = vm.uiState.value
+        assertEquals(ActiveDialog.NONE, afterDelete.activeDialog)
+        assertNull(afterDelete.pendingDeletePageId)
+        assertFalse(afterDelete.pages.any { it.id == parent.id })
+        assertNull(afterDelete.pages.first { it.id == child.id }.parentPageId)
+    }
+
+    @Test
+    fun convertActiveBlockAndClearFormattingPreserveContentAndSupportUndo() {
+        val (vm, _) = createTestFixture()
+        val para = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Paragraph>().first()
+        vm.updateBlockText(para.id, "Sprint Retrospective")
+        vm.dispatch(WorkspaceAction.ToggleParagraphStyle(para.id, "bold"))
+        vm.dispatch(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.ITALIC, null, para.id, 0, 6))
+        vm.dispatch(WorkspaceAction.SetActiveBlock(para.id))
+
+        vm.dispatch(WorkspaceAction.ClearActiveParagraphFormatting)
+        val cleared = vm.uiState.value.activePage!!.blocks.first { it.id == para.id } as DocumentBlock.Paragraph
+        assertEquals("Sprint Retrospective", cleared.text)
+        assertFalse(cleared.isBold)
+        assertTrue(cleared.spans.isEmpty())
+
+        vm.dispatch(WorkspaceAction.ConvertActiveBlock(SlashCommandKind.HEADING_2))
+        val heading = vm.uiState.value.activePage!!.blocks.first { it.id == para.id } as DocumentBlock.Heading
+        assertEquals(2, heading.level)
+        assertEquals("Sprint Retrospective", heading.text)
+
+        vm.dispatch(WorkspaceAction.Undo)
+        assertTrue(vm.uiState.value.activePage!!.blocks.first { it.id == para.id } is DocumentBlock.Paragraph)
+
+        vm.dispatch(WorkspaceAction.Redo)
+        vm.dispatch(WorkspaceAction.ConvertActiveBlock(SlashCommandKind.PARAGRAPH))
+        val backToPara = vm.uiState.value.activePage!!.blocks.first { it.id == para.id } as DocumentBlock.Paragraph
+        assertEquals("Sprint Retrospective", backToPara.text)
+    }
+
+    @Test
+    fun uiStateHandlesSubpageCyclesGlobalSearchSnippetsAndSearchFocusTokens() {
+        val nb1 = Notebook("nb-1", "Core", "", SectionAccentKey.INDIGO, 0)
+        val nb2 = Notebook("nb-2", "Archive", "", SectionAccentKey.EMERALD, 1)
+        val sec1 = NoteSection("sec-1", "nb-1", "Current", SectionAccentKey.INDIGO, 0)
+        val sec2 = NoteSection("sec-2", "nb-2", "Notes", SectionAccentKey.EMERALD, 0)
+        val p1 = NotePage(id = "p-1", sectionId = "sec-1", parentPageId = "p-2", title = "Cycle A", updatedAtEpochMs = 100L)
+        val p2 = NotePage(id = "p-2", sectionId = "sec-1", parentPageId = "p-1", title = "Cycle B", updatedAtEpochMs = 90L)
+        val target = NotePage(
+            id = "p-3",
+            sectionId = "sec-2",
+            title = "Quarterly Review",
+            blocks = listOf(DocumentBlock.Paragraph("b-1", "Discussing offline synchronization latency targets for Q4.")),
+            updatedAtEpochMs = 80L
+        )
+        val state = WorkspaceUiState(
+            notebooks = listOf(nb1, nb2),
+            sections = listOf(sec1, sec2),
+            pages = listOf(p1, p2, target),
+            selectedNotebookId = "nb-1",
+            selectedSectionId = "sec-1",
+            selectedPageId = "p-1",
+            searchQuery = "synchronization"
+        )
+        assertEquals(2, state.copy(searchQuery = "").pagesForSection.size)
+        val hit = state.globalSearchResults.single()
+        assertEquals("p-3", hit.page.id)
+        assertNotNull(hit.matchSnippet)
+        assertTrue(hit.matchSnippet.contains("synchronization", ignoreCase = true))
+
+        val (vm, _) = createTestFixture()
+        vm.dispatch(WorkspaceAction.RequestSearchFocus)
+        val tok = vm.uiState.value.searchFocusRequestToken
+        assertTrue(tok > 0L)
+        assertTrue(vm.uiState.value.isSidebarOpen)
+        vm.dispatch(WorkspaceAction.ConsumeSearchFocusRequest(tok))
+        assertEquals(0L, vm.uiState.value.searchFocusRequestToken)
+
+        val att = DocumentBlock.Attachment("a-1", "chart.png", "image/png", 10L, "", "")
+        vm.dispatch(WorkspaceAction.OpenAttachmentPreview(att))
+        assertEquals(att, vm.uiState.value.previewAttachment)
+        vm.dispatch(WorkspaceAction.DismissAttachmentPreview)
+        assertNull(vm.uiState.value.previewAttachment)
     }
 }

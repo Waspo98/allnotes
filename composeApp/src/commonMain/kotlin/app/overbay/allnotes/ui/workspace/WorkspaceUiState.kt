@@ -20,7 +20,8 @@ data class GlobalSearchHit(
     val page: NotePage,
     val sectionTitle: String,
     val notebookTitle: String,
-    val sectionAccent: SectionAccentKey
+    val sectionAccent: SectionAccentKey,
+    val matchSnippet: String? = null
 )
 
 enum class ActiveDialog {
@@ -31,6 +32,7 @@ enum class ActiveDialog {
     NEW_SECTION,
     EDIT_SECTION,
     CONFIRM_DELETE_SECTION,
+    CONFIRM_DELETE_PAGE,
     NEW_PAGE,
     MOVE_PAGE,
     INSERT_LINK,
@@ -64,131 +66,144 @@ data class WorkspaceUiState(
     val useRemoteHttpSync: Boolean = false,
     val preferences: WorkspacePreferences = WorkspacePreferences(),
     val statusBannerMessage: String? = null,
-    val revision: Long = 1L
+    val revision: Long = 1L,
+    val searchFocusRequestToken: Long = 0L,
+    val previewAttachment: DocumentBlock.Attachment? = null,
+    val pendingDeletePageId: String? = null
 ) {
-    val activeNotebook: Notebook?
-        get() = notebooks.firstOrNull { it.id == selectedNotebookId } ?: notebooks.firstOrNull()
+    val activeNotebook: Notebook? by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        notebooks.firstOrNull { it.id == selectedNotebookId } ?: notebooks.firstOrNull()
+    }
 
-    val sectionsForNotebook: List<NoteSection>
-        get() {
-            val nbId = activeNotebook?.id ?: return emptyList()
-            return sections.filter { it.notebookId == nbId }.sortedBy { it.sortOrder }
-        }
+    val sectionsForNotebook: List<NoteSection> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val nbId = activeNotebook?.id ?: return@lazy emptyList()
+        sections.filter { it.notebookId == nbId }.sortedBy { it.sortOrder }
+    }
 
-    val activeSection: NoteSection?
-        get() = sectionsForNotebook.firstOrNull { it.id == selectedSectionId }
+    val activeSection: NoteSection? by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        sectionsForNotebook.firstOrNull { it.id == selectedSectionId }
             ?: sectionsForNotebook.firstOrNull()
+    }
 
-    val parentPageIdsWithChildren: Set<String>
-        get() {
-            val secId = activeSection?.id ?: return emptySet()
-            val secPages = pages.filter { it.sectionId == secId }
-            val validIds = secPages.mapTo(HashSet()) { it.id }
-            return secPages.mapNotNullTo(HashSet()) { p ->
-                p.parentPageId?.takeIf { it in validIds }
+    val parentPageIdsWithChildren: Set<String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val secId = activeSection?.id ?: return@lazy emptySet()
+        val secPages = pages.filter { it.sectionId == secId }
+        val validIds = secPages.mapTo(HashSet()) { it.id }
+        secPages.mapNotNullTo(HashSet()) { p ->
+            p.parentPageId?.takeIf { it in validIds }
+        }
+    }
+
+    val pagesForSection: List<NotePage> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val secId = activeSection?.id ?: return@lazy emptyList()
+        val q = searchQuery.trim().lowercase()
+        val comparator = compareByDescending<NotePage> { it.isPinned }.thenByDescending { it.updatedAtEpochMs }
+        val filtered = pages
+            .filter { it.sectionId == secId }
+            .filter { page ->
+                if (q.isEmpty()) true
+                else PageSnippetExtractor.pageMatchesQuery(page, q)
             }
+            .sortedWith(comparator)
+
+        if (q.isNotEmpty() || filtered.all { it.parentPageId == null }) {
+            return@lazy filtered
         }
 
-    val pagesForSection: List<NotePage>
-        get() {
-            val secId = activeSection?.id ?: return emptyList()
-            val q = searchQuery.trim().lowercase()
-            val comparator = compareByDescending<NotePage> { it.isPinned }.thenByDescending { it.updatedAtEpochMs }
-            val filtered = pages
-                .filter { it.sectionId == secId }
-                .filter { page ->
-                    if (q.isEmpty()) true
-                    else page.title.lowercase().contains(q) ||
-                        page.blocks.any { BlockMutationEngine.blockContainsQuery(it, q) }
-                }
-                .sortedWith(comparator)
+        val byId = filtered.associateBy { it.id }
+        val roots = filtered.filter { it.parentPageId == null || it.parentPageId !in byId }
+        val childrenByParent = filtered
+            .filter { it.parentPageId != null && it.parentPageId in byId }
+            .groupBy { it.parentPageId!! }
 
-            if (q.isNotEmpty() || filtered.all { it.parentPageId == null }) {
-                return filtered
-            }
+        val ordered = ArrayList<NotePage>(filtered.size)
+        val visitedIds = HashSet<String>(filtered.size)
+        val hiddenChildIds = HashSet<String>()
 
-            val byId = filtered.associateBy { it.id }
-            val roots = filtered.filter { it.parentPageId == null || it.parentPageId !in byId }
-            val childrenByParent = filtered
-                .filter { it.parentPageId != null && it.parentPageId in byId }
-                .groupBy { it.parentPageId!! }
-
-            val ordered = mutableListOf<NotePage>()
-            val hiddenChildIds = HashSet<String>()
-            fun appendTree(page: NotePage) {
-                if (ordered.any { it.id == page.id }) return
-                ordered.add(page)
-                val children = childrenByParent[page.id].orEmpty()
-                if (page.id in collapsedParentPageIds) {
-                    children.forEach { hiddenChildIds.add(it.id) }
-                } else {
-                    children.forEach { child -> appendTree(child) }
-                }
-            }
-            roots.forEach { appendTree(it) }
-            filtered.forEach {
-                if (it.id !in hiddenChildIds && ordered.none { p -> p.id == it.id }) {
-                    ordered.add(it)
-                }
-            }
-            return ordered
+        fun markHidden(pageId: String) {
+            if (!visitedIds.add(pageId)) return
+            hiddenChildIds.add(pageId)
+            childrenByParent[pageId].orEmpty().forEach { markHidden(it.id) }
         }
 
-    val globalSearchResults: List<GlobalSearchHit>
-        get() {
-            val q = searchQuery.trim().lowercase()
-            if (q.isEmpty()) return emptyList()
-            val activeSecId = activeSection?.id
-            val sectionMap = sections.associateBy { it.id }
-            val notebookMap = notebooks.associateBy { it.id }
-            val comparator = compareByDescending<NotePage> { it.isPinned }.thenByDescending { it.updatedAtEpochMs }
-            return pages
-                .asSequence()
-                .filter { it.sectionId != activeSecId }
-                .filter { page ->
-                    page.title.lowercase().contains(q) ||
-                        page.blocks.any { BlockMutationEngine.blockContainsQuery(it, q) }
-                }
-                .sortedWith(comparator)
-                .mapNotNull { page ->
-                    val sec = sectionMap[page.sectionId] ?: return@mapNotNull null
-                    val nb = notebookMap[sec.notebookId] ?: return@mapNotNull null
-                    GlobalSearchHit(
-                        page = page,
-                        sectionTitle = sec.title,
-                        notebookTitle = nb.title,
-                        sectionAccent = sec.accent
-                    )
-                }
-                .toList()
+        fun appendTree(page: NotePage) {
+            if (!visitedIds.add(page.id)) return
+            ordered.add(page)
+            val children = childrenByParent[page.id].orEmpty()
+            if (page.id in collapsedParentPageIds) {
+                children.forEach { markHidden(it.id) }
+            } else {
+                children.forEach { child -> appendTree(child) }
+            }
         }
+        roots.forEach { appendTree(it) }
+        filtered.forEach { page ->
+            if (page.id !in hiddenChildIds && page.id !in visitedIds) {
+                appendTree(page)
+            }
+        }
+        ordered
+    }
 
-    val activePage: NotePage?
-        get() = pagesForSection.firstOrNull { it.id == selectedPageId }
+    val globalSearchResults: List<GlobalSearchHit> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val q = searchQuery.trim().lowercase()
+        if (q.isEmpty()) return@lazy emptyList()
+        val activeSecId = activeSection?.id
+        val sectionMap = sections.associateBy { it.id }
+        val notebookMap = notebooks.associateBy { it.id }
+        val comparator = compareByDescending<NotePage> { it.isPinned }.thenByDescending { it.updatedAtEpochMs }
+        pages
+            .asSequence()
+            .filter { it.sectionId != activeSecId }
+            .filter { page -> PageSnippetExtractor.pageMatchesQuery(page, q) }
+            .sortedWith(comparator)
+            .mapNotNull { page ->
+                val sec = sectionMap[page.sectionId] ?: return@mapNotNull null
+                val nb = notebookMap[sec.notebookId] ?: return@mapNotNull null
+                GlobalSearchHit(
+                    page = page,
+                    sectionTitle = sec.title,
+                    notebookTitle = nb.title,
+                    sectionAccent = sec.accent,
+                    matchSnippet = PageSnippetExtractor.extractExcerpt(page, q)
+                )
+            }
+            .toList()
+    }
+
+    val activePage: NotePage? by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        pagesForSection.firstOrNull { it.id == selectedPageId }
             ?: pagesForSection.firstOrNull()
+    }
 
-    val activeBlock: DocumentBlock?
-        get() = activePage?.blocks?.firstOrNull { it.id == activeBlockId }
+    val activeBlock: DocumentBlock? by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        activePage?.blocks?.firstOrNull { it.id == activeBlockId }
+    }
 
-    val wordCount: Int
-        get() {
-            val page = activePage ?: return 0
-            return PageWordCounter.countWords(page)
-        }
+    val wordCount: Int by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val page = activePage ?: return@lazy 0
+        PageWordCounter.countWords(page)
+    }
 
-    val readingTimeMinutes: Int
-        get() {
-            val count = wordCount
-            return if (count <= 0) 0 else maxOf(1, (count + 199) / 200)
-        }
+    val readingTimeMinutes: Int by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val count = wordCount
+        if (count <= 0) 0 else maxOf(1, (count + 199) / 200)
+    }
 }
 
 internal object PageWordCounter {
-    private val whitespaceRegex = Regex("\\s+")
-
     private fun wordsIn(text: String): Int {
-        val t = text.trim()
-        return if (t.isEmpty()) 0 else t.split(whitespaceRegex).size
+        var count = 0
+        var inWord = false
+        for (i in text.indices) {
+            if (text[i].isWhitespace()) {
+                inWord = false
+            } else if (!inWord) {
+                inWord = true
+                count++
+            }
+        }
+        return count
     }
 
     fun countWords(page: NotePage): Int {
@@ -208,6 +223,62 @@ internal object PageWordCounter {
             }
         }
         return total
+    }
+}
+
+internal object PageSnippetExtractor {
+    fun pageMatchesQuery(page: NotePage, lowerQuery: String): Boolean =
+        page.title.lowercase().contains(lowerQuery) ||
+            page.blocks.any { BlockMutationEngine.blockContainsQuery(it, lowerQuery) }
+
+    fun extractExcerpt(page: NotePage, rawQuery: String): String? {
+        val q = rawQuery.trim().lowercase()
+        if (q.isEmpty()) return null
+        val matchedText = page.blocks.firstNotNullOfOrNull { block ->
+            firstMatchingText(block, q)
+        } ?: return null
+
+        val hit = matchedText.lowercase().indexOf(q)
+        if (hit < 0) return null
+        val start = maxOf(0, hit - 28)
+        val end = minOf(matchedText.length, hit + q.length + 52)
+        val window = buildString(end - start + 4) {
+            if (start > 0) append('…')
+            var prevSpace = false
+            for (i in start until end) {
+                val ch = matchedText[i]
+                if (ch.isWhitespace()) {
+                    if (!prevSpace) {
+                        append(' ')
+                        prevSpace = true
+                    }
+                } else {
+                    append(ch)
+                    prevSpace = false
+                }
+            }
+            if (end < matchedText.length) append('…')
+        }.trim()
+        return window.ifEmpty { null }
+    }
+
+    private fun firstMatchingText(block: DocumentBlock, q: String): String? = when (block) {
+        is DocumentBlock.Heading -> block.text.takeIf { it.lowercase().contains(q) }
+        is DocumentBlock.Paragraph -> block.text.takeIf { it.lowercase().contains(q) }
+        is DocumentBlock.Checklist -> sequenceOf(block.title)
+            .plus(block.items.asSequence().map { it.text })
+            .firstOrNull { it.lowercase().contains(q) }
+        is DocumentBlock.BulletList -> block.items.firstOrNull { it.lowercase().contains(q) }
+        is DocumentBlock.Table -> block.headers.asSequence()
+            .plus(block.rows.asSequence().flatMap { it.asSequence() })
+            .firstOrNull { it.lowercase().contains(q) }
+        is DocumentBlock.Callout -> sequenceOf(block.title, block.text)
+            .firstOrNull { it.lowercase().contains(q) }
+        is DocumentBlock.CodeSnippet -> block.code.takeIf { it.lowercase().contains(q) }
+            ?: block.language.takeIf { it.lowercase().contains(q) }
+        is DocumentBlock.Divider -> null
+        is DocumentBlock.Attachment -> block.caption.takeIf { it.lowercase().contains(q) }
+            ?: block.fileName.takeIf { it.lowercase().contains(q) }
     }
 }
 

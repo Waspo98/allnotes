@@ -17,6 +17,7 @@ enum class SlashCommandKind(
     val title: String,
     val subtitle: String
 ) {
+    PARAGRAPH("/text", "Body Text", "Standard rich text paragraph"),
     HEADING_1("/h1", "Heading 1", "Large document section title"),
     HEADING_2("/h2", "Heading 2", "Medium subsection heading"),
     HEADING_3("/h3", "Heading 3", "Compact accent heading"),
@@ -169,6 +170,10 @@ object EditorInputController {
         val mutable = blocks.toMutableList()
 
         return when (kind) {
+            SlashCommandKind.PARAGRAPH -> {
+                mutable[idx] = DocumentBlock.Paragraph(id = blockId, text = "")
+                EditorMutationResult(mutable, blockId, EditorFocusRequest(blockId, cursorOffset = 0, requestToken = nextToken()), true)
+            }
             SlashCommandKind.HEADING_1 -> {
                 mutable[idx] = DocumentBlock.Heading(id = blockId, text = "", level = 1)
                 EditorMutationResult(mutable, blockId, EditorFocusRequest(blockId, cursorOffset = 0, requestToken = nextToken()), true)
@@ -473,5 +478,33 @@ object EditorInputController {
             }
             else -> EditorMutationResult(blocks, blockId)
         }
+    }
+
+    fun convertBlockWithFocus(
+        blocks: List<DocumentBlock>,
+        blockId: String,
+        target: SlashCommandKind,
+        nextId: () -> String,
+        nextToken: () -> Long
+    ): EditorMutationResult {
+        if (target == SlashCommandKind.ATTACHMENT) return EditorMutationResult(blocks, blockId)
+        val converted = BlockMutationEngine.convertBlock(blocks, blockId, target, nextId)
+        if (converted == blocks) return EditorMutationResult(blocks, blockId)
+        val focusSubIdx = if (
+            target == SlashCommandKind.CHECKLIST ||
+            target == SlashCommandKind.BULLET_LIST ||
+            target == SlashCommandKind.NUMBERED_LIST
+        ) 0 else -1
+        return EditorMutationResult(
+            blocks = converted,
+            activeBlockId = blockId,
+            focusRequest = EditorFocusRequest(
+                blockId = blockId,
+                subItemIndex = focusSubIdx,
+                cursorOffset = Int.MAX_VALUE,
+                requestToken = nextToken()
+            ),
+            isStructuralConversion = true
+        )
     }
 }

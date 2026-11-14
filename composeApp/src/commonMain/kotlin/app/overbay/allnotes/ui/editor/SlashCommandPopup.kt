@@ -115,6 +115,7 @@ internal fun SlashCommandPopup(
 }
 
 private fun SlashCommandKind.icon(): ImageVector = when (this) {
+    SlashCommandKind.PARAGRAPH -> AllNotesIcons.Paragraph
     SlashCommandKind.HEADING_1, SlashCommandKind.HEADING_2, SlashCommandKind.HEADING_3 -> AllNotesIcons.Heading
     SlashCommandKind.CHECKLIST -> AllNotesIcons.Checklist
     SlashCommandKind.BULLET_LIST -> AllNotesIcons.BulletList

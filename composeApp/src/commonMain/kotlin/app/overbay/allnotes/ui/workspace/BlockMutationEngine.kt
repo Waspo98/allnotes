@@ -374,4 +374,70 @@ object BlockMutationEngine {
 
     fun defaultBulletList(id: String, isNumbered: Boolean) =
         DocumentBlock.BulletList(id = id, isNumbered = isNumbered, items = listOf("First item", "Second item"))
+
+    fun clearParagraphFormatting(blocks: List<DocumentBlock>, blockId: String): List<DocumentBlock> =
+        blocks.map { block ->
+            if (block.id == blockId && block is DocumentBlock.Paragraph) {
+                block.copy(
+                    isBold = false,
+                    isItalic = false,
+                    isUnderlined = false,
+                    isStrikethrough = false,
+                    isHighlighted = false,
+                    spans = emptyList()
+                )
+            } else {
+                block
+            }
+        }
+
+    fun convertBlock(
+        blocks: List<DocumentBlock>,
+        blockId: String,
+        target: SlashCommandKind,
+        nextId: () -> String
+    ): List<DocumentBlock> = blocks.map { block ->
+        if (block.id != blockId) return@map block
+        val text = extractConvertibleText(block) ?: return@map block
+        val nonEmptyLines = text.lines().map { it.trimEnd() }.filter { it.isNotEmpty() }.ifEmpty { listOf("") }
+        when (target) {
+            SlashCommandKind.PARAGRAPH -> if (block is DocumentBlock.Paragraph) block
+            else DocumentBlock.Paragraph(id = block.id, text = text)
+            SlashCommandKind.HEADING_1 -> DocumentBlock.Heading(id = block.id, text = text.replace('\n', ' '), level = 1)
+            SlashCommandKind.HEADING_2 -> DocumentBlock.Heading(id = block.id, text = text.replace('\n', ' '), level = 2)
+            SlashCommandKind.HEADING_3 -> DocumentBlock.Heading(id = block.id, text = text.replace('\n', ' '), level = 3)
+            SlashCommandKind.CHECKLIST -> DocumentBlock.Checklist(
+                id = block.id,
+                title = (block as? DocumentBlock.Checklist)?.title ?: "Checklist",
+                items = nonEmptyLines.map { line -> ChecklistItem(id = nextId(), text = line, isChecked = false) }
+            )
+            SlashCommandKind.BULLET_LIST -> DocumentBlock.BulletList(id = block.id, isNumbered = false, items = nonEmptyLines)
+            SlashCommandKind.NUMBERED_LIST -> DocumentBlock.BulletList(id = block.id, isNumbered = true, items = nonEmptyLines)
+            SlashCommandKind.CALLOUT -> DocumentBlock.Callout(
+                id = block.id,
+                title = (block as? DocumentBlock.Callout)?.title ?: "Key Note",
+                text = text,
+                tone = (block as? DocumentBlock.Callout)?.tone ?: CalloutTone.INFO
+            )
+            SlashCommandKind.CODE -> DocumentBlock.CodeSnippet(
+                id = block.id,
+                language = (block as? DocumentBlock.CodeSnippet)?.language ?: "text",
+                code = text
+            )
+            SlashCommandKind.TABLE -> if (text.isBlank()) defaultTable(block.id) else block
+            SlashCommandKind.DIVIDER -> if (text.isBlank()) DocumentBlock.Divider(block.id) else block
+            SlashCommandKind.ATTACHMENT -> block
+        }
+    }
+
+    private fun extractConvertibleText(block: DocumentBlock): String? = when (block) {
+        is DocumentBlock.Paragraph -> block.text
+        is DocumentBlock.Heading -> block.text
+        is DocumentBlock.Callout -> block.text
+        is DocumentBlock.CodeSnippet -> block.code
+        is DocumentBlock.BulletList -> block.items.joinToString("\n")
+        is DocumentBlock.Checklist -> block.items.joinToString("\n") { it.text }
+        is DocumentBlock.Divider -> ""
+        is DocumentBlock.Table, is DocumentBlock.Attachment -> null
+    }
 }

@@ -1,6 +1,7 @@
 package app.overbay.allnotes.ui.workspace
 
 import app.overbay.allnotes.model.CalloutTone
+import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.ThemeMode
@@ -11,12 +12,16 @@ sealed interface WorkspaceAction {
     data class SelectSection(val sectionId: String) : WorkspaceAction
     data class SelectPage(val pageId: String) : WorkspaceAction
     data class SetSearchQuery(val query: String) : WorkspaceAction
+    data object RequestSearchFocus : WorkspaceAction
+    data class ConsumeSearchFocusRequest(val requestToken: Long) : WorkspaceAction
     data object ToggleSidebar : WorkspaceAction
     data class SetMobileHierarchySheetOpen(val open: Boolean) : WorkspaceAction
     data class SetPageMenuOpen(val open: Boolean) : WorkspaceAction
     data class SetMobileInsertMenuOpen(val open: Boolean) : WorkspaceAction
     data class OpenDialog(val dialog: ActiveDialog) : WorkspaceAction
     data object DismissDialog : WorkspaceAction
+    data class OpenAttachmentPreview(val attachment: DocumentBlock.Attachment) : WorkspaceAction
+    data object DismissAttachmentPreview : WorkspaceAction
     data class ShowStatusBanner(val message: String) : WorkspaceAction
     data object DismissStatusBanner : WorkspaceAction
     data object TriggerSync : WorkspaceAction
@@ -47,6 +52,9 @@ sealed interface WorkspaceAction {
     // Active Page Metadata & History
     data class UpdateActivePageTitle(val newTitle: String) : WorkspaceAction
     data object ToggleActivePagePin : WorkspaceAction
+    data class TogglePinPage(val pageId: String) : WorkspaceAction
+    data class RequestDeletePage(val pageId: String) : WorkspaceAction
+    data class DeletePage(val pageId: String) : WorkspaceAction
     data object DeleteActivePage : WorkspaceAction
     data object Undo : WorkspaceAction
     data object Redo : WorkspaceAction
@@ -96,6 +104,8 @@ sealed interface WorkspaceAction {
     ) : WorkspaceAction
     data class ToggleParagraphStyle(val blockId: String, val style: String) : WorkspaceAction
     data class ToggleActiveParagraphStyle(val style: String) : WorkspaceAction
+    data object ClearActiveParagraphFormatting : WorkspaceAction
+    data class ConvertActiveBlock(val command: SlashCommandKind) : WorkspaceAction
     data class UpdateHeadingLevel(val blockId: String, val level: Int) : WorkspaceAction
 
     // Checklist Mutations

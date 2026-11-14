@@ -86,6 +86,19 @@ fun WorkspaceDialogsHost(
                 onConfirmDelete = { onAction(WorkspaceAction.DeleteActiveSection) }
             )
         }
+        ActiveDialog.CONFIRM_DELETE_PAGE -> {
+            val targetPage = state.pages.firstOrNull { it.id == state.pendingDeletePageId }
+                ?: state.activePage
+                ?: return
+            val childCount = state.pages.count { it.parentPageId == targetPage.id }
+            val childNote = if (childCount > 0) " Its $childCount subpage(s) will be promoted to top level." else ""
+            ConfirmDeleteHierarchyDialog(
+                title = "Delete \"${targetPage.title.ifBlank { "Untitled Page" }}\"?",
+                message = "This permanently deletes this page across synced devices.$childNote",
+                onDismiss = { onAction(WorkspaceAction.DismissDialog) },
+                onConfirmDelete = { onAction(WorkspaceAction.DeletePage(targetPage.id)) }
+            )
+        }
         ActiveDialog.NEW_PAGE -> CreatePageDialog(
             hasActivePage = state.activePage != null,
             onDismiss = { onAction(WorkspaceAction.DismissDialog) },

@@ -242,7 +242,7 @@ internal fun EditorTopBar(
                                     modifier = Modifier.size(18.dp)
                                 )
                             },
-                            onClick = { onAction(WorkspaceAction.DeleteActivePage) }
+                            onClick = { onAction(WorkspaceAction.RequestDeletePage(page.id)) }
                         )
                     }
                 }

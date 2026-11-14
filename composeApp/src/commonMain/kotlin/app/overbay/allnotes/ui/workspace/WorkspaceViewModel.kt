@@ -1,7 +1,5 @@
 package app.overbay.allnotes.ui.workspace
 
-import app.overbay.allnotes.data.HttpSyncProvider
-import app.overbay.allnotes.data.LocalLoopbackSyncProvider
 import app.overbay.allnotes.data.NoteRepository
 import app.overbay.allnotes.data.SyncStatus
 import app.overbay.allnotes.data.currentEpochMillis
@@ -20,9 +18,7 @@ import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,10 +34,20 @@ class WorkspaceViewModel(
     private val seqLock = Any()
     private var blockSeq = 5000L
     private var focusTokenSeq = 1L
-    private var autoSyncJob: Job? = null
 
     private val _uiState = MutableStateFlow(buildInitialState())
     val uiState: StateFlow<WorkspaceUiState> = _uiState.asStateFlow()
+
+    private val syncController = WorkspaceSyncController(
+        repository = repository,
+        scope = scope,
+        onStatusChange = { status -> _uiState.update { it.copy(syncStatus = status) } },
+        onSettingsSaved = { endpoint, remote ->
+            _uiState.update {
+                it.copy(syncEndpointUrl = endpoint, useRemoteHttpSync = remote, activeDialog = ActiveDialog.NONE)
+            }
+        }
+    )
 
     init {
         scope.launch { repository.snapshot.collect { syncStateFromRepository(incomingSnapshot = it) } }
@@ -56,14 +62,7 @@ class WorkspaceViewModel(
                 }
             }
         }
-        if (repository.preferences.value.useRemoteHttpSync) {
-            scope.launch {
-                val res = repository.pullFromServer()
-                _uiState.update { it.copy(syncStatus = if (res.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE) }
-            }
-        } else {
-            _uiState.update { it.copy(syncStatus = SyncStatus.LOCAL_READY) }
-        }
+        syncController.syncOnLaunchIfEnabled()
     }
 
     private fun buildInitialState(): WorkspaceUiState {
@@ -87,131 +86,20 @@ class WorkspaceViewModel(
     }
 
     fun flushPendingWrites() = repository.flushPendingWrites()
-    private fun nextFocusToken(): Long = platformSynchronized(seqLock) { ++focusTokenSeq }
+    internal fun updateUiState(transform: (WorkspaceUiState) -> WorkspaceUiState) = _uiState.update(transform)
+    internal fun nextFocusToken(): Long = platformSynchronized(seqLock) { ++focusTokenSeq }
 
     @OptIn(ExperimentalUuidApi::class)
-    private fun nextBlockId(): String {
+    internal fun nextBlockId(): String {
         val seq = platformSynchronized(seqLock) { ++blockSeq }
         return "blk-${_uiState.value.revision}-$seq-${Uuid.random().toHexString().take(6)}"
     }
 
-    fun dispatch(action: WorkspaceAction) {
-        when (action) {
-            is WorkspaceAction.SelectNotebook -> selectNotebook(action.notebookId)
-            is WorkspaceAction.SelectSection -> selectSection(action.sectionId)
-            is WorkspaceAction.SelectPage -> selectPage(action.pageId)
-            is WorkspaceAction.SetSearchQuery -> setSearchQuery(action.query)
-            WorkspaceAction.ToggleSidebar -> toggleSidebar()
-            is WorkspaceAction.SetMobileHierarchySheetOpen -> setMobileHierarchySheetOpen(action.open)
-            is WorkspaceAction.SetPageMenuOpen -> _uiState.update { it.copy(isPageMenuOpen = action.open) }
-            is WorkspaceAction.SetMobileInsertMenuOpen -> _uiState.update { it.copy(isMobileInsertMenuOpen = action.open) }
-            is WorkspaceAction.OpenDialog -> openDialog(action.dialog)
-            WorkspaceAction.DismissDialog -> dismissDialog()
-            is WorkspaceAction.ShowStatusBanner -> _uiState.update { it.copy(statusBannerMessage = action.message) }
-            WorkspaceAction.DismissStatusBanner -> _uiState.update { it.copy(statusBannerMessage = null) }
-            WorkspaceAction.TriggerSync -> triggerManualSync()
-            is WorkspaceAction.ConfigureSyncServer -> configureSyncServer(action.endpointUrl, action.useRemoteHttp)
-            is WorkspaceAction.SaveSyncAndAuthSettings -> saveSyncAndAuthSettings(
-                action.endpointUrl, action.useRemoteHttp, action.authToken, action.autoSync
-            )
-            is WorkspaceAction.UpdateThemeSettings -> repository.updatePreferences {
-                it.copy(themeMode = action.themeMode, useDynamicColor = action.useDynamicColor)
-            }
+    fun dispatch(action: WorkspaceAction) = WorkspaceActionDispatcher.dispatch(this, action)
 
-            is WorkspaceAction.CreateNotebook -> createNotebook(action.title, action.subtitle, action.accent)
-            is WorkspaceAction.UpdateActiveNotebook -> updateActiveNotebook(action.title, action.subtitle, action.accent)
-            is WorkspaceAction.ReorderActiveNotebook -> reorderActiveNotebook(action.delta)
-            WorkspaceAction.DeleteActiveNotebook -> deleteActiveNotebook()
-            is WorkspaceAction.CreateSection -> createSection(action.title, action.accent)
-            is WorkspaceAction.UpdateActiveSection -> updateActiveSection(action.title, action.accent)
-            is WorkspaceAction.ReorderActiveSection -> reorderActiveSection(action.delta)
-            WorkspaceAction.DeleteActiveSection -> deleteActiveSection()
-            is WorkspaceAction.CreatePage -> createPage(action.title, action.asSubpageOfActive)
-            is WorkspaceAction.TogglePageSubpageIndent -> togglePageSubpageIndent(action.pageId)
-            is WorkspaceAction.ToggleSubpageCollapse -> toggleSubpageCollapse(action.parentPageId)
-            is WorkspaceAction.MoveActivePageToSection -> moveActivePageToSection(action.targetSectionId)
-            is WorkspaceAction.ImportMarkdownPage -> importMarkdownPage(action.markdown)
-
-            is WorkspaceAction.UpdateActivePageTitle -> updateActivePageTitle(action.newTitle)
-            WorkspaceAction.ToggleActivePagePin -> toggleActivePagePin()
-            WorkspaceAction.DeleteActivePage -> deleteActivePage()
-            WorkspaceAction.Undo -> performUndo()
-            WorkspaceAction.Redo -> performRedo()
-
-            is WorkspaceAction.SetActiveBlock -> setActiveBlockId(action.blockId)
-            is WorkspaceAction.UpdateActiveSelection -> _uiState.update {
-                it.copy(activeBlockId = action.blockId, selectionStart = action.selectionStart, selectionEnd = action.selectionEnd)
-            }
-            is WorkspaceAction.ConsumeFocusRequest -> _uiState.update {
-                if (it.focusRequest?.requestToken == action.requestToken) it.copy(focusRequest = null) else it
-            }
-            WorkspaceAction.FocusOrAppendTrailingParagraph -> focusOrAppendTrailingParagraph()
-            is WorkspaceAction.MoveBlock -> moveBlock(action.blockId, action.delta)
-            is WorkspaceAction.DeleteBlock -> deleteBlock(action.blockId)
-
-            is WorkspaceAction.EditParagraphText -> applyEditorResult(true) {
-                EditorInputController.editParagraphWithTriggers(it, action.blockId, action.newText, action.cursorOffset, ::nextBlockId, ::nextFocusToken)
-            }
-            is WorkspaceAction.SplitBlockAtCursor -> applyEditorResult(false) {
-                EditorInputController.splitBlockAtCursor(it, action.blockId, action.cursorOffset, ::nextBlockId, ::nextFocusToken)
-            }
-            is WorkspaceAction.BackspaceAtBlockStart -> applyEditorResult(false) {
-                EditorInputController.backspaceAtBlockStart(it, action.blockId, ::nextFocusToken)
-            }
-            is WorkspaceAction.ListEnterAtItem -> applyEditorResult(false) {
-                EditorInputController.handleListEnter(it, action.blockId, action.itemIndex, ::nextBlockId, ::nextFocusToken)
-            }
-            is WorkspaceAction.ListBackspaceOnEmptyItem -> applyEditorResult(false) {
-                EditorInputController.handleListBackspaceOnEmpty(it, action.blockId, action.itemIndex, ::nextFocusToken)
-            }
-            is WorkspaceAction.ExecuteSlashCommand -> applyEditorResult(false) {
-                EditorInputController.executeSlashCommand(it, action.blockId, action.command, ::nextBlockId, ::nextFocusToken)
-            }
-
-            is WorkspaceAction.InsertHeading -> insertHeadingBlock(action.level, action.afterBlockId)
-            is WorkspaceAction.InsertParagraph -> insertParagraphBlock(action.afterBlockId)
-            is WorkspaceAction.InsertChecklist -> insertChecklistBlock(action.afterBlockId)
-            is WorkspaceAction.InsertBulletList -> insertBulletListBlock(action.isNumbered, action.afterBlockId)
-            is WorkspaceAction.InsertTable -> insertTableBlock(action.afterBlockId)
-            is WorkspaceAction.InsertCallout -> insertCalloutBlock(action.afterBlockId)
-            is WorkspaceAction.InsertCode -> insertCodeBlock(action.afterBlockId)
-            is WorkspaceAction.InsertDivider -> insertDividerBlock(action.afterBlockId)
-            is WorkspaceAction.InsertAttachment -> insertAttachmentBlock(
-                action.fileName, action.mimeType, action.sizeBytes, action.dataBase64, action.afterBlockId
-            )
-
-            is WorkspaceAction.UpdateBlockText -> updateBlockText(action.blockId, action.newText)
-            is WorkspaceAction.UpdateAttachmentCaption -> updateAttachmentCaption(action.blockId, action.caption)
-            is WorkspaceAction.ToggleSelectionSpan -> toggleSelectionSpan(
-                action.kind, action.url, action.blockId, action.selStart, action.selEnd
-            )
-            is WorkspaceAction.ToggleParagraphStyle -> toggleParagraphStyle(action.blockId, action.style)
-            is WorkspaceAction.ToggleActiveParagraphStyle -> toggleActiveParagraphStyle(action.style)
-            is WorkspaceAction.UpdateHeadingLevel -> updateHeadingLevel(action.blockId, action.level)
-
-            is WorkspaceAction.UpdateChecklistTitle -> updateChecklistTitle(action.blockId, action.title)
-            is WorkspaceAction.ToggleChecklistItem -> toggleChecklistItem(action.blockId, action.itemId)
-            is WorkspaceAction.AddChecklistItem -> addChecklistItem(action.blockId, action.text)
-            is WorkspaceAction.InsertChecklistItemAfter -> insertChecklistItemAfter(action.blockId, action.afterItemId)
-            is WorkspaceAction.UpdateChecklistItemText -> updateChecklistItemText(action.blockId, action.itemId, action.text)
-            is WorkspaceAction.DeleteChecklistItem -> deleteChecklistItem(action.blockId, action.itemId)
-
-            is WorkspaceAction.ToggleBulletListKind -> toggleBulletListKind(action.blockId)
-            is WorkspaceAction.AddBulletListItem -> addBulletListItem(action.blockId, action.text)
-            is WorkspaceAction.InsertBulletListItemAfter -> insertBulletListItemAfter(action.blockId, action.afterItemIndex)
-            is WorkspaceAction.UpdateBulletListItem -> updateBulletListItem(action.blockId, action.itemIndex, action.text)
-            is WorkspaceAction.DeleteBulletListItem -> deleteBulletListItem(action.blockId, action.itemIndex)
-
-            is WorkspaceAction.UpdateTableHeader -> updateTableHeader(action.blockId, action.colIndex, action.title)
-            is WorkspaceAction.UpdateTableCell -> updateTableCell(action.blockId, action.rowIndex, action.colIndex, action.text)
-            is WorkspaceAction.AddTableRow -> addTableRow(action.blockId)
-            is WorkspaceAction.DeleteTableRow -> deleteTableRow(action.blockId, action.rowIndex)
-            is WorkspaceAction.AddTableColumn -> addTableColumn(action.blockId, action.headerTitle)
-            is WorkspaceAction.DeleteTableColumn -> deleteTableColumn(action.blockId, action.colIndex)
-
-            is WorkspaceAction.UpdateCalloutTitle -> updateCalloutTitle(action.blockId, action.title)
-            is WorkspaceAction.UpdateCalloutTone -> updateCalloutTone(action.blockId, action.tone)
-            is WorkspaceAction.UpdateCodeLanguage -> updateCodeLanguage(action.blockId, action.language)
+    internal fun updateThemeSettings(themeMode: ThemeMode, useDynamicColor: Boolean) {
+        repository.updatePreferences {
+            it.copy(themeMode = themeMode, useDynamicColor = useDynamicColor)
         }
     }
 
@@ -236,15 +124,7 @@ class WorkspaceViewModel(
     }
 
     private fun scheduleAutoSyncIfEnabled() {
-        val prefs = _uiState.value.preferences
-        if (!prefs.autoSyncOnEdit || !prefs.useRemoteHttpSync) return
-        autoSyncJob?.cancel()
-        autoSyncJob = scope.launch {
-            delay(1500L)
-            _uiState.update { it.copy(syncStatus = SyncStatus.SYNCING) }
-            val result = repository.syncWithServer()
-            _uiState.update { it.copy(syncStatus = if (result.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE) }
-        }
+        syncController.scheduleAutoSyncIfEnabled(_uiState.value.preferences)
     }
 
     fun selectNotebook(notebookId: String) {
@@ -272,17 +152,37 @@ class WorkspaceViewModel(
     }
 
     fun setSearchQuery(query: String) {
-        syncStateFromRepository()
+        if (repository.snapshot.value.revision > _uiState.value.revision) {
+            syncStateFromRepository()
+        }
         _uiState.update { it.copy(searchQuery = query) }
+    }
+
+    internal fun requestSearchFocus() = _uiState.update {
+        it.copy(
+            isSidebarOpen = true,
+            searchFocusRequestToken = nextFocusToken()
+        )
     }
 
     fun toggleSidebar() = _uiState.update { it.copy(isSidebarOpen = !it.isSidebarOpen) }
     fun setMobileHierarchySheetOpen(open: Boolean) = _uiState.update { it.copy(isMobileHierarchySheetOpen = open) }
-    fun openDialog(dialog: ActiveDialog) = _uiState.update { it.copy(activeDialog = dialog, isPageMenuOpen = false) }
-    fun dismissDialog() = _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
+    fun openDialog(dialog: ActiveDialog) = _uiState.update {
+        it.copy(
+            activeDialog = dialog,
+            isPageMenuOpen = false,
+            isMobileHierarchySheetOpen = false,
+            isMobileInsertMenuOpen = false
+        )
+    }
+
+    fun dismissDialog() = _uiState.update {
+        it.copy(activeDialog = ActiveDialog.NONE, pendingDeletePageId = null)
+    }
+
     fun setActiveBlockId(blockId: String?) = _uiState.update { it.copy(activeBlockId = blockId) }
 
-    private fun focusOrAppendTrailingParagraph() {
+    internal fun focusOrAppendTrailingParagraph() {
         val page = _uiState.value.activePage ?: return
         val last = page.blocks.lastOrNull()
         if (last is DocumentBlock.Paragraph) {
@@ -401,7 +301,7 @@ class WorkspaceViewModel(
         scheduleAutoSyncIfEnabled()
     }
 
-    private fun toggleSubpageCollapse(parentPageId: String) {
+    internal fun toggleSubpageCollapse(parentPageId: String) {
         val activeChildParent = _uiState.value.activePage?.parentPageId
         _uiState.update { state ->
             val nextSet = if (parentPageId in state.collapsedParentPageIds) state.collapsedParentPageIds - parentPageId
@@ -411,7 +311,7 @@ class WorkspaceViewModel(
         }
     }
 
-    private fun moveActivePageToSection(targetSectionId: String) {
+    internal fun moveActivePageToSection(targetSectionId: String) {
         val pageId = _uiState.value.activePage?.id ?: return
         repository.movePageToSection(pageId, targetSectionId)
         _uiState.update { it.copy(activeDialog = ActiveDialog.NONE, isPageMenuOpen = false) }
@@ -419,7 +319,7 @@ class WorkspaceViewModel(
         scheduleAutoSyncIfEnabled()
     }
 
-    private fun importMarkdownPage(markdown: String) {
+    internal fun importMarkdownPage(markdown: String) {
         val secId = _uiState.value.activeSection?.id ?: return
         if (markdown.isBlank()) return
         val imported = MarkdownCodec.importMarkdownToPage(markdown, secId, repository::nextId, repository.nextTimestampMs())
@@ -429,17 +329,44 @@ class WorkspaceViewModel(
         scheduleAutoSyncIfEnabled()
     }
 
+    internal fun requestDeletePage(pageId: String) {
+        if (_uiState.value.pages.none { it.id == pageId }) return
+        _uiState.update {
+            it.copy(
+                activeDialog = ActiveDialog.CONFIRM_DELETE_PAGE,
+                pendingDeletePageId = pageId,
+                isPageMenuOpen = false,
+                isMobileHierarchySheetOpen = false,
+                isMobileInsertMenuOpen = false
+            )
+        }
+    }
+
     fun deleteActivePage() {
         val pageId = _uiState.value.activePage?.id ?: return
+        deletePage(pageId)
+    }
+
+    fun deletePage(pageId: String) {
         undoRedo.clearPage(pageId)
         repository.deletePage(pageId)
-        _uiState.update { it.copy(isPageMenuOpen = false) }
+        _uiState.update {
+            it.copy(
+                activeDialog = ActiveDialog.NONE,
+                pendingDeletePageId = null,
+                isPageMenuOpen = false
+            )
+        }
         syncStateFromRepository()
         scheduleAutoSyncIfEnabled()
     }
 
     fun toggleActivePagePin() {
         val pageId = _uiState.value.activePage?.id ?: return
+        togglePinPage(pageId)
+    }
+
+    fun togglePinPage(pageId: String) {
         repository.togglePagePin(pageId)
         syncStateFromRepository()
         scheduleAutoSyncIfEnabled()
@@ -452,7 +379,7 @@ class WorkspaceViewModel(
         scheduleAutoSyncIfEnabled()
     }
 
-    private fun performUndo() {
+    internal fun performUndo() {
         val page = _uiState.value.activePage ?: return
         val restored = undoRedo.undo(page.id, page.blocks) ?: return
         repository.updatePageBlocks(page.id, restored, debounced = false)
@@ -460,7 +387,7 @@ class WorkspaceViewModel(
         scheduleAutoSyncIfEnabled()
     }
 
-    private fun performRedo() {
+    internal fun performRedo() {
         val page = _uiState.value.activePage ?: return
         val restored = undoRedo.redo(page.id, page.blocks) ?: return
         repository.updatePageBlocks(page.id, restored, debounced = false)
@@ -468,7 +395,7 @@ class WorkspaceViewModel(
         scheduleAutoSyncIfEnabled()
     }
 
-    private fun applyEditorResult(debounced: Boolean, compute: (List<DocumentBlock>) -> EditorMutationResult) {
+    internal fun applyEditorResult(debounced: Boolean, compute: (List<DocumentBlock>) -> EditorMutationResult) {
         val page = _uiState.value.activePage ?: return
         val res = compute(page.blocks)
         if (res.blocks == page.blocks && res.focusRequest == null) return
@@ -502,7 +429,7 @@ class WorkspaceViewModel(
         scheduleAutoSyncIfEnabled()
     }
 
-    private fun toggleSelectionSpan(kind: RichSpanKind, url: String?, explicitBlockId: String?, explicitStart: Int?, explicitEnd: Int?) {
+    internal fun toggleSelectionSpan(kind: RichSpanKind, url: String?, explicitBlockId: String?, explicitStart: Int?, explicitEnd: Int?) {
         val state = _uiState.value
         val page = state.activePage ?: return
         val targetId = explicitBlockId ?: state.activeBlockId
@@ -518,7 +445,7 @@ class WorkspaceViewModel(
 
     fun moveBlock(blockId: String, delta: Int) = mutateActivePageBlocks(blockId) { BlockMutationEngine.moveBlock(it, blockId, delta) }
     fun updateBlockText(blockId: String, newText: String) = mutateActivePageBlocks(blockId, true) { BlockMutationEngine.updateBlockText(it, blockId, newText) }
-    private fun updateAttachmentCaption(blockId: String, caption: String) = mutateActivePageBlocks(blockId, true) { BlockMutationEngine.updateAttachmentCaption(it, blockId, caption) }
+    internal fun updateAttachmentCaption(blockId: String, caption: String) = mutateActivePageBlocks(blockId, true) { BlockMutationEngine.updateAttachmentCaption(it, blockId, caption) }
     fun toggleParagraphStyle(blockId: String, style: String) = mutateActivePageBlocks(blockId) { BlockMutationEngine.toggleParagraphStyle(it, blockId, style) }
     fun updateHeadingLevel(blockId: String, level: Int) = mutateActivePageBlocks(blockId) { BlockMutationEngine.updateHeadingLevel(it, blockId, level) }
     fun updateChecklistTitle(blockId: String, title: String) = mutateActivePageBlocks(blockId, true) { BlockMutationEngine.updateChecklistTitle(it, blockId, title) }
@@ -553,6 +480,18 @@ class WorkspaceViewModel(
             else -> return
         }
         toggleSelectionSpan(kind, null, null, null, null)
+    }
+
+    fun clearActiveParagraphFormatting() {
+        val targetId = _uiState.value.activeBlockId ?: return
+        mutateActivePageBlocks(targetId) { BlockMutationEngine.clearParagraphFormatting(it, targetId) }
+    }
+
+    fun convertActiveBlock(command: SlashCommandKind) {
+        val blockId = _uiState.value.activeBlockId ?: return
+        applyEditorResult(debounced = false) {
+            EditorInputController.convertBlockWithFocus(it, blockId, command, ::nextBlockId, ::nextFocusToken)
+        }
     }
 
     fun deleteBlock(blockId: String) {
@@ -629,34 +568,14 @@ class WorkspaceViewModel(
         focusInserted = false
     )
 
-    private fun saveSyncAndAuthSettings(endpointUrl: String, useRemoteHttp: Boolean, authToken: String, autoSync: Boolean) {
-        val cleanUrl = endpointUrl.trim().ifEmpty { "https://notes.overbay.app/api/v1/sync" }
-        val cleanToken = authToken.trim()
-        repository.updatePreferences {
-            it.copy(syncEndpointUrl = cleanUrl, useRemoteHttpSync = useRemoteHttp, syncAuthToken = cleanToken, autoSyncOnEdit = autoSync)
-        }
-        val provider = if (useRemoteHttp) HttpSyncProvider(cleanUrl, authTokenProvider = { repository.preferences.value.syncAuthToken })
-        else LocalLoopbackSyncProvider(cleanUrl)
-        repository.configureSyncProvider(provider)
-        _uiState.update { it.copy(syncEndpointUrl = cleanUrl, useRemoteHttpSync = useRemoteHttp, activeDialog = ActiveDialog.NONE) }
-        triggerManualSync()
+    internal fun saveSyncAndAuthSettings(endpointUrl: String, useRemoteHttp: Boolean, authToken: String, autoSync: Boolean) {
+        syncController.saveSettingsAndSync(endpointUrl, useRemoteHttp, authToken, autoSync)
     }
 
     fun configureSyncServer(endpointUrl: String, useRemoteHttp: Boolean) {
         val prefs = repository.preferences.value
-        saveSyncAndAuthSettings(endpointUrl, useRemoteHttp, prefs.syncAuthToken, prefs.autoSyncOnEdit)
+        syncController.saveSettingsAndSync(endpointUrl, useRemoteHttp, prefs.syncAuthToken, prefs.autoSyncOnEdit)
     }
 
-    fun triggerManualSync() {
-        if (!repository.isRemoteSyncEnabled) {
-            repository.flushPendingWrites()
-            _uiState.update { it.copy(syncStatus = SyncStatus.LOCAL_READY) }
-            return
-        }
-        scope.launch {
-            _uiState.update { it.copy(syncStatus = SyncStatus.SYNCING) }
-            val result = repository.syncWithServer()
-            _uiState.update { it.copy(syncStatus = if (result.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE) }
-        }
-    }
+    fun triggerManualSync() = syncController.triggerManualSync()
 }
