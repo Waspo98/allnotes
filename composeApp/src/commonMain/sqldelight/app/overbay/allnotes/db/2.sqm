@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS idx_note_page_section_sort ON note_page(section_id, is_pinned DESC, updated_at_epoch_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_deleted_entity_ts ON deleted_entity(deleted_at_epoch_ms DESC);

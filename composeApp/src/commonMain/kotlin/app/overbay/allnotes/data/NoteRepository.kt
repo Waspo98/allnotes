@@ -14,19 +14,17 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 
 class NoteRepository(
     private val storage: NoteStorageBackend = PlatformNoteStore(),
     private var syncProvider: SyncProvider = LocalLoopbackSyncProvider(),
     private val typingDebounceMs: Long = 0L,
-    private val repositoryScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val repositoryScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    private val persistOnBackground: Boolean = false
 ) {
     private val _snapshot = MutableStateFlow(
         storage.loadSnapshot() ?: SampleWorkspaceFactory.createStarterSnapshot().also {
@@ -38,12 +36,20 @@ class NoteRepository(
     private val _preferences = MutableStateFlow(storage.loadPreferences())
     val preferences: StateFlow<WorkspacePreferences> = _preferences.asStateFlow()
 
-    private val pendingLock = Any()
-    private val dirtyPageIds = LinkedHashSet<String>()
-    private val pendingDebounceJobs = LinkedHashMap<String, Job>()
+    private val stateLock = Any()
+    private val persistence = WorkspacePersistenceCoordinator(
+        storage = storage,
+        typingDebounceMs = typingDebounceMs,
+        scope = repositoryScope,
+        persistOnBackground = persistOnBackground,
+        initialRevision = _snapshot.value.revision,
+        snapshotProvider = { _snapshot.value },
+        preferencesProvider = { _preferences.value }
+    )
 
     private var idCounter = 1000L
-    private var lastEpochMs = 0L
+    private var maxKnownEntityEpochMs = computeMaxEpochMs(_snapshot.value)
+    private var lastEpochMs = maxKnownEntityEpochMs
 
     init {
         val prefs = _preferences.value
@@ -55,66 +61,74 @@ class NoteRepository(
         }
     }
 
-    @OptIn(ExperimentalUuidApi::class)
-    fun nextId(prefix: String): String {
-        idCounter += 1
-        val shortUuid = Uuid.random().toHexString().take(8)
-        return "$prefix-${_snapshot.value.revision}-$idCounter-$shortUuid"
-    }
+    val isRemoteSyncEnabled: Boolean
+        get() = _preferences.value.useRemoteHttpSync || syncProvider !is LocalLoopbackSyncProvider
 
-    fun nextTimestampMs(): Long {
-        val snap = _snapshot.value
+    private fun computeMaxEpochMs(snap: WorkspaceSnapshot): Long {
         val maxPage = snap.pages.maxOfOrNull { it.updatedAtEpochMs } ?: 0L
         val maxSec = snap.sections.maxOfOrNull { it.updatedAtEpochMs } ?: 0L
         val maxNb = snap.notebooks.maxOfOrNull { it.updatedAtEpochMs } ?: 0L
         val maxTomb = snap.tombstones.maxOfOrNull { it.deletedAtEpochMs } ?: 0L
-        val currentMax = maxOf(maxPage, maxSec, maxNb, maxTomb)
+        return maxOf(maxPage, maxSec, maxNb, maxTomb)
+    }
+
+    private fun refreshMaxEpochLocked(snap: WorkspaceSnapshot) {
+        val snapMax = computeMaxEpochMs(snap)
+        if (snapMax > maxKnownEntityEpochMs) maxKnownEntityEpochMs = snapMax
+        if (maxKnownEntityEpochMs > lastEpochMs) lastEpochMs = maxKnownEntityEpochMs
+    }
+
+    @OptIn(ExperimentalUuidApi::class)
+    fun nextId(prefix: String): String {
+        val (rev, seq) = platformSynchronized(stateLock) {
+            idCounter += 1
+            _snapshot.value.revision to idCounter
+        }
+        val shortUuid = Uuid.random().toHexString().take(8)
+        return "$prefix-$rev-$seq-$shortUuid"
+    }
+
+    fun nextTimestampMs(): Long = platformSynchronized(stateLock) {
         val wallNow = currentEpochMillis()
-        val candidate = maxOf(wallNow, currentMax + 1L, lastEpochMs + 1L)
+        val candidate = maxOf(wallNow, maxKnownEntityEpochMs + 1L, lastEpochMs + 1L)
         lastEpochMs = candidate
-        return candidate
+        maxKnownEntityEpochMs = candidate
+        candidate
     }
 
     val currentSyncEndpoint: String
-        get() = syncProvider.endpointUrl
+        get() = platformSynchronized(stateLock) { syncProvider.endpointUrl }
 
     fun configureSyncProvider(provider: SyncProvider) {
-        syncProvider = provider
+        platformSynchronized(stateLock) { syncProvider = provider }
     }
 
     fun updatePreferences(transform: (WorkspacePreferences) -> WorkspacePreferences): WorkspacePreferences {
-        val updated = transform(_preferences.value)
-        _preferences.value = updated
-        storage.savePreferences(updated)
+        val updated = platformSynchronized(stateLock) {
+            val next = transform(_preferences.value)
+            _preferences.value = next
+            next
+        }
+        persistence.recordPreferencesChanged(updated)
         return updated
     }
 
     /**
-     * Immediately commits any debounced in-memory page edits to SQLite / durable storage.
+     * Immediately commits any debounced or queued in-memory edits to SQLite / durable storage.
      */
-    fun flushPendingWrites() {
-        val pagesToFlush = platformSynchronized(pendingLock) {
-            pendingDebounceJobs.values.forEach { it.cancel() }
-            pendingDebounceJobs.clear()
-            dirtyPageIds.toList().also { dirtyPageIds.clear() }
-        }
-        if (pagesToFlush.isEmpty()) return
-        val current = _snapshot.value
-        for (pageId in pagesToFlush) {
-            val page = current.pages.firstOrNull { it.id == pageId }
-            if (page != null) {
-                storage.savePage(page, current.revision)
-            }
-        }
-    }
+    fun flushPendingWrites() = persistence.flush()
 
     private fun commitFullSnapshot(transform: (WorkspaceSnapshot) -> WorkspaceSnapshot) {
-        flushPendingWrites()
-        val updated = transform(_snapshot.value).let {
-            it.copy(revision = it.revision + 1)
+        if (!persistOnBackground) {
+            persistence.flush()
         }
-        _snapshot.value = updated
-        storage.saveSnapshot(updated)
+        val updated = platformSynchronized(stateLock) {
+            val next = transform(_snapshot.value).let { it.copy(revision = it.revision + 1) }
+            _snapshot.value = next
+            refreshMaxEpochLocked(next)
+            next
+        }
+        persistence.recordFullSnapshot(updated)
     }
 
     private fun commitPageMutation(
@@ -122,63 +136,33 @@ class NoteRepository(
         debounced: Boolean = false,
         mutatePage: (NotePage) -> NotePage
     ) {
-        val current = _snapshot.value
-        var mutatedTarget: NotePage? = null
-        val updatedPages = current.pages.map { page ->
-            if (page.id == pageId) {
-                mutatePage(page).also { mutatedTarget = it }
-            } else {
-                page
+        val mutated = platformSynchronized(stateLock) {
+            val current = _snapshot.value
+            var mutatedTarget: NotePage? = null
+            val updatedPages = current.pages.map { page ->
+                if (page.id == pageId) mutatePage(page).also { mutatedTarget = it } else page
             }
-        }
-        val target = mutatedTarget ?: return
-        val nextRev = current.revision + 1
-        val cleanedTombstones = current.tombstones.filterNot {
-            it.id == pageId && it.kind == EntityKind.PAGE
-        }
-        val updated = current.copy(pages = updatedPages, revision = nextRev, tombstones = cleanedTombstones)
-        _snapshot.value = updated
-
-        if (debounced && typingDebounceMs > 0L) {
-            platformSynchronized(pendingLock) {
-                dirtyPageIds.add(pageId)
-                pendingDebounceJobs.remove(pageId)?.cancel()
-                pendingDebounceJobs[pageId] = repositoryScope.launch {
-                    delay(typingDebounceMs)
-                    val shouldWrite = platformSynchronized(pendingLock) {
-                        pendingDebounceJobs.remove(pageId)
-                        dirtyPageIds.remove(pageId)
-                    }
-                    if (shouldWrite) {
-                        val latestSnap = _snapshot.value
-                        val latestPage = latestSnap.pages.firstOrNull { it.id == pageId }
-                        if (latestPage != null) {
-                            storage.savePage(latestPage, latestSnap.revision)
-                        }
-                    }
-                }
+            val target = mutatedTarget ?: return@platformSynchronized null
+            val nextRev = current.revision + 1
+            val cleanedTombstones = current.tombstones.filterNot {
+                it.id == pageId && it.kind == EntityKind.PAGE
             }
-        } else {
-            platformSynchronized(pendingLock) {
-                pendingDebounceJobs.remove(pageId)?.cancel()
-                dirtyPageIds.remove(pageId)
+            _snapshot.value = current.copy(pages = updatedPages, revision = nextRev, tombstones = cleanedTombstones)
+            if (target.updatedAtEpochMs > maxKnownEntityEpochMs) {
+                maxKnownEntityEpochMs = target.updatedAtEpochMs
             }
-            storage.savePage(target, nextRev)
-        }
+            target
+        } ?: return
+        persistence.recordPageWrite(mutated.id, debounced = debounced)
     }
 
-    private fun upsertTombstones(
-        existing: List<DeletedEntity>,
-        additions: List<DeletedEntity>
-    ): List<DeletedEntity> {
+    private fun upsertTombstones(existing: List<DeletedEntity>, additions: List<DeletedEntity>): List<DeletedEntity> {
         if (additions.isEmpty()) return existing
-        val map = LinkedHashMap<Pair<String, EntityKind>, DeletedEntity>()
+        val map = LinkedHashMap<Pair<String, EntityKind>, DeletedEntity>(existing.size + additions.size)
         for (item in existing + additions) {
             val key = item.id to item.kind
             val prev = map[key]
-            if (prev == null || item.deletedAtEpochMs >= prev.deletedAtEpochMs) {
-                map[key] = item
-            }
+            if (prev == null || item.deletedAtEpochMs >= prev.deletedAtEpochMs) map[key] = item
         }
         return map.values.toList()
     }
@@ -397,19 +381,25 @@ class NoteRepository(
     }
 
     fun insertConstructedPage(newPage: NotePage): NotePage {
-        flushPendingWrites()
-        val current = _snapshot.value
-        val nextRev = current.revision + 1
-        val cleanedTombstones = current.tombstones.filterNot {
-            it.id == newPage.id && it.kind == EntityKind.PAGE
+        if (!persistOnBackground) {
+            persistence.flush()
         }
-        val updated = current.copy(
-            pages = listOf(newPage) + current.pages.filterNot { it.id == newPage.id },
-            revision = nextRev,
-            tombstones = cleanedTombstones
-        )
-        _snapshot.value = updated
-        storage.savePage(newPage, nextRev)
+        platformSynchronized(stateLock) {
+            val current = _snapshot.value
+            val rev = current.revision + 1
+            val cleanedTombstones = current.tombstones.filterNot {
+                it.id == newPage.id && it.kind == EntityKind.PAGE
+            }
+            _snapshot.value = current.copy(
+                pages = listOf(newPage) + current.pages.filterNot { it.id == newPage.id },
+                revision = rev,
+                tombstones = cleanedTombstones
+            )
+            if (newPage.updatedAtEpochMs > maxKnownEntityEpochMs) {
+                maxKnownEntityEpochMs = newPage.updatedAtEpochMs
+            }
+        }
+        persistence.recordPageWrite(newPage.id, debounced = false)
         return newPage
     }
 
@@ -438,28 +428,36 @@ class NoteRepository(
     }
 
     fun deletePage(pageId: String) {
-        flushPendingWrites()
-        val current = _snapshot.value
-        if (current.pages.none { it.id == pageId }) return
-        val now = nextTimestampMs()
-        val nextRev = current.revision + 1
-        val hasOrphanedChildren = current.pages.any { it.parentPageId == pageId }
-        val updatedPages = current.pages
-            .filterNot { it.id == pageId }
-            .map { page ->
-                if (page.parentPageId == pageId) page.copy(parentPageId = null, updatedAtEpochMs = now) else page
-            }
-        val updatedTombstones = upsertTombstones(
-            current.tombstones,
-            listOf(DeletedEntity(pageId, EntityKind.PAGE, now))
-        )
-        val updated = current.copy(pages = updatedPages, revision = nextRev, tombstones = updatedTombstones)
-        _snapshot.value = updated
-        if (hasOrphanedChildren) {
-            storage.saveSnapshot(updated)
-        } else {
-            storage.deletePage(pageId, nextRev, now)
+        if (!persistOnBackground) {
+            persistence.flush()
         }
+        val now = nextTimestampMs()
+        val outcome = platformSynchronized(stateLock) {
+            val current = _snapshot.value
+            if (current.pages.none { it.id == pageId }) return@platformSynchronized null
+            val nextRev = current.revision + 1
+            val hasOrphanedChildren = current.pages.any { it.parentPageId == pageId }
+            val updatedPages = current.pages
+                .filterNot { it.id == pageId }
+                .map { page ->
+                    if (page.parentPageId == pageId) page.copy(parentPageId = null, updatedAtEpochMs = now) else page
+                }
+            val updatedTombstones = upsertTombstones(
+                current.tombstones,
+                listOf(DeletedEntity(pageId, EntityKind.PAGE, now))
+            )
+            val updated = current.copy(pages = updatedPages, revision = nextRev, tombstones = updatedTombstones)
+            _snapshot.value = updated
+            updated to hasOrphanedChildren
+        } ?: return
+
+        val (updated, hasOrphanedChildren) = outcome
+        persistence.recordPageDelete(
+            pageId = pageId,
+            deletedAtEpochMs = now,
+            hasOrphanedChildren = hasOrphanedChildren,
+            snapshot = updated
+        )
     }
 
     fun updatePageParent(pageId: String, parentPageId: String?) {
@@ -539,17 +537,23 @@ class NoteRepository(
 
     suspend fun syncWithServer(): Result<WorkspaceSnapshot> {
         flushPendingWrites()
-        val pushed = _snapshot.value
-        val result = syncProvider.pushSnapshot(pushed)
+        val (provider, pushed) = platformSynchronized(stateLock) {
+            syncProvider to _snapshot.value
+        }
+        val result = provider.pushSnapshot(pushed)
         return result.map { acknowledged ->
-            val currentLive = _snapshot.value
-            val committed = if (currentLive.revision > pushed.revision) {
-                WorkspaceMerger.merge(acknowledged, currentLive)
-            } else {
-                acknowledged
+            val committed = platformSynchronized(stateLock) {
+                val currentLive = _snapshot.value
+                val resolved = if (currentLive.revision > pushed.revision) {
+                    WorkspaceMerger.merge(acknowledged, currentLive)
+                } else {
+                    acknowledged
+                }
+                _snapshot.value = resolved
+                refreshMaxEpochLocked(resolved)
+                resolved
             }
-            _snapshot.value = committed
-            storage.saveSnapshot(committed)
+            persistence.recordFullSnapshot(committed)
             updatePreferences { it.copy(lastSyncedEpochMs = currentEpochMillis()) }
             committed
         }
@@ -557,24 +561,33 @@ class NoteRepository(
 
     suspend fun pullFromServer(): Result<WorkspaceSnapshot> {
         flushPendingWrites()
-        val result = syncProvider.pullSnapshot()
+        val provider = platformSynchronized(stateLock) { syncProvider }
+        val result = provider.pullSnapshot()
         return result.map { remote ->
-            val current = _snapshot.value
-            val committed = when {
-                remote.revision <= current.revision && WorkspaceMerger.isSecondSubsumedByFirst(current, remote) -> {
-                    current
+            var didMutate = false
+            val committed = platformSynchronized(stateLock) {
+                val current = _snapshot.value
+                when {
+                    remote.revision <= current.revision && WorkspaceMerger.isSecondSubsumedByFirst(current, remote) -> {
+                        current
+                    }
+                    remote.revision > current.revision && WorkspaceMerger.isSecondSubsumedByFirst(remote, current) -> {
+                        didMutate = true
+                        _snapshot.value = remote
+                        refreshMaxEpochLocked(remote)
+                        remote
+                    }
+                    else -> {
+                        didMutate = true
+                        val merged = WorkspaceMerger.merge(current, remote)
+                        _snapshot.value = merged
+                        refreshMaxEpochLocked(merged)
+                        merged
+                    }
                 }
-                remote.revision > current.revision && WorkspaceMerger.isSecondSubsumedByFirst(remote, current) -> {
-                    _snapshot.value = remote
-                    storage.saveSnapshot(remote)
-                    remote
-                }
-                else -> {
-                    val merged = WorkspaceMerger.merge(current, remote)
-                    _snapshot.value = merged
-                    storage.saveSnapshot(merged)
-                    merged
-                }
+            }
+            if (didMutate) {
+                persistence.recordFullSnapshot(committed)
             }
             committed
         }

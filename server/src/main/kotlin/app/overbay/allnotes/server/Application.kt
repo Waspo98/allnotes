@@ -206,7 +206,14 @@ class AllNotesServer(
 
     private fun addCorsHeaders(exchange: HttpExchange) {
         val headers = exchange.responseHeaders
-        headers.set("Access-Control-Allow-Origin", "*")
+        val requestOrigin = exchange.requestHeaders.getFirst("Origin")?.takeIf { it.isNotBlank() }
+        if (requestOrigin != null) {
+            headers.set("Access-Control-Allow-Origin", requestOrigin)
+            headers.set("Access-Control-Allow-Credentials", "true")
+            headers.set("Vary", "Origin")
+        } else {
+            headers.set("Access-Control-Allow-Origin", "*")
+        }
         headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
     }

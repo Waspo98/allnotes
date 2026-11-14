@@ -196,4 +196,27 @@ class WorkspaceMergerTombstoneTest {
         assertEquals("Typed Title", storage.snapshot?.pages?.first { it.id == "page-1" }?.title)
         assertFalse(repo.snapshot.value.pages.isEmpty())
     }
+
+    @Test
+    fun mergerBreaksMultiNodeCircularSubpageReferencesSafely() {
+        val base = baseSnapshot()
+        val pageA = NotePage(id = "cycle-a", sectionId = "sec-1", parentPageId = "cycle-b", title = "A", updatedAtEpochMs = 2000L)
+        val pageB = NotePage(id = "cycle-b", sectionId = "sec-1", parentPageId = "cycle-c", title = "B", updatedAtEpochMs = 2000L)
+        val pageC = NotePage(id = "cycle-c", sectionId = "sec-1", parentPageId = "cycle-a", title = "C", updatedAtEpochMs = 2000L)
+
+        val merged = WorkspaceMerger.merge(
+            base.copy(pages = base.pages + pageA + pageB),
+            base.copy(pages = base.pages + pageC)
+        )
+        val byId = merged.pages.associateBy { it.id }
+        // Verify walking parent chains from every page terminates cleanly with zero cycles
+        for (page in merged.pages) {
+            val seen = HashSet<String>()
+            var cursor: NotePage? = page
+            while (cursor != null) {
+                assertTrue(seen.add(cursor.id), "Subpage parent chain must remain acyclic")
+                cursor = cursor.parentPageId?.let { byId[it] }
+            }
+        }
+    }
 }

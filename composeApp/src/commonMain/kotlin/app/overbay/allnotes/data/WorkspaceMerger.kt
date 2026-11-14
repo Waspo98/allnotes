@@ -29,19 +29,22 @@ object WorkspaceMerger {
      */
     fun isSecondSubsumedByFirst(first: WorkspaceSnapshot, second: WorkspaceSnapshot): Boolean {
         val firstTombstones = first.tombstones.associate { TombstoneKey(it.id, it.kind) to it.deletedAtEpochMs }
+        val firstNb = first.notebooks.associateBy { it.id }
+        val firstSec = first.sections.associateBy { it.id }
+        val firstPages = first.pages.associateBy { it.id }
+
         for (t in second.tombstones) {
             val ft = firstTombstones[TombstoneKey(t.id, t.kind)]
             if (ft == null || ft < t.deletedAtEpochMs) {
                 val surviving = when (t.kind) {
-                    EntityKind.NOTEBOOK -> first.notebooks.firstOrNull { it.id == t.id }?.updatedAtEpochMs
-                    EntityKind.SECTION -> first.sections.firstOrNull { it.id == t.id }?.updatedAtEpochMs
-                    EntityKind.PAGE -> first.pages.firstOrNull { it.id == t.id }?.updatedAtEpochMs
+                    EntityKind.NOTEBOOK -> firstNb[t.id]?.updatedAtEpochMs
+                    EntityKind.SECTION -> firstSec[t.id]?.updatedAtEpochMs
+                    EntityKind.PAGE -> firstPages[t.id]?.updatedAtEpochMs
                 }
                 if (surviving == null || surviving <= t.deletedAtEpochMs) return false
             }
         }
 
-        val firstNb = first.notebooks.associateBy { it.id }
         for (nb in second.notebooks) {
             val f = firstNb[nb.id]
             val tomb = firstTombstones[TombstoneKey(nb.id, EntityKind.NOTEBOOK)]
@@ -50,7 +53,6 @@ object WorkspaceMerger {
             if (f.updatedAtEpochMs == nb.updatedAtEpochMs && f != nb) return false
         }
 
-        val firstSec = first.sections.associateBy { it.id }
         for (sec in second.sections) {
             val f = firstSec[sec.id]
             val tomb = firstTombstones[TombstoneKey(sec.id, EntityKind.SECTION)]
@@ -59,7 +61,6 @@ object WorkspaceMerger {
             if (f.updatedAtEpochMs == sec.updatedAtEpochMs && f != sec) return false
         }
 
-        val firstPages = first.pages.associateBy { it.id }
         for (page in second.pages) {
             val f = firstPages[page.id]
             val tomb = firstTombstones[TombstoneKey(page.id, EntityKind.PAGE)]
@@ -181,11 +182,36 @@ object WorkspaceMerger {
                 }
             }
         }
-        val validPageIds = preFilteredPages.map { it.id }.toSet()
+        val pageMap = preFilteredPages.associateBy { it.id }
+        val repairedParentByPageId = LinkedHashMap<String, String?>(preFilteredPages.size)
+        for (page in preFilteredPages) {
+            val initialParent = page.parentPageId
+            if (initialParent == null || initialParent == page.id || initialParent !in pageMap) {
+                repairedParentByPageId[page.id] = null
+            } else {
+                val visited = HashSet<String>()
+                visited.add(page.id)
+                var cursor: String? = initialParent
+                var cyclic = false
+                while (cursor != null) {
+                    if (!visited.add(cursor)) {
+                        cyclic = true
+                        break
+                    }
+                    val nextParent = if (cursor in repairedParentByPageId) {
+                        repairedParentByPageId[cursor]
+                    } else {
+                        pageMap[cursor]?.parentPageId
+                    }
+                    cursor = if (nextParent != null && nextParent in pageMap) nextParent else null
+                }
+                repairedParentByPageId[page.id] = if (cyclic) null else initialParent
+            }
+        }
         val survivingPages = preFilteredPages.map { page ->
-            val parentId = page.parentPageId
-            if (parentId != null && (parentId == page.id || parentId !in validPageIds)) {
-                page.copy(parentPageId = null)
+            val sanitizedParent = repairedParentByPageId[page.id]
+            if (page.parentPageId != sanitizedParent) {
+                page.copy(parentPageId = sanitizedParent)
             } else {
                 page
             }

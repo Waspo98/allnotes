@@ -4,7 +4,9 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.w3c.xhr.XMLHttpRequest
 
-class WasmHttpTransport : HttpTransport {
+class WasmHttpTransport(
+    private val timeoutMs: Int = 15_000
+) : HttpTransport {
     override suspend fun get(url: String): HttpResponseData = get(url, emptyMap())
 
     override suspend fun get(url: String, headers: Map<String, String>): HttpResponseData =
@@ -31,6 +33,7 @@ class WasmHttpTransport : HttpTransport {
 
         val xhr = XMLHttpRequest()
         xhr.open(method, url, true)
+        xhr.timeout = timeoutMs
         xhr.withCredentials = true
         xhr.setRequestHeader("Accept", "application/json")
         if (body != null) {

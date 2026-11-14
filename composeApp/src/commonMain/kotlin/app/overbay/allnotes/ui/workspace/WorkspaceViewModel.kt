@@ -30,7 +30,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class WorkspaceViewModel(
-    private val repository: NoteRepository = NoteRepository(typingDebounceMs = 300L),
+    private val repository: NoteRepository = NoteRepository(typingDebounceMs = 300L, persistOnBackground = true),
     private val coroutineDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + coroutineDispatcher)
 ) {
@@ -61,6 +61,8 @@ class WorkspaceViewModel(
                 val res = repository.pullFromServer()
                 _uiState.update { it.copy(syncStatus = if (res.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE) }
             }
+        } else {
+            _uiState.update { it.copy(syncStatus = SyncStatus.LOCAL_READY) }
         }
     }
 
@@ -607,8 +609,25 @@ class WorkspaceViewModel(
     fun insertCodeBlock(afterBlockId: String? = null) = insertBlock(BlockMutationEngine.defaultCode(nextBlockId()), afterBlockId)
     fun insertBulletListBlock(isNumbered: Boolean = false, afterBlockId: String? = null) = insertBlock(BlockMutationEngine.defaultBulletList(nextBlockId(), isNumbered), afterBlockId)
     fun insertDividerBlock(afterBlockId: String? = null) = insertBlock(DocumentBlock.Divider(nextBlockId()), afterBlockId, focusInserted = false)
-    fun insertAttachmentBlock(fileName: String, mimeType: String, sizeBytes: Long, dataBase64: String, afterBlockId: String? = null) =
-        insertBlock(DocumentBlock.Attachment(nextBlockId(), fileName, mimeType, sizeBytes, dataBase64), afterBlockId, focusInserted = false)
+    fun insertAttachmentBlock(
+        fileName: String,
+        mimeType: String,
+        sizeBytes: Long,
+        dataBase64: String,
+        afterBlockId: String? = null,
+        caption: String = ""
+    ) = insertBlock(
+        block = DocumentBlock.Attachment(
+            id = nextBlockId(),
+            fileName = fileName,
+            mimeType = mimeType,
+            sizeBytes = sizeBytes,
+            caption = caption,
+            dataBase64 = dataBase64
+        ),
+        afterBlockId = afterBlockId,
+        focusInserted = false
+    )
 
     private fun saveSyncAndAuthSettings(endpointUrl: String, useRemoteHttp: Boolean, authToken: String, autoSync: Boolean) {
         val cleanUrl = endpointUrl.trim().ifEmpty { "https://notes.overbay.app/api/v1/sync" }
@@ -629,6 +648,11 @@ class WorkspaceViewModel(
     }
 
     fun triggerManualSync() {
+        if (!repository.isRemoteSyncEnabled) {
+            repository.flushPendingWrites()
+            _uiState.update { it.copy(syncStatus = SyncStatus.LOCAL_READY) }
+            return
+        }
         scope.launch {
             _uiState.update { it.copy(syncStatus = SyncStatus.SYNCING) }
             val result = repository.syncWithServer()

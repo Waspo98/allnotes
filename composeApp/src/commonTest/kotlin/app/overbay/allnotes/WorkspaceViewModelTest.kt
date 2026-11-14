@@ -534,4 +534,25 @@ class WorkspaceViewModelTest {
         assertEquals(blBefore.items.size + 1, blAfter.items.size)
         assertEquals("", blAfter.items[1])
     }
+
+    @Test
+    fun insertAttachmentBlockPreservesBase64PayloadAndCaptionSeparately() {
+        val (vm, _) = createTestFixture()
+        val payload = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+        vm.insertAttachmentBlock(
+            fileName = "diagram.png",
+            mimeType = "image/png",
+            sizeBytes = 2048L,
+            dataBase64 = payload,
+            caption = "Architecture diagram"
+        )
+        val attachment = vm.uiState.value.activePage!!.blocks
+            .filterIsInstance<DocumentBlock.Attachment>()
+            .single()
+        assertEquals("diagram.png", attachment.fileName)
+        assertEquals("image/png", attachment.mimeType)
+        assertEquals(2048L, attachment.sizeBytes)
+        assertEquals(payload, attachment.dataBase64)
+        assertEquals("Architecture diagram", attachment.caption)
+    }
 }

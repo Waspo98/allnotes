@@ -61,7 +61,8 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             }
 
             null
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            System.err.println("AllNotes AndroidStorage: Failed to load snapshot: ${e.message}")
             null
         }
     }
@@ -69,29 +70,32 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
     actual override fun saveSnapshot(snapshot: WorkspaceSnapshot) {
         try {
             sqlStore.saveSnapshot(snapshot)
-        } catch (_: Exception) {
-            // Fail-safe local persistence
+        } catch (e: Exception) {
+            System.err.println("AllNotes AndroidStorage: Failed to save snapshot: ${e.message}")
         }
     }
 
     actual override fun savePage(page: NotePage, revision: Long) {
         try {
             sqlStore.savePage(page, revision)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            System.err.println("AllNotes AndroidStorage: Failed to save page ${page.id}: ${e.message}")
         }
     }
 
     actual override fun deletePage(pageId: String, revision: Long, deletedAtEpochMs: Long) {
         try {
             sqlStore.deletePage(pageId, revision, deletedAtEpochMs)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            System.err.println("AllNotes AndroidStorage: Failed to delete page $pageId: ${e.message}")
         }
     }
 
     actual override fun loadPreferences(): WorkspacePreferences {
         return try {
             sqlStore.loadPreferences()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            System.err.println("AllNotes AndroidStorage: Failed to load preferences: ${e.message}")
             WorkspacePreferences()
         }
     }
@@ -99,7 +103,8 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
     actual override fun savePreferences(preferences: WorkspacePreferences) {
         try {
             sqlStore.savePreferences(preferences)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            System.err.println("AllNotes AndroidStorage: Failed to save preferences: ${e.message}")
         }
     }
 }

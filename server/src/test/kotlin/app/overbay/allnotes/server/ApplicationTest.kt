@@ -188,4 +188,22 @@ class ApplicationTest {
             authDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun testCorsReflectsOriginWithCredentialsForBrowserWasmClient() {
+        val origin = "https://notes.overbay.app"
+        val responseHeaders = java.net.Socket("127.0.0.1", server.boundPort).use { socket ->
+            val out = socket.getOutputStream().bufferedWriter(Charsets.US_ASCII)
+            out.write("GET /api/v1/sync HTTP/1.1\r\n")
+            out.write("Host: 127.0.0.1:${server.boundPort}\r\n")
+            out.write("Origin: $origin\r\n")
+            out.write("Connection: close\r\n\r\n")
+            out.flush()
+            socket.getInputStream().bufferedReader(Charsets.UTF_8).readText()
+        }
+        assertTrue(responseHeaders.startsWith("HTTP/1.1 200"))
+        assertTrue(responseHeaders.contains("Access-control-allow-origin: $origin", ignoreCase = true))
+        assertTrue(responseHeaders.contains("Access-control-allow-credentials: true", ignoreCase = true))
+        assertTrue(responseHeaders.contains("Vary: Origin", ignoreCase = true))
+    }
 }

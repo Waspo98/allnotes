@@ -99,18 +99,33 @@ class SqlDelightNoteStore(
     }
 
     /**
-     * Atomically persists the complete workspace snapshot within a single database transaction.
-     * Safely updates all notebooks, sections, pages (with polymorphic blocks as JSON), tombstones, and revision.
+     * Atomically persists the complete workspace snapshot within a single database transaction
+     * via differential upserts so surviving entities never trigger ON DELETE CASCADE / SET NULL.
      */
     override fun saveSnapshot(snapshot: WorkspaceSnapshot) {
         database.transaction {
-            // Delete child entities first to respect foreign key constraints
-            queries.deleteAllPages()
-            queries.deleteAllSections()
-            queries.deleteAllNotebooks()
-            queries.deleteAllDeletedEntities()
+            val targetNotebookIds = snapshot.notebooks.mapTo(HashSet(snapshot.notebooks.size)) { it.id }
+            val targetSectionIds = snapshot.sections.mapTo(HashSet(snapshot.sections.size)) { it.id }
+            val targetPageIds = snapshot.pages.mapTo(HashSet(snapshot.pages.size)) { it.id }
+            val targetTombstoneKeys = snapshot.tombstones.mapTo(HashSet(snapshot.tombstones.size)) { it.id to it.kind.name }
 
-            // Insert notebooks
+            // Delete only removed entities (children first to respect foreign keys cleanly)
+            for (existingId in queries.selectPageIds().executeAsList()) {
+                if (existingId !in targetPageIds) queries.deletePage(existingId)
+            }
+            for (existingId in queries.selectSectionIds().executeAsList()) {
+                if (existingId !in targetSectionIds) queries.deleteSection(existingId)
+            }
+            for (existingId in queries.selectNotebookIds().executeAsList()) {
+                if (existingId !in targetNotebookIds) queries.deleteNotebook(existingId)
+            }
+            for (row in queries.selectDeletedEntityKeys().executeAsList()) {
+                if ((row.id to row.kind) !in targetTombstoneKeys) {
+                    queries.deleteTombstone(id = row.id, kind = row.kind)
+                }
+            }
+
+            // Upsert notebooks
             for (notebook in snapshot.notebooks) {
                 queries.insertNotebook(
                     id = notebook.id,
@@ -122,7 +137,7 @@ class SqlDelightNoteStore(
                 )
             }
 
-            // Insert sections
+            // Upsert sections
             for (section in snapshot.sections) {
                 queries.insertSection(
                     id = section.id,
@@ -134,7 +149,7 @@ class SqlDelightNoteStore(
                 )
             }
 
-            // Insert pages in two passes so out-of-order subpages never trip FK checks
+            // Upsert pages in two passes so out-of-order subpages never trip FK checks
             for (page in snapshot.pages) {
                 val blocksJson = json.encodeToString(page.blocks)
                 queries.insertPage(
@@ -157,7 +172,7 @@ class SqlDelightNoteStore(
                 }
             }
 
-            // Insert deletion tombstones
+            // Upsert deletion tombstones
             for (tombstone in snapshot.tombstones) {
                 queries.upsertDeletedEntity(
                     id = tombstone.id,
@@ -275,7 +290,8 @@ class SqlDelightNoteStore(
     private fun parseBlocks(blocksJson: String): List<DocumentBlock> {
         return try {
             json.decodeFromString<List<DocumentBlock>>(blocksJson)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            println("AllNotes SQLite: Failed to decode document blocks: ${e.message}")
             emptyList()
         }
     }
