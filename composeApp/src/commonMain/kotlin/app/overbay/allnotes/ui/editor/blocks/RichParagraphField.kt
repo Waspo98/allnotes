@@ -29,15 +29,14 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,42 +54,28 @@ internal fun RichParagraphField(
     isActive: Boolean,
     searchQuery: String,
     focusRequest: EditorFocusRequest?,
-    onAction: (WorkspaceAction) -> Unit
+    onAction: (WorkspaceAction) -> Unit,
+    onSlashKeyEvent: ((KeyEvent) -> Boolean)? = null
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val uriHandler = LocalUriHandler.current
     val focusRequester = remember(block.id) { FocusRequester() }
     var isFocused by remember(block.id) { mutableStateOf(false) }
 
-    var fieldValue by remember(block.id) {
-        mutableStateOf(
-            TextFieldValue(
-                text = block.text,
-                selection = TextRange(block.text.length)
-            )
-        )
-    }
-
-    if (fieldValue.text != block.text) {
-        val clampedStart = fieldValue.selection.start.coerceIn(0, block.text.length)
-        val clampedEnd = fieldValue.selection.end.coerceIn(0, block.text.length)
-        fieldValue = TextFieldValue(
-            text = block.text,
-            selection = TextRange(clampedStart, clampedEnd)
-        )
-    }
+    val fieldHolder = rememberSyncedFieldHolder(block.id, block.text)
+    val fieldValue = fieldHolder.fieldValue
 
     LaunchedEffect(focusRequest?.requestToken) {
         if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
             val targetCursor = focusRequest.cursorOffset.coerceIn(0, block.text.length)
-            fieldValue = fieldValue.copy(selection = TextRange(targetCursor))
+            fieldHolder.moveCursorTo(targetCursor)
             runCatching { focusRequester.requestFocus() }
             onAction(WorkspaceAction.UpdateActiveSelection(block.id, targetCursor, targetCursor))
             onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))
         }
     }
 
-    val visualTransformation = remember(block.spans, block.isBold, block.isItalic, block.isUnderlined, block.isStrikethrough, block.isHighlighted, searchQuery, colorScheme) {
+    val visualTransformation = remember(block, searchQuery, colorScheme) {
         VisualTransformation { raw ->
             val previewBlock = if (raw.text == block.text) {
                 block
@@ -147,7 +132,7 @@ internal fun RichParagraphField(
                     }
 
                     val selChanged = updated.selection != fieldValue.selection
-                    fieldValue = updated
+                    fieldHolder.applyLocalChange(updated)
 
                     if (newText != prevText) {
                         onAction(
@@ -181,20 +166,21 @@ internal fun RichParagraphField(
                             onAction(
                                 WorkspaceAction.UpdateActiveSelection(
                                     blockId = block.id,
-                                    selectionStart = fieldValue.selection.min,
-                                    selectionEnd = fieldValue.selection.max
+                                    selectionStart = fieldHolder.fieldValue.selection.min,
+                                    selectionEnd = fieldHolder.fieldValue.selection.max
                                 )
                             )
                         }
                     }
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        if (onSlashKeyEvent?.invoke(event) == true) return@onPreviewKeyEvent true
                         when {
                             event.key == Key.Enter && !event.isShiftPressed -> {
-                                onAction(WorkspaceAction.SplitBlockAtCursor(block.id, fieldValue.selection.min))
+                                onAction(WorkspaceAction.SplitBlockAtCursor(block.id, fieldHolder.fieldValue.selection.min))
                                 true
                             }
-                            event.key == Key.Backspace && fieldValue.selection.collapsed && fieldValue.selection.start == 0 -> {
+                            event.key == Key.Backspace && fieldHolder.fieldValue.selection.collapsed && fieldHolder.fieldValue.selection.start == 0 -> {
                                 onAction(WorkspaceAction.BackspaceAtBlockStart(block.id))
                                 true
                             }

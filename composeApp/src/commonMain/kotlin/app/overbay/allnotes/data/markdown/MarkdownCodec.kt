@@ -110,6 +110,10 @@ object MarkdownCodec {
                     openMarkers[s].add("*")
                     closeMarkers[e].add(0, "*")
                 }
+                RichSpanKind.UNDERLINE -> {
+                    openMarkers[s].add("<u>")
+                    closeMarkers[e].add(0, "</u>")
+                }
                 RichSpanKind.STRIKETHROUGH -> {
                     openMarkers[s].add("~~")
                     closeMarkers[e].add(0, "~~")
@@ -277,7 +281,7 @@ object MarkdownCodec {
                         index++
                     }
                     val parsedRows = tableLines.map { rowStr ->
-                        rowStr.removeSurrounding("|").split("|").map { it.trim() }
+                        splitMarkdownTableRow(rowStr)
                     }
                     val headers = parsedRows.firstOrNull().orEmpty().ifEmpty { listOf("Column 1") }
                     val dataStart = if (parsedRows.size >= 2 && parsedRows[1].all { c -> c.all { ch -> ch == '-' || ch == ':' } && c.isNotEmpty() }) 2 else 1
@@ -306,40 +310,99 @@ object MarkdownCodec {
         )
     }
 
+    private fun splitMarkdownTableRow(rowStr: String): List<String> {
+        val trimmed = rowStr.trim()
+        val inner = if (trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.length >= 2) {
+            trimmed.substring(1, trimmed.length - 1)
+        } else {
+            trimmed
+        }
+        val cells = mutableListOf<String>()
+        val current = StringBuilder()
+        var i = 0
+        while (i < inner.length) {
+            val ch = inner[i]
+            if (ch == '\\' && i + 1 < inner.length && inner[i + 1] == '|') {
+                current.append('|')
+                i += 2
+            } else if (ch == '|') {
+                cells.add(current.toString().trim())
+                current.clear()
+                i++
+            } else {
+                current.append(ch)
+                i++
+            }
+        }
+        cells.add(current.toString().trim())
+        return cells
+    }
+
     private fun parseInlineParagraph(id: String, raw: String): DocumentBlock.Paragraph {
         val sb = StringBuilder()
         val spans = mutableListOf<RichTextSpan>()
-        var i = 0
-        while (i < raw.length) {
+        appendParsedInline(raw, 0, raw.length, sb, spans)
+        val cleanText = sb.toString()
+        return DocumentBlock.Paragraph(
+            id = id,
+            text = cleanText,
+            spans = RichSpanEngine.normalizeAndCoalesce(cleanText.length, spans)
+        )
+    }
+
+    private fun appendParsedInline(
+        raw: String,
+        startIndex: Int,
+        endIndex: Int,
+        sb: StringBuilder,
+        spans: MutableList<RichTextSpan>
+    ) {
+        var i = startIndex
+        while (i < endIndex) {
             when {
-                raw.startsWith("**", i) -> {
-                    val close = raw.indexOf("**", i + 2)
-                    if (close > i + 2) {
-                        val start = sb.length
-                        sb.append(raw.substring(i + 2, close))
-                        spans.add(RichTextSpan(start, sb.length, RichSpanKind.BOLD))
+                raw.startsWith("**", i) && i + 2 < endIndex -> {
+                    var close = raw.indexOf("**", i + 2)
+                    if (close in (i + 2) until endIndex) {
+                        val innerSingleStar = raw.indexOf('*', i + 2)
+                        if (close + 2 < endIndex && raw[close + 2] == '*' && innerSingleStar in (i + 2) until close) {
+                            close++
+                        }
+                        val spanStart = sb.length
+                        appendParsedInline(raw, i + 2, close, sb, spans)
+                        spans.add(RichTextSpan(spanStart, sb.length, RichSpanKind.BOLD))
                         i = close + 2
                     } else {
                         sb.append(raw[i++])
                     }
                 }
-                raw.startsWith("~~", i) -> {
+                raw.startsWith("<u>", i, ignoreCase = true) -> {
+                    val close = raw.indexOf("</u>", i + 3, ignoreCase = true)
+                    if (close in (i + 3) until endIndex) {
+                        val spanStart = sb.length
+                        appendParsedInline(raw, i + 3, close, sb, spans)
+                        spans.add(RichTextSpan(spanStart, sb.length, RichSpanKind.UNDERLINE))
+                        i = close + 4
+                    } else {
+                        sb.append(raw[i++])
+                    }
+                }
+                raw.startsWith("~~", i) && i + 2 < endIndex -> {
                     val close = raw.indexOf("~~", i + 2)
-                    if (close > i + 2) {
-                        val start = sb.length
-                        sb.append(raw.substring(i + 2, close))
-                        spans.add(RichTextSpan(start, sb.length, RichSpanKind.STRIKETHROUGH))
+                    if (close in (i + 2) until endIndex) {
+                        val spanStart = sb.length
+                        appendParsedInline(raw, i + 2, close, sb, spans)
+                        spans.add(RichTextSpan(spanStart, sb.length, RichSpanKind.STRIKETHROUGH))
                         i = close + 2
                     } else {
                         sb.append(raw[i++])
                     }
                 }
-                raw.startsWith("==", i) -> {
+                raw.startsWith("==", i) && i + 2 < endIndex -> {
                     val close = raw.indexOf("==", i + 2)
-                    if (close > i + 2) {
-                        val start = sb.length
-                        sb.append(raw.substring(i + 2, close))
-                        spans.add(RichTextSpan(start, sb.length, RichSpanKind.HIGHLIGHT))
+                    if (close in (i + 2) until endIndex) {
+                        val spanStart = sb.length
+                        appendParsedInline(raw, i + 2, close, sb, spans)
+                        spans.add(RichTextSpan(spanStart, sb.length, RichSpanKind.HIGHLIGHT))
                         i = close + 2
                     } else {
                         sb.append(raw[i++])
@@ -347,10 +410,10 @@ object MarkdownCodec {
                 }
                 raw[i] == '`' -> {
                     val close = raw.indexOf('`', i + 1)
-                    if (close > i + 1) {
-                        val start = sb.length
-                        sb.append(raw.substring(i + 1, close))
-                        spans.add(RichTextSpan(start, sb.length, RichSpanKind.INLINE_CODE))
+                    if (close in (i + 1) until endIndex) {
+                        val spanStart = sb.length
+                        sb.append(raw, i + 1, close)
+                        spans.add(RichTextSpan(spanStart, sb.length, RichSpanKind.INLINE_CODE))
                         i = close + 1
                     } else {
                         sb.append(raw[i++])
@@ -358,10 +421,10 @@ object MarkdownCodec {
                 }
                 raw[i] == '*' -> {
                     val close = raw.indexOf('*', i + 1)
-                    if (close > i + 1) {
-                        val start = sb.length
-                        sb.append(raw.substring(i + 1, close))
-                        spans.add(RichTextSpan(start, sb.length, RichSpanKind.ITALIC))
+                    if (close in (i + 1) until endIndex) {
+                        val spanStart = sb.length
+                        appendParsedInline(raw, i + 1, close, sb, spans)
+                        spans.add(RichTextSpan(spanStart, sb.length, RichSpanKind.ITALIC))
                         i = close + 1
                     } else {
                         sb.append(raw[i++])
@@ -369,13 +432,14 @@ object MarkdownCodec {
                 }
                 raw[i] == '[' -> {
                     val closeBracket = raw.indexOf("](", i + 1)
-                    val closeParen = if (closeBracket > i) raw.indexOf(')', closeBracket + 2) else -1
-                    if (closeBracket > i && closeParen > closeBracket + 2) {
-                        val label = raw.substring(i + 1, closeBracket)
+                    val closeParen = if (closeBracket in (i + 1) until endIndex) {
+                        raw.indexOf(')', closeBracket + 2)
+                    } else -1
+                    if (closeBracket in (i + 1) until endIndex && closeParen in (closeBracket + 2) until endIndex) {
                         val url = raw.substring(closeBracket + 2, closeParen)
-                        val start = sb.length
-                        sb.append(label)
-                        spans.add(RichTextSpan(start, sb.length, RichSpanKind.LINK, url))
+                        val spanStart = sb.length
+                        appendParsedInline(raw, i + 1, closeBracket, sb, spans)
+                        spans.add(RichTextSpan(spanStart, sb.length, RichSpanKind.LINK, url))
                         i = closeParen + 1
                     } else {
                         sb.append(raw[i++])
@@ -384,11 +448,5 @@ object MarkdownCodec {
                 else -> sb.append(raw[i++])
             }
         }
-        val cleanText = sb.toString()
-        return DocumentBlock.Paragraph(
-            id = id,
-            text = cleanText,
-            spans = RichSpanEngine.normalizeAndCoalesce(cleanText.length, spans)
-        )
     }
 }

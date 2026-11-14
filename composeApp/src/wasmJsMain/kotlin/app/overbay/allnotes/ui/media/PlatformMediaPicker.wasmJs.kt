@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.browser.document
 import org.jetbrains.skia.Image
+import org.w3c.dom.HTMLAnchorElement
 import org.w3c.dom.HTMLInputElement
 import org.w3c.files.FileReader
 import org.w3c.files.get
@@ -60,6 +61,32 @@ actual fun rememberPlatformAttachmentPicker(
             input.click()
         } catch (e: Exception) {
             currentOnError(e.message ?: "File picker unavailable.")
+        }
+    }
+}
+
+@Composable
+actual fun rememberPlatformAttachmentExporter(
+    onExported: (String) -> Unit,
+    onError: (String) -> Unit
+): (fileName: String, mimeType: String, dataBase64: String) -> Unit {
+    val currentOnExported by rememberUpdatedState(onExported)
+    val currentOnError by rememberUpdatedState(onError)
+
+    return { fileName, mimeType, dataBase64 ->
+        try {
+            val clean = dataBase64.substringAfter("base64,", dataBase64).trim()
+            val safeMime = mimeType.ifBlank { "application/octet-stream" }
+            val safeName = fileName.ifBlank { "attachment" }
+            val anchor = document.createElement("a") as HTMLAnchorElement
+            anchor.href = "data:$safeMime;base64,$clean"
+            anchor.download = safeName
+            document.body?.appendChild(anchor)
+            anchor.click()
+            anchor.remove()
+            currentOnExported("Downloaded $safeName")
+        } catch (e: Exception) {
+            currentOnError(e.message ?: "Failed to download attachment.")
         }
     }
 }

@@ -2,18 +2,26 @@
 
 package app.overbay.allnotes.ui.media
 
+import android.app.Activity
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.Dispatchers
@@ -65,8 +73,10 @@ actual fun rememberPlatformAttachmentPicker(
                         buffer.toByteArray()
                     } ?: error("Unable to read selected file.")
 
-                    val (finalBytes, finalMime) = if (mime.startsWith("image/") && rawBytes.size > 900_000) {
-                        compressAndroidImage(rawBytes) to "image/jpeg"
+                    val needsReencode = mime.startsWith("image/") &&
+                        (rawBytes.size > 900_000 || readExifOrientation(rawBytes) != ExifInterface.ORIENTATION_NORMAL)
+                    val (finalBytes, finalMime) = if (needsReencode) {
+                        compressAndOrientAndroidImage(rawBytes) to "image/jpeg"
                     } else {
                         rawBytes to mime
                     }
@@ -92,23 +102,115 @@ actual fun rememberPlatformAttachmentPicker(
     return { launcher.launch(arrayOf("*/*")) }
 }
 
-private fun compressAndroidImage(rawBytes: ByteArray): ByteArray {
-    val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size) ?: return rawBytes
-    val maxDim = 1440
-    val scale = minOf(1f, maxDim.toFloat() / maxOf(decoded.width, decoded.height).coerceAtLeast(1))
-    val targetBitmap = if (scale < 1f) {
-        Bitmap.createScaledBitmap(
-            decoded,
-            (decoded.width * scale).toInt().coerceAtLeast(1),
-            (decoded.height * scale).toInt().coerceAtLeast(1),
-            true
-        )
-    } else {
-        decoded
+@Composable
+actual fun rememberPlatformAttachmentExporter(
+    onExported: (String) -> Unit,
+    onError: (String) -> Unit
+): (fileName: String, mimeType: String, dataBase64: String) -> Unit {
+    val appContext = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
+    val currentOnExported by rememberUpdatedState(onExported)
+    val currentOnError by rememberUpdatedState(onError)
+    var pendingExport by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { activityResult ->
+        val pending = pendingExport
+        pendingExport = null
+        val uri = activityResult.data?.data
+        if (activityResult.resultCode != Activity.RESULT_OK || uri == null || pending == null) {
+            return@rememberLauncherForActivityResult
+        }
+        val (fileName, dataBase64) = pending
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val clean = dataBase64.substringAfter("base64,", dataBase64).trim()
+                    val bytes = Base64.decode(clean)
+                    appContext.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(bytes)
+                    } ?: error("Could not open destination stream.")
+                    "Saved $fileName"
+                }
+            }
+            result.onSuccess(currentOnExported).onFailure {
+                currentOnError(it.message ?: "Failed to save attachment.")
+            }
+        }
     }
-    val out = ByteArrayOutputStream()
-    targetBitmap.compress(Bitmap.CompressFormat.JPEG, 82, out)
-    return out.toByteArray()
+
+    return { fileName, mimeType, dataBase64 ->
+        val safeName = fileName.ifBlank { "attachment" }
+        pendingExport = safeName to dataBase64
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = mimeType.ifBlank { "*/*" }
+            putExtra(Intent.EXTRA_TITLE, safeName)
+        }
+        launcher.launch(intent)
+    }
+}
+
+private fun readExifOrientation(rawBytes: ByteArray): Int = runCatching {
+    ExifInterface(ByteArrayInputStream(rawBytes)).getAttributeInt(
+        ExifInterface.TAG_ORIENTATION,
+        ExifInterface.ORIENTATION_NORMAL
+    )
+}.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+
+private fun compressAndOrientAndroidImage(rawBytes: ByteArray): ByteArray {
+    val orientation = readExifOrientation(rawBytes)
+    val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size) ?: return rawBytes
+    var scaled: Bitmap = decoded
+    var oriented: Bitmap = decoded
+    try {
+        val maxDim = 1440
+        val scale = minOf(1f, maxDim.toFloat() / maxOf(decoded.width, decoded.height).coerceAtLeast(1))
+        scaled = if (scale < 1f) {
+            Bitmap.createScaledBitmap(
+                decoded,
+                (decoded.width * scale).toInt().coerceAtLeast(1),
+                (decoded.height * scale).toInt().coerceAtLeast(1),
+                true
+            )
+        } else {
+            decoded
+        }
+        oriented = applyExifMatrix(scaled, orientation)
+        val out = ByteArrayOutputStream()
+        oriented.compress(Bitmap.CompressFormat.JPEG, 82, out)
+        if (out.size() > MAX_ATTACHMENT_BYTES) {
+            out.reset()
+            oriented.compress(Bitmap.CompressFormat.JPEG, 64, out)
+        }
+        return out.toByteArray()
+    } finally {
+        if (oriented !== scaled && oriented !== decoded) oriented.recycle()
+        if (scaled !== decoded) scaled.recycle()
+        decoded.recycle()
+    }
+}
+
+private fun applyExifMatrix(source: Bitmap, orientation: Int): Bitmap {
+    val matrix = Matrix()
+    when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+        ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+        ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+        ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+        ExifInterface.ORIENTATION_TRANSPOSE -> {
+            matrix.postRotate(90f)
+            matrix.postScale(-1f, 1f)
+        }
+        ExifInterface.ORIENTATION_TRANSVERSE -> {
+            matrix.postRotate(270f)
+            matrix.postScale(-1f, 1f)
+        }
+        else -> return source
+    }
+    return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
 }
 
 actual fun decodeBytesToImageBitmap(bytes: ByteArray): ImageBitmap? {

@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -35,9 +36,18 @@ import app.overbay.allnotes.ui.workspace.SlashCommandKind
 @Composable
 internal fun SlashCommandPopup(
     commands: List<SlashCommandKind>,
+    selectedIndex: Int = 0,
     onSelectCommand: (SlashCommandKind) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scrollState = rememberScrollState()
+    LaunchedEffect(selectedIndex, commands.size) {
+        if (commands.isNotEmpty()) {
+            val targetPx = (selectedIndex * 96).coerceAtLeast(0)
+            scrollState.animateScrollTo(targetPx)
+        }
+    }
+
     AnimatedVisibility(
         visible = commands.isNotEmpty(),
         enter = expandVertically(animationSpec = allNotesSpring()) + fadeIn(animationSpec = allNotesSpring()),
@@ -56,21 +66,31 @@ internal fun SlashCommandPopup(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     .padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "INSERT BLOCK",
+                    text = "INSERT BLOCK (↑↓, Enter)",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
-                commands.forEach { cmd ->
+                commands.forEachIndexed { idx, cmd ->
+                    val highlighted = idx == selectedIndex
                     Surface(
                         onClick = { onSelectCommand(cmd) },
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        color = if (highlighted) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerLow
+                        },
+                        contentColor = if (highlighted) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -83,7 +103,11 @@ internal fun SlashCommandPopup(
                             Icon(
                                 imageVector = cmd.icon(),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = if (highlighted) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(12.dp))
@@ -91,20 +115,27 @@ internal fun SlashCommandPopup(
                                 Text(
                                     text = cmd.title,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
                                     text = cmd.subtitle,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (highlighted) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
                                 )
                             }
                             Text(
                                 text = cmd.command,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (highlighted) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
                             )
                         }
                     }

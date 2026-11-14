@@ -65,53 +65,84 @@ object EditorInputController {
         if (idx < 0) return EditorMutationResult(blocks, blockId)
         val current = blocks[idx] as? DocumentBlock.Paragraph ?: return EditorMutationResult(blocks, blockId)
 
+        if (newText.contains('\n')) {
+            val normalizedLines = newText.replace("\r\n", "\n").split('\n')
+            if (normalizedLines.size > 1) {
+                val mutable = blocks.toMutableList()
+                val firstText = normalizedLines.first()
+                mutable[idx] = current.copy(
+                    text = firstText,
+                    spans = RichSpanEngine.adjustSpansAfterEdit(current.text, firstText, current.spans)
+                )
+                var targetId = blockId
+                var targetCursor = firstText.length
+                normalizedLines.drop(1).forEachIndexed { offset, lineText ->
+                    val newId = nextId()
+                    mutable.add(idx + 1 + offset, DocumentBlock.Paragraph(id = newId, text = lineText))
+                    targetId = newId
+                    targetCursor = lineText.length
+                }
+                return EditorMutationResult(
+                    blocks = mutable,
+                    activeBlockId = targetId,
+                    focusRequest = EditorFocusRequest(targetId, cursorOffset = targetCursor, requestToken = nextToken()),
+                    isStructuralConversion = true
+                )
+            }
+        }
+
+        fun shiftedCursor(prefixLen: Int, rest: String): Int =
+            (cursorOffset - prefixLen).coerceIn(0, rest.length)
+
         // Check Markdown live auto-conversion prefixes
         val converted: Pair<DocumentBlock, EditorFocusRequest>? = when {
             newText.startsWith("### ") -> {
                 val rest = newText.removePrefix("### ")
                 DocumentBlock.Heading(id = blockId, text = rest, level = 3) to
-                    EditorFocusRequest(blockId, cursorOffset = 0, requestToken = nextToken())
+                    EditorFocusRequest(blockId, cursorOffset = shiftedCursor(4, rest), requestToken = nextToken())
             }
             newText.startsWith("## ") -> {
                 val rest = newText.removePrefix("## ")
                 DocumentBlock.Heading(id = blockId, text = rest, level = 2) to
-                    EditorFocusRequest(blockId, cursorOffset = 0, requestToken = nextToken())
+                    EditorFocusRequest(blockId, cursorOffset = shiftedCursor(3, rest), requestToken = nextToken())
             }
             newText.startsWith("# ") -> {
                 val rest = newText.removePrefix("# ")
                 DocumentBlock.Heading(id = blockId, text = rest, level = 1) to
-                    EditorFocusRequest(blockId, cursorOffset = 0, requestToken = nextToken())
+                    EditorFocusRequest(blockId, cursorOffset = shiftedCursor(2, rest), requestToken = nextToken())
             }
             newText.startsWith("- [x] ") || newText.startsWith("- [X] ") || newText.startsWith("[x] ") || newText.startsWith("[X] ") -> {
                 val rest = newText.substringAfter("] ")
+                val prefixLen = newText.length - rest.length
                 DocumentBlock.Checklist(
                     id = blockId,
                     title = "",
                     items = listOf(ChecklistItem(id = nextId(), text = rest, isChecked = true))
-                ) to EditorFocusRequest(blockId, subItemIndex = 0, cursorOffset = 0, requestToken = nextToken())
+                ) to EditorFocusRequest(blockId, subItemIndex = 0, cursorOffset = shiftedCursor(prefixLen, rest), requestToken = nextToken())
             }
             newText.startsWith("- [ ] ") || newText.startsWith("[] ") || newText.startsWith("[ ] ") -> {
                 val rest = newText.substringAfter("] ")
+                val prefixLen = newText.length - rest.length
                 DocumentBlock.Checklist(
                     id = blockId,
                     title = "",
                     items = listOf(ChecklistItem(id = nextId(), text = rest, isChecked = false))
-                ) to EditorFocusRequest(blockId, subItemIndex = 0, cursorOffset = 0, requestToken = nextToken())
+                ) to EditorFocusRequest(blockId, subItemIndex = 0, cursorOffset = shiftedCursor(prefixLen, rest), requestToken = nextToken())
             }
             newText.startsWith("- ") || newText.startsWith("* ") -> {
                 val rest = newText.substring(2)
                 DocumentBlock.BulletList(id = blockId, isNumbered = false, items = listOf(rest)) to
-                    EditorFocusRequest(blockId, subItemIndex = 0, cursorOffset = 0, requestToken = nextToken())
+                    EditorFocusRequest(blockId, subItemIndex = 0, cursorOffset = shiftedCursor(2, rest), requestToken = nextToken())
             }
             newText.startsWith("1. ") -> {
                 val rest = newText.removePrefix("1. ")
                 DocumentBlock.BulletList(id = blockId, isNumbered = true, items = listOf(rest)) to
-                    EditorFocusRequest(blockId, subItemIndex = 0, cursorOffset = 0, requestToken = nextToken())
+                    EditorFocusRequest(blockId, subItemIndex = 0, cursorOffset = shiftedCursor(3, rest), requestToken = nextToken())
             }
             newText.startsWith("> ") -> {
                 val rest = newText.removePrefix("> ")
                 DocumentBlock.Callout(id = blockId, title = "Note", text = rest, tone = CalloutTone.INFO) to
-                    EditorFocusRequest(blockId, cursorOffset = rest.length, requestToken = nextToken())
+                    EditorFocusRequest(blockId, cursorOffset = shiftedCursor(2, rest), requestToken = nextToken())
             }
             newText.startsWith("```") && (newText.endsWith(" ") || newText.length == 3) -> {
                 val lang = newText.removePrefix("```").trim().ifEmpty { "kotlin" }

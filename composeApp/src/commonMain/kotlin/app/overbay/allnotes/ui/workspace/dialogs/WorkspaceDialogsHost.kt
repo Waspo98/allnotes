@@ -5,6 +5,7 @@ import app.overbay.allnotes.data.markdown.MarkdownCodec
 import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
+import app.overbay.allnotes.ui.editor.blocks.AttachmentLightboxDialog
 import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
@@ -143,6 +144,14 @@ fun WorkspaceDialogsHost(
             state = state,
             onAction = onAction,
             onDismiss = { onAction(WorkspaceAction.DismissDialog) }
+        )
+    }
+
+    val preview = state.previewAttachment
+    if (preview != null) {
+        AttachmentLightboxDialog(
+            attachment = preview,
+            onAction = onAction
         )
     }
 }

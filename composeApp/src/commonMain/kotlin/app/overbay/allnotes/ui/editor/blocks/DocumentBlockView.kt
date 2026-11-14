@@ -5,9 +5,15 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.key
 import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.ui.editor.SlashCommandPopup
 import app.overbay.allnotes.ui.workspace.EditorFocusRequest
@@ -31,6 +37,43 @@ fun DocumentBlockView(
     } else {
         emptyList()
     }
+    var selectedSlashIndex by remember(block.id, slashMatches.size) { mutableIntStateOf(0) }
+
+    val executeCommand: (SlashCommandKind) -> Unit = { cmd ->
+        if (cmd == SlashCommandKind.ATTACHMENT) {
+            onAction(WorkspaceAction.UpdateBlockText(block.id, ""))
+            onRequestMediaPicker()
+        } else {
+            onAction(WorkspaceAction.ExecuteSlashCommand(block.id, cmd))
+        }
+    }
+
+    val handleSlashKey: (KeyEvent) -> Boolean = { event ->
+        if (slashMatches.isEmpty()) {
+            false
+        } else {
+            when (event.key) {
+                Key.DirectionDown -> {
+                    selectedSlashIndex = (selectedSlashIndex + 1) % slashMatches.size
+                    true
+                }
+                Key.DirectionUp -> {
+                    selectedSlashIndex = (selectedSlashIndex - 1 + slashMatches.size) % slashMatches.size
+                    true
+                }
+                Key.Enter, Key.Tab -> {
+                    val chosen = slashMatches.getOrNull(selectedSlashIndex.coerceIn(0, slashMatches.lastIndex))
+                    if (chosen != null) executeCommand(chosen)
+                    true
+                }
+                Key.Escape -> {
+                    onAction(WorkspaceAction.UpdateBlockText(block.id, ""))
+                    true
+                }
+                else -> false
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -51,7 +94,14 @@ fun DocumentBlockView(
     ) {
         when (block) {
             is DocumentBlock.Heading -> HeadingBlockContent(block, searchQuery, focusRequest, onAction)
-            is DocumentBlock.Paragraph -> ParagraphBlockContent(block, isActive, searchQuery, focusRequest, onAction)
+            is DocumentBlock.Paragraph -> ParagraphBlockContent(
+                block = block,
+                isActive = isActive,
+                searchQuery = searchQuery,
+                focusRequest = focusRequest,
+                onAction = onAction,
+                onSlashKeyEvent = if (slashMatches.isNotEmpty()) handleSlashKey else null
+            )
             is DocumentBlock.Checklist -> ChecklistBlockContent(block, isActive, searchQuery, focusRequest, onAction)
             is DocumentBlock.BulletList -> BulletListBlockContent(block, isActive, searchQuery, focusRequest, onAction)
             is DocumentBlock.Table -> ResponsiveTableBlockContent(block, isActive, isCompactMobile, searchQuery, onAction)
@@ -63,14 +113,8 @@ fun DocumentBlockView(
 
         SlashCommandPopup(
             commands = slashMatches,
-            onSelectCommand = { cmd ->
-                if (cmd == SlashCommandKind.ATTACHMENT) {
-                    onAction(WorkspaceAction.UpdateBlockText(block.id, ""))
-                    onRequestMediaPicker()
-                } else {
-                    onAction(WorkspaceAction.ExecuteSlashCommand(block.id, cmd))
-                }
-            }
+            selectedIndex = selectedSlashIndex.coerceIn(0, (slashMatches.size - 1).coerceAtLeast(0)),
+            onSelectCommand = executeCommand
         )
     }
 }

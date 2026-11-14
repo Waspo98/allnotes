@@ -215,4 +215,105 @@ class RichSpanAndEditorControllerTest {
         vm.dispatch(WorkspaceAction.MoveActivePageToSection(destSec.id))
         assertEquals(destSec.id, vm.uiState.value.activePage?.sectionId)
     }
+
+    @Test
+    fun markdownCodecRoundtripsTableEscapedPipesUnderlineAndNestedSpans() {
+        val page = NotePage(
+            id = "md-p1",
+            sectionId = "sec-1",
+            title = "Formatting Audit",
+            blocks = listOf(
+                DocumentBlock.Paragraph(
+                    id = "b1",
+                    text = "bold italic",
+                    spans = listOf(
+                        RichTextSpan(0, 11, RichSpanKind.BOLD),
+                        RichTextSpan(5, 11, RichSpanKind.ITALIC)
+                    )
+                ),
+                DocumentBlock.Paragraph(
+                    id = "b2",
+                    text = "underlined and bold link",
+                    spans = listOf(
+                        RichTextSpan(0, 10, RichSpanKind.UNDERLINE),
+                        RichTextSpan(15, 24, RichSpanKind.LINK, "https://overbay.app")
+                    )
+                ),
+                DocumentBlock.Table(
+                    id = "b3",
+                    headers = listOf("Key", "Expr"),
+                    rows = listOf(listOf("OR", "A | B"))
+                )
+            )
+        )
+
+        val md = MarkdownCodec.exportPageToMarkdown(page)
+        assertTrue(md.contains("<u>underlined</u>"))
+        assertTrue(md.contains("[bold link](https://overbay.app)"))
+        assertTrue(md.contains("A \\| B"))
+
+        val seq = generateSequence(1) { it + 1 }.iterator()
+        val reimported = MarkdownCodec.importMarkdownToPage(
+            markdown = md,
+            sectionId = "sec-1",
+            nextId = { prefix -> "$prefix-${seq.next()}" }
+        )
+
+        val p2 = reimported.blocks.filterIsInstance<DocumentBlock.Paragraph>()[1]
+        assertTrue(p2.spans.any { it.kind == RichSpanKind.UNDERLINE && p2.text.substring(it.start, it.end) == "underlined" })
+        assertTrue(p2.spans.any { it.kind == RichSpanKind.LINK && it.url == "https://overbay.app" })
+
+        val nestedMd = """
+            # Nested
+            **bold *italic*** and [**Overbay**](https://overbay.app)
+        """.trimIndent()
+        val nestedPage = MarkdownCodec.importMarkdownToPage(
+            markdown = nestedMd,
+            sectionId = "sec-1",
+            nextId = { prefix -> "$prefix-${seq.next()}" }
+        )
+        val nestedPara = nestedPage.blocks.single() as DocumentBlock.Paragraph
+        assertEquals("bold italic and Overbay", nestedPara.text)
+        assertTrue(nestedPara.spans.any { it.kind == RichSpanKind.BOLD && nestedPara.text.substring(it.start, it.end) == "bold italic" })
+        assertTrue(nestedPara.spans.any { it.kind == RichSpanKind.ITALIC && nestedPara.text.substring(it.start, it.end) == "italic" })
+        assertTrue(nestedPara.spans.any { it.kind == RichSpanKind.BOLD && nestedPara.text.substring(it.start, it.end) == "Overbay" })
+        assertTrue(nestedPara.spans.any { it.kind == RichSpanKind.LINK && it.url == "https://overbay.app" })
+
+        val table = reimported.blocks.filterIsInstance<DocumentBlock.Table>().single()
+        assertEquals(listOf("OR", "A | B"), table.rows.single())
+    }
+
+    @Test
+    fun editorInputControllerSplitsMultilinePasteAndShiftsCursorOnHeadingPrefix() {
+        var idSeq = 1
+        var tokSeq = 1L
+        val nextId = { "paste-${idSeq++}" }
+        val nextTok = { tokSeq++ }
+
+        val pasted = EditorInputController.editParagraphWithTriggers(
+            blocks = listOf(DocumentBlock.Paragraph(id = "p1", text = "")),
+            blockId = "p1",
+            newText = "line one\nline two\nline three",
+            cursorOffset = 28,
+            nextId = nextId,
+            nextToken = nextTok
+        )
+        assertEquals(3, pasted.blocks.size)
+        assertEquals(listOf("line one", "line two", "line three"), pasted.blocks.map { (it as DocumentBlock.Paragraph).text })
+        assertEquals(pasted.blocks.last().id, pasted.activeBlockId)
+        assertEquals("line three".length, pasted.focusRequest?.cursorOffset)
+
+        val prefixed = EditorInputController.editParagraphWithTriggers(
+            blocks = listOf(DocumentBlock.Paragraph(id = "p2", text = "Existing text")),
+            blockId = "p2",
+            newText = "## Existing text",
+            cursorOffset = 3,
+            nextId = nextId,
+            nextToken = nextTok
+        )
+        val h2 = prefixed.blocks.single() as DocumentBlock.Heading
+        assertEquals(2, h2.level)
+        assertEquals("Existing text", h2.text)
+        assertEquals(0, prefixed.focusRequest?.cursorOffset)
+    }
 }

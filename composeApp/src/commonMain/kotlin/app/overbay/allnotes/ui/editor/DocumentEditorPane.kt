@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.FilledTonalButton
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.ui.editor.blocks.DocumentBlockView
+import app.overbay.allnotes.ui.editor.blocks.rememberSyncedFieldHolder
 import app.overbay.allnotes.ui.editor.toolbar.DesktopFormattingRibbon
 import app.overbay.allnotes.ui.editor.toolbar.ExpressiveInsertFabMenu
 import app.overbay.allnotes.ui.editor.toolbar.MobileFloatingToolbar
@@ -116,6 +118,25 @@ fun DocumentEditorPane(
                 if (page == null) {
                     EmptyPageStudioState(onAction = onAction)
                 } else {
+                    val listState = rememberLazyListState()
+                    val titleHolder = rememberSyncedFieldHolder("page-title-${page.id}", page.title)
+
+                    LaunchedEffect(page.id) {
+                        listState.scrollToItem(0)
+                    }
+
+                    LaunchedEffect(state.focusRequest?.requestToken) {
+                        val req = state.focusRequest ?: return@LaunchedEffect
+                        val idx = page.blocks.indexOfFirst { it.id == req.blockId }
+                        if (idx >= 0) {
+                            val listIdx = idx + 1
+                            val isVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == listIdx }
+                            if (!isVisible) {
+                                listState.animateScrollToItem(listIdx)
+                            }
+                        }
+                    }
+
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = if (isCompactMobile) {
@@ -131,6 +152,7 @@ fun DocumentEditorPane(
                         }
                     ) {
                         LazyColumn(
+                            state = listState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
                                 start = if (isCompactMobile) 20.dp else 44.dp,
@@ -143,7 +165,7 @@ fun DocumentEditorPane(
                             item(key = "page-header-${page.id}") {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Box(modifier = Modifier.fillMaxWidth()) {
-                                        if (page.title.isEmpty()) {
+                                        if (titleHolder.fieldValue.text.isEmpty()) {
                                             Text(
                                                 text = "Untitled Page",
                                                 style = MaterialTheme.typography.headlineMedium.copy(
@@ -153,8 +175,12 @@ fun DocumentEditorPane(
                                             )
                                         }
                                         BasicTextField(
-                                            value = page.title,
-                                            onValueChange = { onAction(WorkspaceAction.UpdateActivePageTitle(it)) },
+                                            value = titleHolder.fieldValue,
+                                            onValueChange = { updated ->
+                                                val changed = updated.text != titleHolder.fieldValue.text
+                                                titleHolder.applyLocalChange(updated)
+                                                if (changed) onAction(WorkspaceAction.UpdateActivePageTitle(updated.text))
+                                            },
                                             textStyle = MaterialTheme.typography.headlineMedium.copy(
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface

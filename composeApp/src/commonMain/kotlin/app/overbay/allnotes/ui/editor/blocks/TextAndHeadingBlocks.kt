@@ -17,31 +17,23 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.DocumentBlock
-import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.workspace.EditorFocusRequest
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
@@ -55,18 +47,13 @@ internal fun HeadingBlockContent(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val focusRequester = remember(block.id) { FocusRequester() }
-    var fieldValue by remember(block.id) {
-        mutableStateOf(TextFieldValue(text = block.text, selection = TextRange(block.text.length)))
-    }
-    if (fieldValue.text != block.text) {
-        val pos = fieldValue.selection.start.coerceIn(0, block.text.length)
-        fieldValue = TextFieldValue(text = block.text, selection = TextRange(pos))
-    }
+    val fieldHolder = rememberSyncedFieldHolder(block.id, block.text)
+    val fieldValue = fieldHolder.fieldValue
 
     LaunchedEffect(focusRequest?.requestToken) {
         if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
             val pos = focusRequest.cursorOffset.coerceIn(0, block.text.length)
-            fieldValue = fieldValue.copy(selection = TextRange(pos))
+            fieldHolder.moveCursorTo(pos)
             runCatching { focusRequester.requestFocus() }
             onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))
         }
@@ -87,14 +74,7 @@ internal fun HeadingBlockContent(
         )
     }
 
-    val searchVisual = remember(searchQuery, colorScheme) {
-        VisualTransformation { raw ->
-            TransformedText(
-                RichSpanEngine.buildSearchHighlightedString(raw.text, colorScheme, searchQuery),
-                OffsetMapping.Identity
-            )
-        }
-    }
+    val searchVisual = rememberSearchHighlightTransformation(searchQuery)
 
     Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp)) {
         if (fieldValue.text.isEmpty()) {
@@ -113,10 +93,12 @@ internal fun HeadingBlockContent(
                         return@BasicTextField
                     }
                 }
-                val textChanged = updated.text != fieldValue.text
-                fieldValue = updated
+                val cleaned = updated.text.replace("\n", " ")
+                val normalized = if (cleaned == updated.text) updated else updated.copy(text = cleaned)
+                val textChanged = cleaned != fieldValue.text
+                fieldHolder.applyLocalChange(normalized, cleaned)
                 if (textChanged) {
-                    onAction(WorkspaceAction.UpdateBlockText(block.id, updated.text.replace("\n", " ")))
+                    onAction(WorkspaceAction.UpdateBlockText(block.id, cleaned))
                 }
             },
             textStyle = headingStyle,
@@ -129,10 +111,12 @@ internal fun HeadingBlockContent(
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
                         event.key == Key.Enter && !event.isShiftPressed -> {
-                            onAction(WorkspaceAction.SplitBlockAtCursor(block.id, fieldValue.selection.min))
+                            onAction(WorkspaceAction.SplitBlockAtCursor(block.id, fieldHolder.fieldValue.selection.min))
                             true
                         }
-                        event.key == Key.Backspace && fieldValue.selection.collapsed && fieldValue.selection.start == 0 -> {
+                        event.key == Key.Backspace &&
+                            fieldHolder.fieldValue.selection.collapsed &&
+                            fieldHolder.fieldValue.selection.start == 0 -> {
                             onAction(WorkspaceAction.BackspaceAtBlockStart(block.id))
                             true
                         }
@@ -149,14 +133,16 @@ internal fun ParagraphBlockContent(
     isActive: Boolean,
     searchQuery: String,
     focusRequest: EditorFocusRequest?,
-    onAction: (WorkspaceAction) -> Unit
+    onAction: (WorkspaceAction) -> Unit,
+    onSlashKeyEvent: ((KeyEvent) -> Boolean)? = null
 ) {
     RichParagraphField(
         block = block,
         isActive = isActive,
         searchQuery = searchQuery,
         focusRequest = focusRequest,
-        onAction = onAction
+        onAction = onAction,
+        onSlashKeyEvent = onSlashKeyEvent
     )
 }
 
@@ -169,23 +155,13 @@ internal fun CalloutBlockContent(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val bodyFocusRequester = remember(block.id) { FocusRequester() }
-    var titleField by remember(block.id) {
-        mutableStateOf(TextFieldValue(text = block.title, selection = TextRange(block.title.length)))
-    }
-    var bodyField by remember(block.id) {
-        mutableStateOf(TextFieldValue(text = block.text, selection = TextRange(block.text.length)))
-    }
-    if (titleField.text != block.title) {
-        titleField = TextFieldValue(block.title, TextRange(titleField.selection.start.coerceIn(0, block.title.length)))
-    }
-    if (bodyField.text != block.text) {
-        bodyField = TextFieldValue(block.text, TextRange(bodyField.selection.start.coerceIn(0, block.text.length)))
-    }
+    val titleHolder = rememberSyncedFieldHolder(block.id to "title", block.title)
+    val bodyHolder = rememberSyncedFieldHolder(block.id to "body", block.text)
 
     LaunchedEffect(focusRequest?.requestToken) {
         if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
             val pos = focusRequest.cursorOffset.coerceIn(0, block.text.length)
-            bodyField = bodyField.copy(selection = TextRange(pos))
+            bodyHolder.moveCursorTo(pos)
             runCatching { bodyFocusRequester.requestFocus() }
             onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))
         }
@@ -209,14 +185,7 @@ internal fun CalloutBlockContent(
         )
     }
 
-    val searchVisual = remember(searchQuery, colorScheme) {
-        VisualTransformation { raw ->
-            TransformedText(
-                RichSpanEngine.buildSearchHighlightedString(raw.text, colorScheme, searchQuery),
-                OffsetMapping.Identity
-            )
-        }
-    }
+    val searchVisual = rememberSearchHighlightTransformation(searchQuery)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -237,7 +206,7 @@ internal fun CalloutBlockContent(
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    if (titleField.text.isEmpty()) {
+                    if (titleHolder.fieldValue.text.isEmpty()) {
                         Text(
                             text = "Callout title…",
                             style = MaterialTheme.typography.titleSmall,
@@ -245,10 +214,10 @@ internal fun CalloutBlockContent(
                         )
                     }
                     BasicTextField(
-                        value = titleField,
+                        value = titleHolder.fieldValue,
                         onValueChange = { updated ->
-                            val changed = updated.text != titleField.text
-                            titleField = updated
+                            val changed = updated.text != titleHolder.fieldValue.text
+                            titleHolder.applyLocalChange(updated)
                             if (changed) {
                                 onAction(WorkspaceAction.UpdateCalloutTitle(block.id, updated.text))
                             }
@@ -265,7 +234,7 @@ internal fun CalloutBlockContent(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    if (bodyField.text.isEmpty()) {
+                    if (bodyHolder.fieldValue.text.isEmpty()) {
                         Text(
                             text = "Add callout details…",
                             style = MaterialTheme.typography.bodyMedium,
@@ -273,10 +242,10 @@ internal fun CalloutBlockContent(
                         )
                     }
                     BasicTextField(
-                        value = bodyField,
+                        value = bodyHolder.fieldValue,
                         onValueChange = { updated ->
-                            val changed = updated.text != bodyField.text
-                            bodyField = updated
+                            val changed = updated.text != bodyHolder.fieldValue.text
+                            bodyHolder.applyLocalChange(updated)
                             if (changed) {
                                 onAction(WorkspaceAction.UpdateBlockText(block.id, updated.text))
                             }
@@ -290,8 +259,8 @@ internal fun CalloutBlockContent(
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
                                     event.key == Key.Backspace &&
-                                    bodyField.text.isEmpty() &&
-                                    titleField.text.isEmpty()
+                                    bodyHolder.fieldValue.text.isEmpty() &&
+                                    titleHolder.fieldValue.text.isEmpty()
                                 ) {
                                     onAction(WorkspaceAction.BackspaceAtBlockStart(block.id))
                                     true
