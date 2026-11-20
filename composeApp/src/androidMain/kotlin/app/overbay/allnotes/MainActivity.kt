@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
     private fun handleLaunchIntent(intent: Intent?, vm: WorkspaceViewModel) {
         when (intent?.action) {
             ACTION_NEW_PAGE -> {
-                vm.dispatch(WorkspaceAction.OpenDialog(ActiveDialog.NEW_PAGE))
+                vm.dispatch(WorkspaceAction.CreatePageInstant(false))
                 intent.action = Intent.ACTION_MAIN
             }
             ACTION_SEARCH_NOTES -> {

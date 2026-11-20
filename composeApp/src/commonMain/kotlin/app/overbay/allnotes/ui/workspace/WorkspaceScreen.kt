@@ -172,6 +172,10 @@ fun WorkspaceScreen(
                             viewModel.dispatch(WorkspaceAction.RequestSearchFocus)
                             true
                         }
+                        Key.P -> {
+                            viewModel.dispatch(WorkspaceAction.OpenDialog(ActiveDialog.QUICK_JUMP))
+                            true
+                        }
                         Key.S -> {
                             if (event.isShiftPressed) {
                                 viewModel.dispatch(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.STRIKETHROUGH))
@@ -302,7 +306,7 @@ fun WorkspaceScreen(
                 animationSpec = AllNotesMotion.spatialDefault(),
                 label = "DesktopSidebarWidth"
             )
-            val railWidthPx = with(density) { 60.dp.roundToPx() }
+            val railWidthPx = with(density) { 64.dp.roundToPx() }
             val expandedWidthPx = with(density) { 320.dp.roundToPx() }
 
             Row(modifier = Modifier.fillMaxSize()) {
@@ -356,6 +360,7 @@ fun WorkspaceScreen(
 
         WorkspaceDialogsHost(
             state = state,
+            isCompactMobile = isCompactMobile,
             onAction = viewModel::dispatch
         )
     }

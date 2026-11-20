@@ -1,6 +1,5 @@
 package app.overbay.allnotes.ui.hierarchy
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
@@ -25,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,7 +46,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.theme.AllNotesMotion
-import app.overbay.allnotes.ui.theme.accentColor
 import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
@@ -63,8 +60,8 @@ fun HierarchySidebar(
     val globalHits = state.globalSearchResults
     val searchFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(state.searchFocusRequestToken) {
-        if (state.searchFocusRequestToken > 0L) {
+    if (state.searchFocusRequestToken > 0L) {
+        LaunchedEffect(state.searchFocusRequestToken) {
             runCatching { searchFocusRequester.requestFocus() }
             onAction(WorkspaceAction.ConsumeSearchFocusRequest(state.searchFocusRequestToken))
         }
@@ -78,7 +75,7 @@ fun HierarchySidebar(
             modifier = Modifier
                 .fillMaxHeight()
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start))
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -89,25 +86,24 @@ fun HierarchySidebar(
             ) {
                 Text(
                     text = "AllNotes",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(MaterialTheme.shapes.extraSmall)
                             .clickable { onAction(WorkspaceAction.TriggerSync) }
-                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
                         Icon(
                             AllNotesIcons.Sync,
                             contentDescription = "Sync status",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = state.syncStatus.label,
                             style = MaterialTheme.typography.labelSmall,
@@ -118,13 +114,13 @@ fun HierarchySidebar(
                     }
                     IconButton(
                         onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.SYNC_SETTINGS)) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Icon(
                             AllNotesIcons.Settings,
-                            contentDescription = "Workspace & Sync Settings",
+                            contentDescription = "Settings & Sync",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
                 }
@@ -132,22 +128,34 @@ fun HierarchySidebar(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Tier 1: Distinct Notebook Switcher Card
+            NotebookSwitcherCard(
+                activeNotebook = state.activeNotebook,
+                notebooks = state.notebooks,
+                onSelectNotebook = { onAction(WorkspaceAction.SelectNotebook(it)) },
+                onEditNotebook = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.EDIT_NOTEBOOK)) },
+                onCreateNotebook = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_NOTEBOOK)) }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Global Search Pill
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(20.dp)
+                shape = CircleShape
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         AllNotesIcons.Search,
                         contentDescription = "Search",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(modifier = Modifier.weight(1f)) {
@@ -188,69 +196,18 @@ fun HierarchySidebar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
+            // Tier 2: Color-Tabbed Sections Strip
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "NOTEBOOKS",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (state.activeNotebook != null) {
-                        IconButton(
-                            onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.EDIT_NOTEBOOK)) },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                AllNotesIcons.Edit,
-                                contentDescription = "Edit active notebook",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                    TextButton(
-                        onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_NOTEBOOK)) },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text("+ Notebook")
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                state.notebooks.forEach { notebook ->
-                    NotebookPill(
-                        notebook = notebook,
-                        isSelected = notebook.id == state.activeNotebook?.id,
-                        onClick = { onAction(WorkspaceAction.SelectNotebook(notebook.id)) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "SECTIONS",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
+                    text = "Sections",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -263,7 +220,7 @@ fun HierarchySidebar(
                                 AllNotesIcons.Edit,
                                 contentDescription = "Edit active section",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                         }
                     }
@@ -291,26 +248,29 @@ fun HierarchySidebar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
+            // Tier 3: Pages List with 1-Tap Instant Page Creation
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "PAGES",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
+                    text = "Pages",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 TextButton(
-                    onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_PAGE)) },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    onClick = { onAction(WorkspaceAction.CreatePageInstant(false)) },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
                 ) {
-                    Text("+ Page")
+                    Icon(AllNotesIcons.EditNote, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("New Page")
                 }
             }
 
@@ -323,7 +283,7 @@ fun HierarchySidebar(
                         EmptyPagesPlaceholder(
                             hasSearchQuery = state.searchQuery.isNotBlank(),
                             onClearSearch = { onAction(WorkspaceAction.SetSearchQuery("")) },
-                            onNewPage = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_PAGE)) }
+                            onNewPage = { onAction(WorkspaceAction.CreatePageInstant(false)) }
                         )
                     }
                 } else {
@@ -353,11 +313,11 @@ fun HierarchySidebar(
 
                 if (globalHits.isNotEmpty()) {
                     item(key = "global-search-header", contentType = "global-header") {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "OTHER SECTIONS & NOTEBOOKS (${globalHits.size})",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
+                            text = "Other Notebooks (${globalHits.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )

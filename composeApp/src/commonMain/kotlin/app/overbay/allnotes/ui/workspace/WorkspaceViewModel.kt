@@ -264,30 +264,18 @@ class WorkspaceViewModel(
 
     fun createPageInstant(asSubpageOfActive: Boolean = false) {
         val secId = _uiState.value.activeSection?.id ?: return
-        val parentId = if (asSubpageOfActive) {
-            val active = _uiState.value.activePage
-            active?.parentPageId ?: active?.id
-        } else null
+        val parentId = if (asSubpageOfActive) _uiState.value.activePage?.let { it.parentPageId ?: it.id } else null
         val created = repository.createPage(secId, "", parentId)
-        val blankTitlePage = created.copy(title = "")
         repository.updatePageTitle(created.id, "", debounced = false)
         _uiState.update {
             it.copy(
-                activeDialog = ActiveDialog.NONE,
-                isMobileHierarchySheetOpen = false,
-                isPageMenuOpen = false,
-                isMobileInsertMenuOpen = false,
-                isBlockInsertSheetOpen = false,
+                activeDialog = ActiveDialog.NONE, isMobileHierarchySheetOpen = false,
+                isPageMenuOpen = false, isMobileInsertMenuOpen = false, isBlockInsertSheetOpen = false,
                 collapsedParentPageIds = if (parentId != null) it.collapsedParentPageIds - parentId else it.collapsedParentPageIds
             )
         }
-        selectPage(blankTitlePage.id)
-        _uiState.update {
-            it.copy(
-                activeBlockId = null,
-                titleFocusRequestToken = nextFocusToken()
-            )
-        }
+        selectPage(created.id)
+        _uiState.update { it.copy(activeBlockId = null, titleFocusRequestToken = nextFocusToken()) }
         scheduleAutoSyncIfEnabled()
     }
 
@@ -534,9 +522,7 @@ class WorkspaceViewModel(
         _uiState.update {
             it.copy(
                 activeBlockId = if (it.activeBlockId == blockId) null else it.activeBlockId,
-                statusBannerMessage = "Block removed",
-                statusBannerActionLabel = "Undo",
-                statusBannerAction = WorkspaceAction.Undo
+                statusBannerMessage = "Block removed", statusBannerActionLabel = "Undo", statusBannerAction = WorkspaceAction.Undo
             )
         }
         scheduleAutoSyncIfEnabled()

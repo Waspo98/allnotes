@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -191,55 +190,6 @@ internal fun ConfirmDeleteHierarchyDialog(
         confirmButton = {
             TextButton(onClick = onConfirmDelete) {
                 Text("Delete Permanently", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-internal fun CreatePageDialog(
-    hasActivePage: Boolean,
-    onDismiss: () -> Unit,
-    onCreate: (String, Boolean) -> Unit
-) {
-    var title by remember { mutableStateOf("") }
-    var asSubpage by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("New Document Page") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Page Title") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (hasActivePage) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = asSubpage,
-                            onCheckedChange = { asSubpage = it }
-                        )
-                        Text(
-                            text = "Nest as subpage under current page",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onCreate(title, asSubpage) }) {
-                Text("Create")
             }
         },
         dismissButton = {

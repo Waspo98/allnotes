@@ -14,6 +14,7 @@ import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 @Composable
 fun WorkspaceDialogsHost(
     state: WorkspaceUiState,
+    isCompactMobile: Boolean = false,
     onAction: (WorkspaceAction) -> Unit
 ) {
     when (state.activeDialog) {
@@ -100,11 +101,6 @@ fun WorkspaceDialogsHost(
                 onConfirmDelete = { onAction(WorkspaceAction.DeletePage(targetPage.id)) }
             )
         }
-        ActiveDialog.NEW_PAGE -> CreatePageDialog(
-            hasActivePage = state.activePage != null,
-            onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-            onCreate = { title, asSubpage -> onAction(WorkspaceAction.CreatePage(title, asSubpage)) }
-        )
         ActiveDialog.MOVE_PAGE -> {
             val page = state.activePage ?: return
             MovePageDialog(
@@ -140,7 +136,13 @@ fun WorkspaceDialogsHost(
             onDismiss = { onAction(WorkspaceAction.DismissDialog) },
             onImport = { md -> onAction(WorkspaceAction.ImportMarkdownPage(md)) }
         )
-        ActiveDialog.SYNC_SETTINGS -> WorkspaceSettingsDialog(
+        ActiveDialog.SYNC_SETTINGS -> WorkspaceSettingsSheet(
+            state = state,
+            isCompactMobile = isCompactMobile,
+            onAction = onAction,
+            onDismiss = { onAction(WorkspaceAction.DismissDialog) }
+        )
+        ActiveDialog.QUICK_JUMP -> QuickJumpDialog(
             state = state,
             onAction = onAction,
             onDismiss = { onAction(WorkspaceAction.DismissDialog) }

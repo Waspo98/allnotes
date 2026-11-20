@@ -33,12 +33,12 @@ enum class ActiveDialog {
     EDIT_SECTION,
     CONFIRM_DELETE_SECTION,
     CONFIRM_DELETE_PAGE,
-    NEW_PAGE,
     MOVE_PAGE,
     INSERT_LINK,
     MARKDOWN_EXPORT,
     MARKDOWN_IMPORT,
-    SYNC_SETTINGS
+    SYNC_SETTINGS,
+    QUICK_JUMP
 }
 
 data class WorkspaceUiState(
