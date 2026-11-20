@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,7 +109,10 @@ fun DocumentEditorPane(
         }
     }
 
-    val imeVisible = WindowInsets.ime.getBottom(density) > 0
+    val imeInsets = WindowInsets.ime
+    val imeVisible by remember(imeInsets, density) {
+        derivedStateOf { imeInsets.getBottom(density) > 0 }
+    }
     val navBarBottomDp = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
 
     Surface(
@@ -189,21 +193,22 @@ fun DocumentEditorPane(
                             val listState = rememberLazyListState()
                             val titleHolder = rememberSyncedFieldHolder("page-title-${renderedPage.id}", renderedPage.title)
 
-                            LaunchedEffect(state.activeBlockId, imeVisible) {
-                                val targetBlockId = state.activeBlockId ?: return@LaunchedEffect
-                                val idx = renderedPage.blocks.indexOfFirst { it.id == targetBlockId }
-                                if (idx >= 0) {
-                                    val listIdx = idx + 1
-                                    val layoutInfo = listState.layoutInfo
-                                    val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == listIdx }
-                                    val viewportBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
-                                    val itemTop = itemInfo?.offset ?: Int.MAX_VALUE
-                                    if (itemInfo == null ||
-                                        itemTop < layoutInfo.viewportStartOffset ||
-                                        itemTop >= viewportBottom
-                                    ) {
-                                        listState.animateScrollToItem(listIdx)
-                                    }
+                            val targetBlockId = state.focusRequest?.blockId ?: state.activeBlockId
+                            val targetBlockIndex = if (targetBlockId != null) {
+                                renderedPage.blocks.indexOfFirst { it.id == targetBlockId }
+                            } else -1
+
+                            LaunchedEffect(targetBlockId, targetBlockIndex, state.focusRequest?.requestToken) {
+                                if (targetBlockIndex < 0) return@LaunchedEffect
+                                val listIdx = targetBlockIndex + 1
+                                val layoutInfo = listState.layoutInfo
+                                val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == listIdx }
+                                val viewportBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+                                val isIntersectingViewport = itemInfo != null &&
+                                    (itemInfo.offset + itemInfo.size) > layoutInfo.viewportStartOffset &&
+                                    itemInfo.offset < viewportBottom
+                                if (!isIntersectingViewport) {
+                                    listState.animateScrollToItem(listIdx)
                                 }
                             }
 

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -117,25 +115,22 @@ private fun MobileStackedTableView(
                 color = colorScheme.primary
             )
             block.headers.forEachIndexed { colIndex, header ->
-                val holder = rememberSyncedFieldHolder(Triple(block.id, -1, colIndex), header)
+                val headerKey = Triple(block.id, -1, colIndex)
+                val holder = rememberSyncedFieldHolder(headerKey, header)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    BasicTextField(
-                        value = holder.fieldValue,
-                        onValueChange = { updated ->
-                            val changed = updated.text != holder.fieldValue.text
-                            holder.applyLocalChange(updated)
-                            if (changed) onAction(WorkspaceAction.UpdateTableHeader(block.id, colIndex, updated.text))
-                        },
+                    SyncedCursorTextField(
+                        focusKey = headerKey,
+                        holder = holder,
                         textStyle = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Bold,
                             color = colorScheme.onSurface
                         ),
-                        singleLine = true,
                         visualTransformation = searchVisual,
-                        cursorBrush = SolidColor(colorScheme.primary),
+                        singleLine = true,
+                        onTextChange = { onAction(WorkspaceAction.UpdateTableHeader(block.id, colIndex, it)) },
                         modifier = Modifier.weight(1f)
                     )
                     if (block.headers.size > 1) {
@@ -182,7 +177,8 @@ private fun MobileStackedTableView(
                     }
                     block.headers.forEachIndexed { cIdx, header ->
                         val cellValue = row.getOrElse(cIdx) { "" }
-                        val cellHolder = rememberSyncedFieldHolder(Triple(block.id, rIdx, cIdx), cellValue)
+                        val cellKey = Triple(block.id, rIdx, cIdx)
+                        val cellHolder = rememberSyncedFieldHolder(cellKey, cellValue)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.Top
@@ -202,16 +198,12 @@ private fun MobileStackedTableView(
                                         color = colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                                     )
                                 }
-                                BasicTextField(
-                                    value = cellHolder.fieldValue,
-                                    onValueChange = { updated ->
-                                        val changed = updated.text != cellHolder.fieldValue.text
-                                        cellHolder.applyLocalChange(updated)
-                                        if (changed) onAction(WorkspaceAction.UpdateTableCell(block.id, rIdx, cIdx, updated.text))
-                                    },
+                                SyncedCursorTextField(
+                                    focusKey = cellKey,
+                                    holder = cellHolder,
                                     textStyle = MaterialTheme.typography.bodyMedium.copy(color = colorScheme.onSurface),
                                     visualTransformation = searchVisual,
-                                    cursorBrush = SolidColor(colorScheme.primary),
+                                    onTextChange = { onAction(WorkspaceAction.UpdateTableCell(block.id, rIdx, cIdx, it)) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -245,7 +237,8 @@ private fun StandardGridTableView(
         verticalAlignment = Alignment.CenterVertically
     ) {
         block.headers.forEachIndexed { colIndex, header ->
-            val holder = rememberSyncedFieldHolder(Triple(block.id, -1, colIndex), header)
+            val headerKey = Triple(block.id, -1, colIndex)
+            val holder = rememberSyncedFieldHolder(headerKey, header)
             Row(
                 modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -258,21 +251,17 @@ private fun StandardGridTableView(
                             color = colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
                     }
-                    BasicTextField(
-                        value = holder.fieldValue,
-                        onValueChange = { updated ->
-                            val changed = updated.text != holder.fieldValue.text
-                            holder.applyLocalChange(updated)
-                            if (changed) onAction(WorkspaceAction.UpdateTableHeader(block.id, colIndex, updated.text))
-                        },
+                    SyncedCursorTextField(
+                        focusKey = headerKey,
+                        holder = holder,
                         textStyle = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Bold,
                             color = colorScheme.onSurface
                         ),
-                        singleLine = true,
                         visualTransformation = searchVisual,
+                        singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        cursorBrush = SolidColor(colorScheme.primary),
+                        onTextChange = { onAction(WorkspaceAction.UpdateTableHeader(block.id, colIndex, it)) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(gridRequesters[0][colIndex])
@@ -309,7 +298,8 @@ private fun StandardGridTableView(
         ) {
             block.headers.indices.forEach { cIdx ->
                 val cell = row.getOrElse(cIdx) { "" }
-                val holder = rememberSyncedFieldHolder(Triple(block.id, rIdx, cIdx), cell)
+                val cellKey = Triple(block.id, rIdx, cIdx)
+                val holder = rememberSyncedFieldHolder(cellKey, cell)
                 Box(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
                     if (holder.fieldValue.text.isEmpty()) {
                         Text(
@@ -318,17 +308,13 @@ private fun StandardGridTableView(
                             color = colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         )
                     }
-                    BasicTextField(
-                        value = holder.fieldValue,
-                        onValueChange = { updated ->
-                            val changed = updated.text != holder.fieldValue.text
-                            holder.applyLocalChange(updated)
-                            if (changed) onAction(WorkspaceAction.UpdateTableCell(block.id, rIdx, cIdx, updated.text))
-                        },
+                    SyncedCursorTextField(
+                        focusKey = cellKey,
+                        holder = holder,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = colorScheme.onSurface),
                         visualTransformation = searchVisual,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        cursorBrush = SolidColor(colorScheme.primary),
+                        onTextChange = { onAction(WorkspaceAction.UpdateTableCell(block.id, rIdx, cIdx, it)) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(gridRequesters[rIdx + 1][cIdx])

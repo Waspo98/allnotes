@@ -214,7 +214,6 @@ object AllNotesIcons {
     val Callout: ImageVector get() = AllNotesEditorIcons.Callout
     val Code: ImageVector get() = AllNotesEditorIcons.Code
     val EditNote: ImageVector get() = AllNotesEditorIcons.EditNote
-    val GridApps: ImageVector get() = AllNotesEditorIcons.GridApps
     val PinFilled: ImageVector get() = AllNotesStudioIcons.PinFilled
     val Link: ImageVector get() = AllNotesStudioIcons.Link
     val Undo: ImageVector get() = AllNotesStudioIcons.Undo

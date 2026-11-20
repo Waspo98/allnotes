@@ -113,12 +113,13 @@ internal fun BoxScope.MobileEditorChromeOverlay(
         initialValue = activeBlock is DocumentBlock.Divider || activeBlock is DocumentBlock.Attachment,
         key1 = activeBlock?.id
     ) {
-        value = when {
-            activeBlock == null -> false
-            activeBlock is DocumentBlock.Divider || activeBlock is DocumentBlock.Attachment -> true
+        when {
+            activeBlock == null -> value = false
+            activeBlock is DocumentBlock.Divider || activeBlock is DocumentBlock.Attachment -> value = true
             else -> {
+                value = false
                 delay(160L)
-                true
+                value = true
             }
         }
     }

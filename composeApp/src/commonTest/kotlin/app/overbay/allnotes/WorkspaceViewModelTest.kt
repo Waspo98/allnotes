@@ -537,6 +537,14 @@ class WorkspaceViewModelTest {
         val chkAfter = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Checklist>().first()
         assertEquals(chkBefore.items.size + 1, chkAfter.items.size)
         assertEquals("", chkAfter.items[1].text)
+        assertEquals(chkBefore.id, vm.uiState.value.focusRequest?.blockId)
+        assertEquals(1, vm.uiState.value.focusRequest?.subItemIndex)
+
+        // Toolbar "+ Item" appends to end of checklist and focuses the newly created row
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.InsertChecklistItemAfter(chkBefore.id, null))
+        val chkAppended = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Checklist>().first()
+        assertEquals(chkAfter.items.size + 1, chkAppended.items.size)
+        assertEquals(chkAppended.items.lastIndex, vm.uiState.value.focusRequest?.subItemIndex)
 
         val blBefore = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.BulletList>().first()
         vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.InsertBulletListItemAfter(blBefore.id, 0))
@@ -750,12 +758,18 @@ class WorkspaceViewModelTest {
         assertFalse(updatedS2.isPinned)
 
         // Switching pages closes transient mobile chrome and resets active block selection
+        val secondPage = repo.createPage(s1.id, "Second Page")
+        vm.dispatch(WorkspaceAction.SelectPage(activePageId!!))
+        val firstBlockId = vm.uiState.value.activePage!!.blocks.first().id
+        vm.dispatch(WorkspaceAction.SetActiveBlock(firstBlockId))
         vm.dispatch(WorkspaceAction.SetMobileHierarchySheetOpen(true))
         vm.dispatch(WorkspaceAction.SetPageMenuOpen(true))
+        assertEquals(firstBlockId, vm.uiState.value.activeBlockId)
         assertTrue(vm.uiState.value.isMobileHierarchySheetOpen)
         assertTrue(vm.uiState.value.isPageMenuOpen)
-        vm.dispatch(WorkspaceAction.SelectPage(activePageId!!))
+        vm.dispatch(WorkspaceAction.SelectPage(secondPage.id))
         assertFalse(vm.uiState.value.isMobileHierarchySheetOpen)
         assertFalse(vm.uiState.value.isPageMenuOpen)
+        assertEquals(null, vm.uiState.value.activeBlockId)
     }
 }

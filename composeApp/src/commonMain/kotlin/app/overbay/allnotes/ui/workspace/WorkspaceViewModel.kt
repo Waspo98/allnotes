@@ -418,8 +418,15 @@ class WorkspaceViewModel(
     fun updateChecklistTitle(blockId: String, title: String) = mutateActivePageBlocks(blockId, true) { BlockMutationEngine.updateChecklistTitle(it, blockId, title) }
     fun updateChecklistItemText(blockId: String, itemId: String, text: String) = mutateActivePageBlocks(blockId, true) { BlockMutationEngine.updateChecklistItemText(it, blockId, itemId, text) }
     fun deleteChecklistItem(blockId: String, itemId: String) = mutateActivePageBlocks(blockId) { BlockMutationEngine.deleteChecklistItem(it, blockId, itemId) }
-    fun insertChecklistItemAfter(blockId: String, afterItemId: String? = null) = mutateActivePageBlocks(blockId) {
-        BlockMutationEngine.insertChecklistItemAfter(it, blockId, ChecklistItem(nextBlockId(), "", false), afterItemId)
+    fun insertChecklistItemAfter(blockId: String, afterItemId: String? = null) = applyEditorResult(debounced = false) { blocks ->
+        val newItem = ChecklistItem(nextBlockId(), "", false)
+        val updated = BlockMutationEngine.insertChecklistItemAfter(blocks, blockId, newItem, afterItemId)
+        val insertedIdx = (updated.firstOrNull { it.id == blockId } as? DocumentBlock.Checklist)
+            ?.items?.indexOfFirst { it.id == newItem.id } ?: -1
+        val focusReq = if (insertedIdx >= 0) {
+            EditorFocusRequest(blockId = blockId, subItemIndex = insertedIdx, cursorOffset = 0, requestToken = nextFocusToken())
+        } else null
+        EditorMutationResult(blocks = updated, activeBlockId = blockId, focusRequest = focusReq)
     }
     fun toggleBulletListKind(blockId: String) = mutateActivePageBlocks(blockId) { BlockMutationEngine.toggleBulletListKind(it, blockId) }
     fun insertBulletListItemAfter(blockId: String, afterItemIndex: Int? = null) = mutateActivePageBlocks(blockId) { BlockMutationEngine.insertBulletListItemAfter(it, blockId, afterItemIndex) }
