@@ -211,10 +211,23 @@ fun HierarchySidebar(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (state.activeSection != null) {
+                    val activeSec = state.activeSection
+                    if (activeSec != null) {
+                        IconButton(
+                            onClick = { onAction(WorkspaceAction.TogglePinSection(activeSec.id)) },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                if (activeSec.isPinned) AllNotesIcons.PinFilled else AllNotesIcons.Pin,
+                                contentDescription = if (activeSec.isPinned) "Unpin active section" else "Pin active section",
+                                tint = if (activeSec.isPinned) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                         IconButton(
                             onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.EDIT_SECTION)) },
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
                                 AllNotesIcons.Edit,
@@ -222,6 +235,14 @@ fun HierarchySidebar(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(15.dp)
                             )
+                        }
+                    }
+                    if (state.sectionsForNotebook.size > 1) {
+                        TextButton(
+                            onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.MANAGE_SECTIONS)) },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("Order")
                         }
                     }
                     TextButton(
@@ -242,8 +263,10 @@ fun HierarchySidebar(
                 state.sectionsForNotebook.forEach { section ->
                     SectionTabChip(
                         section = section,
+                        sectionsInNotebook = state.sectionsForNotebook,
                         isSelected = section.id == state.activeSection?.id,
-                        onClick = { onAction(WorkspaceAction.SelectSection(section.id)) }
+                        onClick = { onAction(WorkspaceAction.SelectSection(section.id)) },
+                        onAction = onAction
                     )
                 }
             }

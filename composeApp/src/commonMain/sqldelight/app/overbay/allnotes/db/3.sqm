@@ -1,0 +1,2 @@
+ALTER TABLE note_section ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_note_section_sort ON note_section(notebook_id, is_pinned DESC, sort_order ASC, title ASC);

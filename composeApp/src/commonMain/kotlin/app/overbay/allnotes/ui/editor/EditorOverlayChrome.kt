@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -58,7 +59,7 @@ internal fun BoxScope.EditorStatusSnackbar(
             .align(Alignment.BottomCenter)
             .navigationBarsPadding()
             .imePadding()
-            .padding(horizontal = 16.dp, vertical = if (isCompactMobile) 84.dp else 20.dp)
+            .padding(horizontal = 16.dp, vertical = if (isCompactMobile) 140.dp else 76.dp)
     ) {
         Surface(
             color = MaterialTheme.colorScheme.inverseSurface,
@@ -105,6 +106,7 @@ internal fun BoxScope.EditorStatusSnackbar(
 internal fun BoxScope.MobileEditorChromeOverlay(
     state: WorkspaceUiState,
     isWritingMode: Boolean,
+    imeVisible: Boolean,
     readingPillHidden: Boolean,
     onRequestMediaPicker: () -> Unit,
     onAction: (WorkspaceAction) -> Unit
@@ -147,28 +149,47 @@ internal fun BoxScope.MobileEditorChromeOverlay(
                 label = "MobileModeChrome"
             ) { writing ->
                 if (writing) {
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Bottom
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        MobileFloatingToolbar(
-                            state = state,
-                            onRequestMediaPicker = onRequestMediaPicker,
-                            onAction = onAction,
-                            modifier = Modifier.weight(1f)
-                        )
-                        ExpressiveInsertFabMenu(
-                            state = state,
-                            onRequestMediaPicker = onRequestMediaPicker,
-                            onAction = onAction
-                        )
+                        AnimatedVisibility(
+                            visible = (!imeVisible || state.isMobileWritingPageStripOpen) && state.activeSection != null,
+                            enter = fadeIn(AllNotesMotion.effectsFast()) + slideInVertically(AllNotesMotion.spatialFast()) { it / 2 },
+                            exit = fadeOut(AllNotesMotion.effectsFast()) + slideOutVertically(AllNotesMotion.spatialFast()) { it / 2 }
+                        ) {
+                            MobileFloatingPageStrip(
+                                state = state,
+                                onAction = onAction
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            MobileFloatingToolbar(
+                                state = state,
+                                imeVisible = imeVisible,
+                                onRequestMediaPicker = onRequestMediaPicker,
+                                onAction = onAction,
+                                modifier = Modifier.weight(1f)
+                            )
+                            ExpressiveInsertFabMenu(
+                                state = state,
+                                onRequestMediaPicker = onRequestMediaPicker,
+                                onAction = onAction
+                            )
+                        }
                     }
                 } else {
                     MobileReadingPill(
+                        state = state,
                         onOpenDrawer = { onAction(WorkspaceAction.SetMobileHierarchySheetOpen(true)) },
                         onNewPage = { onAction(WorkspaceAction.CreatePageInstant(false)) },
-                        onOpenBlockSheet = { onAction(WorkspaceAction.SetBlockInsertSheetOpen(true)) }
+                        onOpenBlockSheet = { onAction(WorkspaceAction.SetBlockInsertSheetOpen(true)) },
+                        onAction = onAction,
+                        modifier = Modifier.widthIn(max = 520.dp)
                     )
                 }
             }

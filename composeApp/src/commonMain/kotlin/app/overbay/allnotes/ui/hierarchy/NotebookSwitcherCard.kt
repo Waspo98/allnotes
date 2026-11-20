@@ -34,15 +34,6 @@ import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.theme.containerColor
 import app.overbay.allnotes.ui.theme.contentColor
 
-internal fun notebookMonogram(title: String): String {
-    val words = title.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-    return when {
-        words.isEmpty() -> "N"
-        words.size == 1 -> words[0].take(2).uppercase()
-        else -> "${words[0].first()}${words[1].first()}".uppercase()
-    }
-}
-
 /**
  * Tier 1 Hierarchy Anchor: Tactile full-width Notebook Switcher card with accent
  * monogram badge, subtitle, and dropdown switcher—visually distinct from Section tabs.
@@ -83,7 +74,7 @@ internal fun NotebookSwitcherCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = notebookMonogram(nb.title),
+                        text = titleMonogram(nb.title),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = nb.accent.contentColor()
@@ -151,7 +142,7 @@ internal fun NotebookSwitcherCard(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = notebookMonogram(item.title),
+                                text = titleMonogram(item.title),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = item.accent.contentColor()

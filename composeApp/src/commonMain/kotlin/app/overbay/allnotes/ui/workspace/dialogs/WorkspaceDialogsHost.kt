@@ -58,34 +58,56 @@ fun WorkspaceDialogsHost(
         ActiveDialog.NEW_SECTION -> SectionDialog(
             initialTitle = "",
             initialAccent = SectionAccentKey.EMERALD,
+            initialPinned = false,
             isEdit = false,
-            canReorder = false,
+            canMoveEarlier = false,
+            canMoveLater = false,
             onReorder = {},
             onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-            onConfirm = { t, a -> onAction(WorkspaceAction.CreateSection(t, a)) },
+            onConfirm = { t, a, _ -> onAction(WorkspaceAction.CreateSection(t, a)) },
             onRequestDelete = null
         )
         ActiveDialog.EDIT_SECTION -> {
-            val sec = state.activeSection ?: return
+            val sec = state.sections.firstOrNull { it.id == state.editingSectionId }
+                ?: state.activeSection
+                ?: return
+            val partition = state.sections
+                .filter { it.notebookId == sec.notebookId && it.isPinned == sec.isPinned }
+                .sortedWith(app.overbay.allnotes.model.NoteSectionDisplayComparator)
+            val idx = partition.indexOfFirst { it.id == sec.id }
             SectionDialog(
                 initialTitle = sec.title,
                 initialAccent = sec.accent,
+                initialPinned = sec.isPinned,
                 isEdit = true,
-                canReorder = state.sectionsForNotebook.size > 1,
-                onReorder = { delta -> onAction(WorkspaceAction.ReorderActiveSection(delta)) },
+                canMoveEarlier = idx > 0,
+                canMoveLater = idx >= 0 && idx < partition.lastIndex,
+                onReorder = { delta -> onAction(WorkspaceAction.ReorderSection(sec.id, delta)) },
                 onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-                onConfirm = { t, a -> onAction(WorkspaceAction.UpdateActiveSection(t, a)) },
+                onConfirm = { t, a, pinned -> onAction(WorkspaceAction.UpdateSection(sec.id, t, a, pinned)) },
                 onRequestDelete = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.CONFIRM_DELETE_SECTION)) }
             )
         }
+        ActiveDialog.MANAGE_SECTIONS -> {
+            val nb = state.activeNotebook ?: return
+            ManageSectionsDialog(
+                notebookTitle = nb.title,
+                sections = state.sectionsForNotebook,
+                activeSectionId = state.activeSection?.id,
+                onAction = onAction,
+                onDismiss = { onAction(WorkspaceAction.DismissDialog) }
+            )
+        }
         ActiveDialog.CONFIRM_DELETE_SECTION -> {
-            val sec = state.activeSection ?: return
+            val sec = state.sections.firstOrNull { it.id == state.editingSectionId }
+                ?: state.activeSection
+                ?: return
             val pageCount = state.pages.count { it.sectionId == sec.id }
             ConfirmDeleteHierarchyDialog(
                 title = "Delete \"${sec.title}\"?",
                 message = "This permanently deletes $pageCount page(s) inside this section across synced devices.",
                 onDismiss = { onAction(WorkspaceAction.DismissDialog) },
-                onConfirmDelete = { onAction(WorkspaceAction.DeleteActiveSection) }
+                onConfirmDelete = { onAction(WorkspaceAction.DeleteSection(sec.id)) }
             )
         }
         ActiveDialog.CONFIRM_DELETE_PAGE -> {

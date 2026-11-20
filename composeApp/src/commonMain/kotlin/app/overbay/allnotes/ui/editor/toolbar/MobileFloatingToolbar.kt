@@ -4,14 +4,17 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -31,86 +34,112 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.ui.editor.PagePillStripContent
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.theme.accentColor
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 
 /**
- * Calm, minimal floating pill displayed on mobile in Reading Mode so note content
- * breathes unobstructed while keeping primary navigation and 1-tap capture in the thumb zone.
+ * Calm, unified mobile reading bottom dock combining a scrollable page switcher strip
+ * with primary navigation and 1-tap capture in the thumb zone.
  */
 @Composable
 fun MobileReadingPill(
+    state: WorkspaceUiState,
     onOpenDrawer: () -> Unit,
     onNewPage: () -> Unit,
     onOpenBlockSheet: () -> Unit,
+    onAction: (WorkspaceAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val section = state.activeSection
+    val hasPageStrip = section != null
+
     Surface(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         color = colorScheme.surfaceContainerHigh,
         contentColor = colorScheme.onSurface,
-        shape = CircleShape,
-        shadowElevation = 4.dp,
+        shape = if (hasPageStrip) RoundedCornerShape(26.dp) else CircleShape,
+        shadowElevation = 5.dp,
         border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onOpenDrawer,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = AllNotesIcons.Menu,
-                    contentDescription = "Browse notebooks & pages",
-                    tint = colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Surface(
-                onClick = onNewPage,
-                color = colorScheme.primaryContainer,
-                contentColor = colorScheme.onPrimaryContainer,
-                shape = CircleShape
-            ) {
-                Row(
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (section != null) {
+                PagePillStripContent(
+                    pages = state.pagesForSection,
+                    activePageId = state.activePage?.id,
+                    sectionAccent = section.accent.accentColor(),
+                    compact = true,
+                    onAction = onAction,
                     modifier = Modifier
-                        .height(40.dp)
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                        .fillMaxWidth()
+                        .height(42.dp)
+                        .padding(horizontal = 8.dp)
+                )
+                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.35f))
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onOpenDrawer,
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
-                        imageVector = AllNotesIcons.EditNote,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "New Page",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
+                        imageVector = AllNotesIcons.Menu,
+                        contentDescription = "Browse notebooks & pages",
+                        tint = colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
-            }
-            IconButton(
-                onClick = onOpenBlockSheet,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = AllNotesIcons.Add,
-                    contentDescription = "Insert block",
-                    tint = colorScheme.onSurface,
-                    modifier = Modifier.size(21.dp)
-                )
+                Surface(
+                    onClick = onNewPage,
+                    color = colorScheme.primaryContainer,
+                    contentColor = colorScheme.onPrimaryContainer,
+                    shape = CircleShape
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .height(40.dp)
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = AllNotesIcons.EditNote,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "New Page",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = onOpenBlockSheet,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = AllNotesIcons.Add,
+                        contentDescription = "Insert block",
+                        tint = colorScheme.onSurface,
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
             }
         }
     }
@@ -120,11 +149,13 @@ fun MobileReadingPill(
 @Composable
 fun MobileFloatingToolbar(
     state: WorkspaceUiState,
+    imeVisible: Boolean,
     onRequestMediaPicker: () -> Unit,
     onAction: (WorkspaceAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val activeBlock = state.activeBlock
+    val focusManager = LocalFocusManager.current
     var blockActionsOpen by remember { mutableStateOf(false) }
 
     HorizontalFloatingToolbar(
@@ -138,6 +169,35 @@ fun MobileFloatingToolbar(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (imeVisible && state.activeSection != null) {
+                Surface(
+                    onClick = {
+                        onAction(
+                            WorkspaceAction.SetMobileWritingPageStripOpen(!state.isMobileWritingPageStripOpen)
+                        )
+                    },
+                    color = if (state.isMobileWritingPageStripOpen) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    } else {
+                        Color.Transparent
+                    },
+                    contentColor = if (state.isMobileWritingPageStripOpen) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = "Pages (${state.pagesForSection.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                    )
+                }
+                VerticalDivider(modifier = Modifier.height(22.dp).padding(horizontal = 2.dp))
+            }
+
             BlockTypeConverterPill(
                 activeBlock = activeBlock,
                 onAction = onAction
@@ -284,6 +344,25 @@ fun MobileFloatingToolbar(
                             }
                         )
                     }
+                }
+            }
+
+            if (state.activeBlockId != null) {
+                VerticalDivider(modifier = Modifier.height(22.dp).padding(horizontal = 2.dp))
+                IconButton(
+                    onClick = {
+                        focusManager.clearFocus(force = true)
+                        onAction(WorkspaceAction.SetMobileWritingPageStripOpen(false))
+                        onAction(WorkspaceAction.SetActiveBlock(null))
+                    },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = AllNotesIcons.Check,
+                        contentDescription = "Finish editing block",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(19.dp)
+                    )
                 }
             }
         }

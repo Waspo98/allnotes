@@ -63,7 +63,8 @@ class SqlDelightNoteStore(
                 title = row.title,
                 accent = parseAccent(row.accent),
                 sortOrder = row.sort_order.toInt(),
-                updatedAtEpochMs = row.updated_at_epoch_ms
+                updatedAtEpochMs = row.updated_at_epoch_ms,
+                isPinned = row.is_pinned != 0L
             )
         }
 
@@ -145,7 +146,8 @@ class SqlDelightNoteStore(
                     title = section.title,
                     accent = section.accent.name,
                     sortOrder = section.sortOrder.toLong(),
-                    updatedAtEpochMs = section.updatedAtEpochMs
+                    updatedAtEpochMs = section.updatedAtEpochMs,
+                    isPinned = if (section.isPinned) 1L else 0L
                 )
             }
 

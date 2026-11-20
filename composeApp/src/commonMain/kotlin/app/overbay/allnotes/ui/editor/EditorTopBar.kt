@@ -1,16 +1,11 @@
 package app.overbay.allnotes.ui.editor
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -21,15 +16,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.ui.editor.toolbar.StudioTooltip
 import app.overbay.allnotes.ui.theme.AllNotesIcons
-import app.overbay.allnotes.ui.theme.accentColor
 import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
@@ -59,60 +50,39 @@ internal fun EditorTopBar(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            StudioTooltip(
-                label = if (isCompactMobile) "Browse workspace" else "Toggle sidebar",
-                enabled = showTooltips
-            ) {
-                IconButton(
-                    onClick = {
-                        if (isCompactMobile) {
-                            onAction(WorkspaceAction.SetMobileHierarchySheetOpen(true))
-                        } else {
-                            onAction(WorkspaceAction.ToggleSidebar)
-                        }
-                    },
-                    modifier = Modifier.size(if (isCompactMobile) 48.dp else 40.dp)
+            if (isCompactMobile || state.isSidebarOpen) {
+                StudioTooltip(
+                    label = if (isCompactMobile) "Browse workspace" else "Collapse sidebar",
+                    enabled = showTooltips
                 ) {
-                    Icon(
-                        imageVector = if (isCompactMobile) AllNotesIcons.Menu else AllNotesIcons.Sidebar,
-                        contentDescription = if (isCompactMobile) "Open navigation drawer" else "Toggle sidebar",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            if (notebook != null && section != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .clip(MaterialTheme.shapes.extraSmall)
-                        .clickable {
+                    IconButton(
+                        onClick = {
                             if (isCompactMobile) {
                                 onAction(WorkspaceAction.SetMobileHierarchySheetOpen(true))
                             } else {
                                 onAction(WorkspaceAction.ToggleSidebar)
                             }
-                        }
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(section.accent.accentColor())
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "${notebook.title}  ›  ${section.title}",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                        },
+                        modifier = Modifier.size(if (isCompactMobile) 48.dp else 40.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isCompactMobile) AllNotesIcons.Menu else AllNotesIcons.Sidebar,
+                            contentDescription = if (isCompactMobile) "Open navigation drawer" else "Collapse sidebar",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
+            }
+
+            if (notebook != null && section != null) {
+                EditorBreadcrumbBar(
+                    notebook = notebook,
+                    section = section,
+                    state = state,
+                    onAction = onAction,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
             }
         }
 

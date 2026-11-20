@@ -694,4 +694,58 @@ class WorkspaceViewModelTest {
         vm.dispatch(afterDelete.statusBannerAction!!)
         assertTrue(vm.uiState.value.activePage!!.blocks.any { it.id == targetBlockId })
     }
+
+    @Test
+    fun sectionPinningAndPartitionAwareReorderingPreserveOrderAcrossNotebooks() {
+        val (vm, repo) = createTestFixture()
+        val nb = repo.createNotebook("Discipleships", "", SectionAccentKey.TEAL)
+        vm.selectNotebook(nb.id)
+        val s1 = vm.uiState.value.activeSection!! // General Notes (0)
+        val s2 = repo.createSection(nb.id, "Kyle", SectionAccentKey.EMERALD)
+        val s3 = repo.createSection(nb.id, "Mark", SectionAccentKey.AMBER)
+        val s4 = repo.createSection(nb.id, "Luke", SectionAccentKey.ROSE)
+        vm.syncStateFromRepository()
+
+        assertEquals(listOf(s1.id, s2.id, s3.id, s4.id), vm.uiState.value.sectionsForNotebook.map { it.id })
+
+        // Pin Kyle (s2) -> floats ahead of unpinned sections
+        vm.dispatch(WorkspaceAction.TogglePinSection(s2.id))
+        assertEquals(listOf(s2.id, s1.id, s3.id, s4.id), vm.uiState.value.sectionsForNotebook.map { it.id })
+        assertTrue(vm.uiState.value.sectionsForNotebook.first().isPinned)
+
+        // Pin Luke (s4) -> joins pinned partition after Kyle
+        vm.dispatch(WorkspaceAction.TogglePinSection(s4.id))
+        assertEquals(listOf(s2.id, s4.id, s1.id, s3.id), vm.uiState.value.sectionsForNotebook.map { it.id })
+
+        // Reorder pinned section Luke up -> swaps with Kyle inside pinned partition
+        vm.dispatch(WorkspaceAction.ReorderSection(s4.id, -1))
+        assertEquals(listOf(s4.id, s2.id, s1.id, s3.id), vm.uiState.value.sectionsForNotebook.map { it.id })
+
+        // Reordering first unpinned section (s1) earlier cannot cross pinned boundary
+        vm.dispatch(WorkspaceAction.ReorderSection(s1.id, -1))
+        assertEquals(listOf(s4.id, s2.id, s1.id, s3.id), vm.uiState.value.sectionsForNotebook.map { it.id })
+
+        // Reordering s3 earlier swaps with s1 cleanly within unpinned partition
+        vm.dispatch(WorkspaceAction.ReorderSection(s3.id, -1))
+        assertEquals(listOf(s4.id, s2.id, s3.id, s1.id), vm.uiState.value.sectionsForNotebook.map { it.id })
+
+        // Switching away and back to notebook selects first pinned section (s4)
+        val otherNb = repo.createNotebook("Sunday", "", SectionAccentKey.INDIGO)
+        vm.selectNotebook(otherNb.id)
+        vm.selectNotebook(nb.id)
+        assertEquals(s4.id, vm.uiState.value.activeSection?.id)
+
+        // Non-active section edit preserves current active section/page
+        vm.dispatch(WorkspaceAction.SelectSection(s1.id))
+        val activePageId = vm.uiState.value.activePage?.id
+        vm.dispatch(WorkspaceAction.OpenEditSectionDialog(s2.id))
+        assertEquals(ActiveDialog.EDIT_SECTION, vm.uiState.value.activeDialog)
+        assertEquals(s2.id, vm.uiState.value.editingSectionId)
+        vm.dispatch(WorkspaceAction.UpdateSection(s2.id, "Kyle M.", SectionAccentKey.VIOLET, false))
+        assertEquals(s1.id, vm.uiState.value.activeSection?.id)
+        assertEquals(activePageId, vm.uiState.value.activePage?.id)
+        val updatedS2 = vm.uiState.value.sections.first { it.id == s2.id }
+        assertEquals("Kyle M.", updatedS2.title)
+        assertFalse(updatedS2.isPinned)
+    }
 }

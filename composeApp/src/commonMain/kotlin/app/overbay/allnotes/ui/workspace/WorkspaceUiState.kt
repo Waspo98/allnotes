@@ -4,6 +4,7 @@ import app.overbay.allnotes.data.SyncStatus
 import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.NoteSection
+import app.overbay.allnotes.model.NoteSectionDisplayComparator
 import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.WorkspacePreferences
@@ -31,6 +32,7 @@ enum class ActiveDialog {
     CONFIRM_DELETE_NOTEBOOK,
     NEW_SECTION,
     EDIT_SECTION,
+    MANAGE_SECTIONS,
     CONFIRM_DELETE_SECTION,
     CONFIRM_DELETE_PAGE,
     MOVE_PAGE,
@@ -61,7 +63,9 @@ data class WorkspaceUiState(
     val isPageMenuOpen: Boolean = false,
     val isMobileInsertMenuOpen: Boolean = false,
     val isBlockInsertSheetOpen: Boolean = false,
+    val isMobileWritingPageStripOpen: Boolean = false,
     val activeDialog: ActiveDialog = ActiveDialog.NONE,
+    val editingSectionId: String? = null,
     val syncStatus: SyncStatus = SyncStatus.LOCAL_READY,
     val syncEndpointUrl: String = "https://notes.overbay.app/api/v1/sync",
     val useRemoteHttpSync: Boolean = true,
@@ -81,7 +85,7 @@ data class WorkspaceUiState(
 
     val sectionsForNotebook: List<NoteSection> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val nbId = activeNotebook?.id ?: return@lazy emptyList()
-        sections.filter { it.notebookId == nbId }.sortedBy { it.sortOrder }
+        sections.filter { it.notebookId == nbId }.sortedWith(NoteSectionDisplayComparator)
     }
 
     val activeSection: NoteSection? by lazy(LazyThreadSafetyMode.PUBLICATION) {
@@ -317,7 +321,10 @@ internal object HierarchySelectionResolver {
             val matchedNb = effectiveSnap.notebooks.firstOrNull { it.id == targetNotebookId }
             if (matchedNb != null) {
                 nbId = matchedNb.id
-                secId = effectiveSnap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
+                secId = effectiveSnap.sections
+                    .filter { it.notebookId == nbId }
+                    .sortedWith(NoteSectionDisplayComparator)
+                    .firstOrNull()?.id.orEmpty()
                 pageId = effectiveSnap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
             }
         } else if (pageId.isNotEmpty()) {
@@ -333,7 +340,10 @@ internal object HierarchySelectionResolver {
             nbId = effectiveSnap.notebooks.firstOrNull()?.id.orEmpty()
         }
         if (effectiveSnap.sections.none { it.id == secId && it.notebookId == nbId }) {
-            secId = effectiveSnap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
+            secId = effectiveSnap.sections
+                .filter { it.notebookId == nbId }
+                .sortedWith(NoteSectionDisplayComparator)
+                .firstOrNull()?.id.orEmpty()
         }
         if (effectiveSnap.pages.none { it.id == pageId && it.sectionId == secId }) {
             val pageElsewhere = effectiveSnap.pages.firstOrNull { it.id == pageId }

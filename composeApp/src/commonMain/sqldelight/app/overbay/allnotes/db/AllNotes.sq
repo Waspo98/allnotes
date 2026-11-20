@@ -14,10 +14,12 @@ CREATE TABLE note_section (
     accent TEXT NOT NULL,
     sort_order INTEGER NOT NULL DEFAULT 0,
     updated_at_epoch_ms INTEGER NOT NULL DEFAULT 0,
+    is_pinned INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (notebook_id) REFERENCES notebook(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_note_section_notebook_id ON note_section(notebook_id);
+CREATE INDEX idx_note_section_sort ON note_section(notebook_id, is_pinned DESC, sort_order ASC, title ASC);
 
 CREATE TABLE note_page (
     id TEXT PRIMARY KEY NOT NULL,
@@ -102,13 +104,13 @@ WHERE id = :id;
 selectAllSections:
 SELECT *
 FROM note_section
-ORDER BY sort_order ASC, title ASC;
+ORDER BY is_pinned DESC, sort_order ASC, title ASC;
 
 selectSectionsByNotebook:
 SELECT *
 FROM note_section
 WHERE notebook_id = :notebookId
-ORDER BY sort_order ASC, title ASC;
+ORDER BY is_pinned DESC, sort_order ASC, title ASC;
 
 selectSectionById:
 SELECT *
@@ -125,21 +127,24 @@ INSERT INTO note_section (
     title,
     accent,
     sort_order,
-    updated_at_epoch_ms
+    updated_at_epoch_ms,
+    is_pinned
 ) VALUES (
     :id,
     :notebookId,
     :title,
     :accent,
     :sortOrder,
-    :updatedAtEpochMs
+    :updatedAtEpochMs,
+    :isPinned
 )
 ON CONFLICT(id) DO UPDATE SET
     notebook_id = excluded.notebook_id,
     title = excluded.title,
     accent = excluded.accent,
     sort_order = excluded.sort_order,
-    updated_at_epoch_ms = excluded.updated_at_epoch_ms;
+    updated_at_epoch_ms = excluded.updated_at_epoch_ms,
+    is_pinned = excluded.is_pinned;
 
 deleteSection:
 DELETE FROM note_section

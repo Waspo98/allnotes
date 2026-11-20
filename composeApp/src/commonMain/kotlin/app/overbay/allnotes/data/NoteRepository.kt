@@ -6,6 +6,7 @@ import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.EntityKind
 import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.NoteSection
+import app.overbay.allnotes.model.NoteSectionDisplayComparator
 import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.WorkspacePreferences
@@ -314,38 +315,89 @@ class NoteRepository(
         return newSection
     }
 
-    fun updateSection(sectionId: String, title: String, accent: SectionAccentKey) {
+    fun updateSection(
+        sectionId: String,
+        title: String,
+        accent: SectionAccentKey,
+        isPinned: Boolean? = null
+    ) {
         val cleanTitle = title.trim().ifEmpty { "Untitled Section" }
         val now = nextTimestampMs()
         commitFullSnapshot { current ->
-            current.copy(
-                sections = current.sections.map { sec ->
-                    if (sec.id == sectionId) {
-                        sec.copy(title = cleanTitle, accent = accent, updatedAtEpochMs = now)
-                    } else sec
-                }
-            )
+            val updated = current.sections.map { sec ->
+                if (sec.id == sectionId) {
+                    sec.copy(
+                        title = cleanTitle,
+                        accent = accent,
+                        isPinned = isPinned ?: sec.isPinned,
+                        updatedAtEpochMs = now
+                    )
+                } else sec
+            }
+            val target = updated.firstOrNull { it.id == sectionId } ?: return@commitFullSnapshot current
+            val reindexed = reindexNotebookSections(updated, target.notebookId, now, touchedId = sectionId)
+            current.copy(sections = reindexed)
+        }
+    }
+
+    fun toggleSectionPin(sectionId: String) {
+        mutateNotebookSectionPartitions(sectionId) { target, pinned, unpinned, now ->
+            val updated = target.copy(isPinned = !target.isPinned, updatedAtEpochMs = now)
+            pinned.removeAll { it.id == sectionId }
+            unpinned.removeAll { it.id == sectionId }
+            if (updated.isPinned) pinned.add(updated) else unpinned.add(0, updated)
+            true
         }
     }
 
     fun reorderSection(sectionId: String, delta: Int) {
+        mutateNotebookSectionPartitions(sectionId) { target, pinned, unpinned, _ ->
+            val partition = if (target.isPinned) pinned else unpinned
+            val idx = partition.indexOfFirst { it.id == sectionId }
+            val targetIdx = if (idx >= 0) (idx + delta).coerceIn(0, partition.lastIndex) else -1
+            if (idx < 0 || targetIdx == idx) return@mutateNotebookSectionPartitions false
+            partition.add(targetIdx, partition.removeAt(idx))
+            true
+        }
+    }
+
+    private inline fun mutateNotebookSectionPartitions(
+        sectionId: String,
+        crossinline transform: (
+            target: NoteSection,
+            pinned: MutableList<NoteSection>,
+            unpinned: MutableList<NoteSection>,
+            now: Long
+        ) -> Boolean
+    ) {
         val now = nextTimestampMs()
         commitFullSnapshot { current ->
-            val targetSec = current.sections.firstOrNull { it.id == sectionId } ?: return@commitFullSnapshot current
-            val siblings = current.sections.filter { it.notebookId == targetSec.notebookId }
-                .sortedBy { it.sortOrder }
-                .toMutableList()
-            val idx = siblings.indexOfFirst { it.id == sectionId }
-            if (idx < 0) return@commitFullSnapshot current
-            val targetIdx = (idx + delta).coerceIn(0, siblings.lastIndex)
-            if (targetIdx == idx) return@commitFullSnapshot current
-            val moved = siblings.removeAt(idx)
-            siblings.add(targetIdx, moved)
-            val reindexedById = siblings.mapIndexed { i, sec ->
-                sec.id to sec.copy(sortOrder = i, updatedAtEpochMs = now)
+            val target = current.sections.firstOrNull { it.id == sectionId } ?: return@commitFullSnapshot current
+            val siblings = current.sections.filter { it.notebookId == target.notebookId }
+            val pinned = siblings.filter { it.isPinned }.sortedWith(NoteSectionDisplayComparator).toMutableList()
+            val unpinned = siblings.filter { !it.isPinned }.sortedWith(NoteSectionDisplayComparator).toMutableList()
+            if (!transform(target, pinned, unpinned, now)) return@commitFullSnapshot current
+            val reindexedById = (pinned + unpinned).mapIndexed { i, sec ->
+                val changed = sec.id == sectionId || sec.sortOrder != i
+                sec.id to if (changed) sec.copy(sortOrder = i, updatedAtEpochMs = now) else sec
             }.toMap()
             current.copy(sections = current.sections.map { reindexedById[it.id] ?: it })
         }
+    }
+
+    private fun reindexNotebookSections(
+        sections: List<NoteSection>,
+        notebookId: String,
+        now: Long,
+        touchedId: String
+    ): List<NoteSection> {
+        val ordered = sections.filter { it.notebookId == notebookId }.sortedWith(NoteSectionDisplayComparator)
+        val reindexedById = ordered.mapIndexed { i, sec ->
+            sec.id to if (sec.sortOrder != i || sec.id == touchedId) {
+                sec.copy(sortOrder = i, updatedAtEpochMs = now)
+            } else sec
+        }.toMap()
+        return sections.map { reindexedById[it.id] ?: it }
     }
 
     fun deleteSection(sectionId: String) {

@@ -8,6 +8,7 @@ import app.overbay.allnotes.data.platformSynchronized
 import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.ChecklistItem
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.model.NoteSectionDisplayComparator
 import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.ThemeMode
@@ -77,7 +78,10 @@ class WorkspaceViewModel(
         val snap = repository.snapshot.value
         val prefs = repository.preferences.value
         val nbId = snap.notebooks.firstOrNull()?.id.orEmpty()
-        val secId = snap.sections.firstOrNull { it.notebookId == nbId }?.id.orEmpty()
+        val secId = snap.sections
+            .filter { it.notebookId == nbId }
+            .sortedWith(NoteSectionDisplayComparator)
+            .firstOrNull()?.id.orEmpty()
         val pageId = snap.pages.firstOrNull { it.sectionId == secId }?.id.orEmpty()
         return WorkspaceUiState(
             notebooks = snap.notebooks,
@@ -137,7 +141,10 @@ class WorkspaceViewModel(
 
     fun selectNotebook(notebookId: String) {
         val snap = repository.snapshot.value
-        val firstSec = snap.sections.filter { it.notebookId == notebookId }.minByOrNull { it.sortOrder }?.id.orEmpty()
+        val firstSec = snap.sections
+            .filter { it.notebookId == notebookId }
+            .sortedWith(NoteSectionDisplayComparator)
+            .firstOrNull()?.id.orEmpty()
         val firstPage = snap.pages.firstOrNull { it.sectionId == firstSec }?.id.orEmpty()
         syncStateFromRepository(targetNotebookId = notebookId, targetSectionId = firstSec, targetPageId = firstPage)
     }
@@ -179,6 +186,17 @@ class WorkspaceViewModel(
     fun openDialog(dialog: ActiveDialog) = _uiState.update {
         it.copy(
             activeDialog = dialog,
+            editingSectionId = if (dialog == ActiveDialog.CONFIRM_DELETE_SECTION) it.editingSectionId else null,
+            isPageMenuOpen = false,
+            isMobileHierarchySheetOpen = false,
+            isMobileInsertMenuOpen = false
+        )
+    }
+
+    internal fun openEditSectionDialog(sectionId: String) = _uiState.update {
+        it.copy(
+            activeDialog = ActiveDialog.EDIT_SECTION,
+            editingSectionId = sectionId,
             isPageMenuOpen = false,
             isMobileHierarchySheetOpen = false,
             isMobileInsertMenuOpen = false
@@ -186,7 +204,7 @@ class WorkspaceViewModel(
     }
 
     fun dismissDialog() = _uiState.update {
-        it.copy(activeDialog = ActiveDialog.NONE, pendingDeletePageId = null)
+        it.copy(activeDialog = ActiveDialog.NONE, pendingDeletePageId = null, editingSectionId = null)
     }
 
     fun setActiveBlockId(blockId: String?) = _uiState.update { it.copy(activeBlockId = blockId) }
@@ -208,6 +226,12 @@ class WorkspaceViewModel(
         }
     }
 
+    private inline fun commitHierarchyMutation(closeDialog: Boolean = false, mutate: () -> Unit) {
+        mutate()
+        if (closeDialog) _uiState.update { it.copy(activeDialog = ActiveDialog.NONE, editingSectionId = null) }
+        syncStateFromRepository(); scheduleAutoSyncIfEnabled()
+    }
+
     fun createNotebook(title: String, subtitle: String, accent: SectionAccentKey) {
         val created = repository.createNotebook(title, subtitle, accent)
         _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
@@ -216,21 +240,17 @@ class WorkspaceViewModel(
 
     fun updateActiveNotebook(title: String, subtitle: String, accent: SectionAccentKey) {
         val nbId = _uiState.value.activeNotebook?.id ?: return
-        repository.updateNotebook(nbId, title, subtitle, accent)
-        _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        syncStateFromRepository(); scheduleAutoSyncIfEnabled()
+        commitHierarchyMutation(closeDialog = true) { repository.updateNotebook(nbId, title, subtitle, accent) }
     }
 
     fun reorderActiveNotebook(delta: Int) {
         val nbId = _uiState.value.activeNotebook?.id ?: return
-        repository.reorderNotebook(nbId, delta); syncStateFromRepository(); scheduleAutoSyncIfEnabled()
+        commitHierarchyMutation { repository.reorderNotebook(nbId, delta) }
     }
 
     fun deleteActiveNotebook() {
         val nbId = _uiState.value.activeNotebook?.id ?: return
-        repository.deleteNotebook(nbId)
-        _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        syncStateFromRepository(); scheduleAutoSyncIfEnabled()
+        commitHierarchyMutation(closeDialog = true) { repository.deleteNotebook(nbId) }
     }
 
     fun createSection(title: String, accent: SectionAccentKey) {
@@ -240,24 +260,26 @@ class WorkspaceViewModel(
         selectSection(created.id); scheduleAutoSyncIfEnabled()
     }
 
-    fun updateActiveSection(title: String, accent: SectionAccentKey) {
-        val secId = _uiState.value.activeSection?.id ?: return
-        repository.updateSection(secId, title, accent)
-        _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        syncStateFromRepository(); scheduleAutoSyncIfEnabled()
-    }
+    fun updateActiveSection(title: String, accent: SectionAccentKey, isPinned: Boolean? = null) =
+        _uiState.value.activeSection?.id?.let { updateSection(it, title, accent, isPinned) } ?: Unit
 
-    fun reorderActiveSection(delta: Int) {
-        val secId = _uiState.value.activeSection?.id ?: return
-        repository.reorderSection(secId, delta); syncStateFromRepository(); scheduleAutoSyncIfEnabled()
-    }
+    fun updateSection(sectionId: String, title: String, accent: SectionAccentKey, isPinned: Boolean? = null) =
+        commitHierarchyMutation(closeDialog = true) { repository.updateSection(sectionId, title, accent, isPinned) }
 
-    fun deleteActiveSection() {
-        val secId = _uiState.value.activeSection?.id ?: return
-        repository.deleteSection(secId)
-        _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        syncStateFromRepository(); scheduleAutoSyncIfEnabled()
-    }
+    fun toggleSectionPin(sectionId: String) =
+        commitHierarchyMutation { repository.toggleSectionPin(sectionId) }
+
+    fun reorderActiveSection(delta: Int) =
+        _uiState.value.activeSection?.id?.let { reorderSection(it, delta) } ?: Unit
+
+    fun reorderSection(sectionId: String, delta: Int) =
+        commitHierarchyMutation { repository.reorderSection(sectionId, delta) }
+
+    fun deleteActiveSection() =
+        _uiState.value.activeSection?.id?.let { deleteSection(it) } ?: Unit
+
+    fun deleteSection(sectionId: String) =
+        commitHierarchyMutation(closeDialog = true) { repository.deleteSection(sectionId) }
 
     fun createPageInstant(asSubpageOfActive: Boolean = false) {
         val secId = _uiState.value.activeSection?.id ?: return

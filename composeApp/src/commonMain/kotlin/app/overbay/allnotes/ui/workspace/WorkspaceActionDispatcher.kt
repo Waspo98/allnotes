@@ -18,10 +18,14 @@ internal object WorkspaceActionDispatcher {
             is WorkspaceAction.SetBlockInsertSheetOpen -> vm.updateUiState {
                 it.copy(isBlockInsertSheetOpen = action.open, isMobileInsertMenuOpen = false)
             }
+            is WorkspaceAction.SetMobileWritingPageStripOpen -> vm.updateUiState {
+                it.copy(isMobileWritingPageStripOpen = action.open)
+            }
             is WorkspaceAction.ConsumeTitleFocusRequest -> vm.updateUiState {
                 if (it.titleFocusRequestToken == action.requestToken) it.copy(titleFocusRequestToken = 0L) else it
             }
             is WorkspaceAction.OpenDialog -> vm.openDialog(action.dialog)
+            is WorkspaceAction.OpenEditSectionDialog -> vm.openEditSectionDialog(action.sectionId)
             WorkspaceAction.DismissDialog -> vm.dismissDialog()
             is WorkspaceAction.OpenAttachmentPreview -> vm.updateUiState {
                 it.copy(previewAttachment = action.attachment, isPageMenuOpen = false, isMobileInsertMenuOpen = false, isBlockInsertSheetOpen = false)
@@ -44,9 +48,13 @@ internal object WorkspaceActionDispatcher {
             is WorkspaceAction.ReorderActiveNotebook -> vm.reorderActiveNotebook(action.delta)
             WorkspaceAction.DeleteActiveNotebook -> vm.deleteActiveNotebook()
             is WorkspaceAction.CreateSection -> vm.createSection(action.title, action.accent)
-            is WorkspaceAction.UpdateActiveSection -> vm.updateActiveSection(action.title, action.accent)
+            is WorkspaceAction.UpdateActiveSection -> vm.updateActiveSection(action.title, action.accent, action.isPinned)
+            is WorkspaceAction.UpdateSection -> vm.updateSection(action.sectionId, action.title, action.accent, action.isPinned)
+            is WorkspaceAction.TogglePinSection -> vm.toggleSectionPin(action.sectionId)
             is WorkspaceAction.ReorderActiveSection -> vm.reorderActiveSection(action.delta)
+            is WorkspaceAction.ReorderSection -> vm.reorderSection(action.sectionId, action.delta)
             WorkspaceAction.DeleteActiveSection -> vm.deleteActiveSection()
+            is WorkspaceAction.DeleteSection -> vm.deleteSection(action.sectionId)
             is WorkspaceAction.CreatePage -> vm.createPage(action.title, action.asSubpageOfActive)
             is WorkspaceAction.CreatePageInstant -> vm.createPageInstant(action.asSubpageOfActive)
             is WorkspaceAction.TogglePageSubpageIndent -> vm.togglePageSubpageIndent(action.pageId)

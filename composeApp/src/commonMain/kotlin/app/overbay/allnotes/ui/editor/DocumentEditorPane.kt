@@ -221,7 +221,7 @@ fun DocumentEditorPane(
                                     start = if (isCompactMobile) 22.dp else 52.dp,
                                     end = if (isCompactMobile) 22.dp else 52.dp,
                                     top = if (isCompactMobile) 12.dp else 36.dp,
-                                    bottom = if (isCompactMobile) 136.dp else 88.dp
+                                    bottom = if (isCompactMobile) 168.dp else 104.dp
                                 ),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
@@ -286,10 +286,24 @@ fun DocumentEditorPane(
                 onAction = onAction
             )
 
+            if (!isCompactMobile && state.activeSection != null) {
+                DesktopBottomPageBar(
+                    state = state,
+                    onAction = onAction,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .widthIn(max = 880.dp)
+                        .padding(horizontal = 28.dp, vertical = 14.dp)
+                )
+            }
+
             if (isCompactMobile && page != null) {
                 MobileEditorChromeOverlay(
                     state = state,
                     isWritingMode = isWritingMode,
+                    imeVisible = imeVisible,
                     readingPillHidden = readingPillHidden,
                     onRequestMediaPicker = requestMediaPicker,
                     onAction = onAction

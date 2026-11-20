@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -117,15 +118,18 @@ internal fun NotebookDialog(
 internal fun SectionDialog(
     initialTitle: String,
     initialAccent: SectionAccentKey,
+    initialPinned: Boolean = false,
     isEdit: Boolean,
-    canReorder: Boolean,
+    canMoveEarlier: Boolean,
+    canMoveLater: Boolean,
     onReorder: (Int) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: (String, SectionAccentKey) -> Unit,
+    onConfirm: (String, SectionAccentKey, Boolean) -> Unit,
     onRequestDelete: (() -> Unit)?
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var accent by remember { mutableStateOf(initialAccent) }
+    var isPinned by remember(initialPinned) { mutableStateOf(initialPinned) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -142,21 +146,48 @@ internal fun SectionDialog(
                 Spacer(modifier = Modifier.height(10.dp))
                 AccentPickerRow(selected = accent, onSelect = { accent = it })
 
-                if (isEdit && canReorder) {
+                if (isEdit) {
                     Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Pin section to top",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Switch(
+                            checked = isPinned,
+                            onCheckedChange = { isPinned = it }
+                        )
+                    }
+                }
+
+                if (isEdit && (canMoveEarlier || canMoveLater)) {
+                    Spacer(modifier = Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { onReorder(-1) }, modifier = Modifier.weight(1f)) {
-                            Text("Move Left")
+                        OutlinedButton(
+                            onClick = { onReorder(-1) },
+                            enabled = canMoveEarlier,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Move Earlier")
                         }
-                        OutlinedButton(onClick = { onReorder(1) }, modifier = Modifier.weight(1f)) {
-                            Text("Move Right")
+                        OutlinedButton(
+                            onClick = { onReorder(1) },
+                            enabled = canMoveLater,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Move Later")
                         }
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(title, accent) }) {
+            TextButton(onClick = { onConfirm(title, accent, isPinned) }) {
                 Text(if (isEdit) "Save" else "Create")
             }
         },

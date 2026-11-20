@@ -2,7 +2,6 @@ package app.overbay.allnotes.ui.hierarchy
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -26,6 +27,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -123,34 +128,93 @@ fun CollapsedWorkspaceRail(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    state.notebooks.forEach { nb ->
-                        val selected = nb.id == state.activeNotebook?.id
+                    val sections = state.sectionsForNotebook
+                    sections.forEach { sec ->
+                        val selected = sec.id == state.activeSection?.id
                         val badgeShape = MaterialTheme.shapes.small
-                        StudioTooltip(nb.title.ifBlank { "Notebook" }, position = TooltipAnchorPosition.End) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(badgeShape)
-                                    .background(
-                                        if (selected) nb.accent.containerColor()
-                                        else MaterialTheme.colorScheme.surfaceContainer
-                                    )
-                                    .then(
-                                        if (selected) {
-                                            Modifier.border(1.5.dp, nb.accent.accentColor(), badgeShape)
-                                        } else Modifier
-                                    )
-                                    .clickable { onAction(WorkspaceAction.SelectNotebook(nb.id)) }
+                        val accent = sec.accent.accentColor()
+                        var menuOpen by remember(sec.id) { mutableStateOf(false) }
+
+                        Box(contentAlignment = Alignment.Center) {
+                            StudioTooltip(
+                                label = buildString {
+                                    append(sec.title.ifBlank { "Section" })
+                                    if (sec.isPinned) append("  ·  Pinned")
+                                },
+                                position = TooltipAnchorPosition.End
                             ) {
-                                Text(
-                                    text = notebookMonogram(nb.title),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-                                    color = if (selected) nb.accent.contentColor()
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(badgeShape)
+                                            .background(
+                                                if (selected) sec.accent.containerColor()
+                                                else MaterialTheme.colorScheme.surfaceContainer
+                                            )
+                                            .border(
+                                                width = if (selected) 1.5.dp else 1.dp,
+                                                color = if (selected) accent else accent.copy(alpha = 0.25f),
+                                                shape = badgeShape
+                                            )
+                                            .clickableWithContextAction(
+                                                onClick = { onAction(WorkspaceAction.SelectSection(sec.id)) },
+                                                onContextMenu = { menuOpen = true }
+                                            )
+                                    ) {
+                                        Text(
+                                            text = titleMonogram(sec.title, fallback = "S"),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = if (selected) sec.accent.contentColor()
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (sec.isPinned) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = 1.dp, y = (-1).dp)
+                                                .size(14.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                                .padding(1.dp)
+                                                .clip(CircleShape)
+                                                .background(accent)
+                                        ) {
+                                            Icon(
+                                                imageVector = AllNotesIcons.PinFilled,
+                                                contentDescription = "Pinned section",
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(8.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
+                            SectionContextMenu(
+                                section = sec,
+                                sectionsInNotebook = sections,
+                                expanded = menuOpen,
+                                onDismiss = { menuOpen = false },
+                                onAction = onAction
+                            )
+                        }
+                    }
+
+                    StudioTooltip("Manage & Reorder Sections", position = TooltipAnchorPosition.End) {
+                        IconButton(
+                            onClick = { onAction(WorkspaceAction.OpenDialog(ActiveDialog.MANAGE_SECTIONS)) },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                AllNotesIcons.Add,
+                                contentDescription = "Manage or add sections",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(17.dp)
+                            )
                         }
                     }
                 }

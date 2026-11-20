@@ -331,7 +331,8 @@ class SqlDelightNoteStoreTest {
                 title = orphanSection.title,
                 accent = orphanSection.accent.name,
                 sortOrder = orphanSection.sortOrder.toLong(),
-                updatedAtEpochMs = orphanSection.updatedAtEpochMs
+                updatedAtEpochMs = orphanSection.updatedAtEpochMs,
+                isPinned = 0L
             )
         }
 
@@ -436,7 +437,8 @@ class SqlDelightNoteStoreTest {
                     title = orphanSection.title,
                     accent = orphanSection.accent.name,
                     sortOrder = 0L,
-                    updatedAtEpochMs = 1000L
+                    updatedAtEpochMs = 1000L,
+                    isPinned = 0L
                 )
             }
             assertNull(db2.allNotesQueries.selectSectionById("sec-conn2-orphan").executeAsOneOrNull())

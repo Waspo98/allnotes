@@ -70,8 +70,14 @@ data class NoteSection(
     val title: String,
     val accent: SectionAccentKey = SectionAccentKey.INDIGO,
     val sortOrder: Int = 0,
-    val updatedAtEpochMs: Long = 0L
+    val updatedAtEpochMs: Long = 0L,
+    val isPinned: Boolean = false
 )
+
+internal val NoteSectionDisplayComparator: Comparator<NoteSection> =
+    compareByDescending<NoteSection> { it.isPinned }
+        .thenBy { it.sortOrder }
+        .thenBy { it.title.lowercase() }
 
 @Serializable
 data class ChecklistItem(

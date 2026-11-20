@@ -128,4 +128,41 @@ class SqlDelightMigrationTest {
         assertEquals(1, reloaded.tombstones.size)
         assertEquals("old-page-99", reloaded.tombstones.single().id)
     }
+
+    @Test
+    fun migratingFromSchemaV3ToV4PreservesSectionsAndEnablesSectionPinning() {
+        val properties = Properties().apply { put("foreign_keys", "on") }
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY, properties)
+
+        driver.execute(null, "PRAGMA foreign_keys = ON;", 0)
+        driver.execute(null, "CREATE TABLE workspace_meta (id INTEGER NOT NULL PRIMARY KEY DEFAULT 1, revision INTEGER NOT NULL DEFAULT 1, updated_at_epoch_ms INTEGER NOT NULL DEFAULT 0);", 0)
+        driver.execute(null, "CREATE TABLE notebook (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, subtitle TEXT NOT NULL DEFAULT '', accent TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, updated_at_epoch_ms INTEGER NOT NULL DEFAULT 0);", 0)
+        driver.execute(null, "CREATE TABLE note_section (id TEXT PRIMARY KEY NOT NULL, notebook_id TEXT NOT NULL, title TEXT NOT NULL, accent TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, updated_at_epoch_ms INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (notebook_id) REFERENCES notebook(id) ON DELETE CASCADE);", 0)
+        driver.execute(null, "CREATE TABLE note_page (id TEXT PRIMARY KEY NOT NULL, section_id TEXT NOT NULL, parent_page_id TEXT, title TEXT NOT NULL, blocks_json TEXT NOT NULL, is_pinned INTEGER NOT NULL DEFAULT 0, updated_at_epoch_ms INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (section_id) REFERENCES note_section(id) ON DELETE CASCADE, FOREIGN KEY (parent_page_id) REFERENCES note_page(id) ON DELETE SET NULL);", 0)
+        driver.execute(null, "CREATE TABLE deleted_entity (id TEXT NOT NULL, kind TEXT NOT NULL, deleted_at_epoch_ms INTEGER NOT NULL, PRIMARY KEY (id, kind));", 0)
+        driver.execute(null, "CREATE TABLE workspace_preferences (id INTEGER PRIMARY KEY NOT NULL DEFAULT 1, prefs_json TEXT NOT NULL);", 0)
+
+        driver.execute(null, "INSERT INTO workspace_meta(id, revision) VALUES (1, 5);", 0)
+        driver.execute(null, "INSERT INTO notebook(id, title, subtitle, accent, sort_order, updated_at_epoch_ms) VALUES ('nb-1', 'Discipleships', '', 'TEAL', 0, 1000);", 0)
+        driver.execute(null, "INSERT INTO note_section(id, notebook_id, title, accent, sort_order, updated_at_epoch_ms) VALUES ('sec-a', 'nb-1', 'Alpha', 'INDIGO', 0, 1000);", 0)
+        driver.execute(null, "INSERT INTO note_section(id, notebook_id, title, accent, sort_order, updated_at_epoch_ms) VALUES ('sec-b', 'nb-1', 'Kyle', 'EMERALD', 1, 1000);", 0)
+        driver.execute(null, "INSERT INTO note_page(id, section_id, parent_page_id, title, blocks_json, is_pinned, updated_at_epoch_ms) VALUES ('p-1', 'sec-b', NULL, 'hi page 2', '[]', 0, 1000);", 0)
+
+        AllNotesDatabase.Schema.migrate(driver, oldVersion = 3, newVersion = AllNotesDatabase.Schema.version)
+
+        val store = SqlDelightNoteStore(AllNotesDatabase(driver))
+        val loaded = store.loadSnapshot()!!
+        assertEquals(2, loaded.sections.size)
+        assertTrue(loaded.sections.all { !it.isPinned })
+
+        val pinnedSections = loaded.sections.map {
+            if (it.id == "sec-b") it.copy(isPinned = true, updatedAtEpochMs = 2000L) else it
+        }
+        store.saveSnapshot(loaded.copy(sections = pinnedSections, revision = 6L))
+
+        val reloaded = store.loadSnapshot()!!
+        assertEquals(listOf("sec-b", "sec-a"), reloaded.sections.map { it.id })
+        assertTrue(reloaded.sections.first().isPinned)
+        assertEquals("hi page 2", reloaded.pages.single().title)
+    }
 }
