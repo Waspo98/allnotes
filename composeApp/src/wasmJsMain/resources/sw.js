@@ -1,5 +1,15 @@
-const CACHE_NAME = 'allnotes-pwa-v4';
-const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
+const CACHE_NAME = 'allnotes-pwa-v5';
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.json',
+  './icon.svg',
+  './icon-maskable.svg',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-512.png',
+  './apple-touch-icon.png'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

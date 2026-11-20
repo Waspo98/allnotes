@@ -49,6 +49,7 @@ compose.desktop {
                 menuGroup = "Overbay.app"
                 shortcut = true
                 upgradeUuid = "8B27D174-5C9A-4D2B-A2E1-9E45A092C811"
+                iconFile.set(project.file("src/main/resources/allnotes.ico"))
             }
         }
     }
