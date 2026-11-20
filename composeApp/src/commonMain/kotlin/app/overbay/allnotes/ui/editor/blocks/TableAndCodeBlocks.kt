@@ -53,13 +53,13 @@ internal fun ResponsiveTableBlockContent(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val searchVisual = rememberSearchHighlightTransformation(searchQuery)
-    val useMobileStackedCards = isCompactMobile && block.headers.size >= 4
+    val useMobileStackedCards = isCompactMobile && block.headers.size >= 3
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, colorScheme.outlineVariant)
+        color = colorScheme.surfaceContainerLowest,
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.65f))
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             if (useMobileStackedCards) {
@@ -141,9 +141,9 @@ private fun MobileStackedTableView(
                     if (block.headers.size > 1) {
                         IconButton(
                             onClick = { onAction(WorkspaceAction.DeleteTableColumn(block.id, colIndex)) },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
-                            Icon(AllNotesIcons.Close, contentDescription = "Delete column", modifier = Modifier.size(14.dp))
+                            Icon(AllNotesIcons.Close, contentDescription = "Delete column", modifier = Modifier.size(15.dp))
                         }
                     }
                 }
@@ -174,9 +174,9 @@ private fun MobileStackedTableView(
                             )
                             IconButton(
                                 onClick = { onAction(WorkspaceAction.DeleteTableRow(block.id, rIdx)) },
-                                modifier = Modifier.size(30.dp)
+                                modifier = Modifier.size(38.dp)
                             ) {
-                                Icon(AllNotesIcons.Close, contentDescription = "Delete row", modifier = Modifier.size(14.dp))
+                                Icon(AllNotesIcons.Close, contentDescription = "Delete row", modifier = Modifier.size(15.dp))
                             }
                         }
                     }
@@ -284,23 +284,27 @@ private fun StandardGridTableView(
                 if (isActive && block.headers.size > 1) {
                     IconButton(
                         onClick = { onAction(WorkspaceAction.DeleteTableColumn(block.id, colIndex)) },
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(38.dp)
                     ) {
-                        Icon(AllNotesIcons.Close, contentDescription = "Delete column", tint = colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                        Icon(AllNotesIcons.Close, contentDescription = "Delete column", tint = colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
                     }
                 }
             }
         }
         if (isActive && block.rows.size > 1) {
-            Spacer(modifier = Modifier.width(28.dp))
+            Spacer(modifier = Modifier.width(38.dp))
         }
     }
 
-    HorizontalDivider(color = colorScheme.outlineVariant)
+    HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.7f))
 
     block.rows.forEachIndexed { rIdx, row ->
+        val rowBg = if (rIdx % 2 == 1) colorScheme.surfaceContainerLow.copy(alpha = 0.55f) else colorScheme.surfaceContainerLowest
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(rowBg)
+                .padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             block.headers.indices.forEach { cIdx ->
@@ -337,9 +341,9 @@ private fun StandardGridTableView(
             if (isActive && block.rows.size > 1) {
                 IconButton(
                     onClick = { onAction(WorkspaceAction.DeleteTableRow(block.id, rIdx)) },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(38.dp)
                 ) {
-                    Icon(AllNotesIcons.Close, contentDescription = "Delete row", tint = colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                    Icon(AllNotesIcons.Close, contentDescription = "Delete row", tint = colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
                 }
             }
         }

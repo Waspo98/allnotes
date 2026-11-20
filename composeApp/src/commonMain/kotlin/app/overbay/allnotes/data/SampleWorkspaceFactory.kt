@@ -6,6 +6,8 @@ import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.NoteSection
 import app.overbay.allnotes.model.Notebook
+import app.overbay.allnotes.model.RichSpanKind
+import app.overbay.allnotes.model.RichTextSpan
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.WorkspaceSnapshot
 
@@ -13,17 +15,17 @@ object SampleWorkspaceFactory {
     fun createStarterSnapshot(): WorkspaceSnapshot {
         val notebooks = listOf(
             Notebook(
-                id = "nb-overbay",
-                title = "Overbay Studio",
-                subtitle = "Architecture, apps & home infrastructure",
+                id = "nb-studio",
+                title = "Getting Started",
+                subtitle = "Welcome guide, tips & quick reference",
                 accent = SectionAccentKey.INDIGO,
                 sortOrder = 0,
                 updatedAtEpochMs = 1762420000000L
             ),
             Notebook(
                 id = "nb-personal",
-                title = "Personal & Home",
-                subtitle = "Projects, travel & daily reference",
+                title = "Personal Studio",
+                subtitle = "Weekly focus, ideas & travel notes",
                 accent = SectionAccentKey.EMERALD,
                 sortOrder = 1,
                 updatedAtEpochMs = 1762410000000L
@@ -32,139 +34,143 @@ object SampleWorkspaceFactory {
 
         val sections = listOf(
             NoteSection(
-                id = "sec-allnotes",
-                notebookId = "nb-overbay",
-                title = "AllNotes Blueprint",
+                id = "sec-welcome",
+                notebookId = "nb-studio",
+                title = "Welcome",
                 accent = SectionAccentKey.INDIGO,
                 sortOrder = 0,
                 updatedAtEpochMs = 1762420000000L
             ),
             NoteSection(
-                id = "sec-server",
-                notebookId = "nb-overbay",
-                title = "HAL 9000 Runbooks",
+                id = "sec-ideas",
+                notebookId = "nb-studio",
+                title = "Ideas & Plans",
                 accent = SectionAccentKey.TEAL,
                 sortOrder = 1,
                 updatedAtEpochMs = 1762415000000L
             ),
             NoteSection(
-                id = "sec-home",
+                id = "sec-focus",
                 notebookId = "nb-personal",
-                title = "Home Projects",
+                title = "Daily Focus",
                 accent = SectionAccentKey.EMERALD,
                 sortOrder = 0,
                 updatedAtEpochMs = 1762410000000L
             )
         )
 
+        val introText = "Organize your thinking into Notebooks, color-coded Sections, and calm, readable Pages—everything saved locally first and always ready offline."
         val pages = listOf(
             NotePage(
                 id = "page-welcome",
-                sectionId = "sec-allnotes",
-                title = "AllNotes: OneNote Hierarchy + Word Document Flow",
+                sectionId = "sec-welcome",
+                title = "Welcome to AllNotes",
                 isPinned = true,
                 updatedAtEpochMs = 1762420000000L,
                 blocks = listOf(
-                    DocumentBlock.Callout(
+                    DocumentBlock.Paragraph(
                         id = "blk-1",
-                        title = "Mobile-First, Word-Grade Document Studio",
-                        text = "Every page flows vertically and fits your screen cleanly on mobile without 2D horizontal panning, while scaling to a full Word-style document workspace with a hierarchy sidebar on tablets, Windows (x64 & ARM64), and Web.",
-                        tone = CalloutTone.IMPORTANT
+                        text = introText,
+                        spans = listOf(
+                            RichTextSpan(28, 37, RichSpanKind.BOLD),
+                            RichTextSpan(51, 59, RichSpanKind.BOLD),
+                            RichTextSpan(80, 85, RichSpanKind.BOLD)
+                        )
+                    ),
+                    DocumentBlock.Callout(
+                        id = "blk-2",
+                        title = "Type '/' anywhere to insert blocks",
+                        text = "Start a blank line with '/', '# ' for headings, or tap + to add checklists, tables, callouts, images, and code snippets without breaking your flow.",
+                        tone = CalloutTone.TIP
                     ),
                     DocumentBlock.Heading(
-                        id = "blk-2",
-                        text = "Core Platform Targets",
+                        id = "blk-3",
+                        text = "Try These First",
                         level = 2
                     ),
                     DocumentBlock.Checklist(
-                        id = "blk-3",
-                        title = "Multiplatform Launch Checklist",
+                        id = "blk-4",
+                        title = "Quick Tour",
                         items = listOf(
-                            ChecklistItem("chk-1", "Android M3 Expressive Phone & Foldable App", isChecked = true),
-                            ChecklistItem("chk-2", "Windows Native Executable (x86_64 & ARM64)", isChecked = true),
-                            ChecklistItem("chk-3", "Self-Hosted Web PWA + Sync Server (notes.overbay.app)", isChecked = true),
-                            ChecklistItem("chk-4", "Rich Block Formatting, Tables & Keyboard Shortcuts", isChecked = false)
+                            ChecklistItem("chk-1", "Tap a section tab to see the page wash shift softly", isChecked = true),
+                            ChecklistItem("chk-2", "Check off an item in this list", isChecked = false),
+                            ChecklistItem("chk-3", "Swipe a page in the sidebar to pin or archive it", isChecked = false),
+                            ChecklistItem("chk-4", "Tap New Page for instant distraction-free capture", isChecked = false)
                         )
                     ),
                     DocumentBlock.Heading(
-                        id = "blk-4",
-                        text = "Target Matrix Overview",
+                        id = "blk-5",
+                        text = "Handy Shortcuts",
                         level = 2
                     ),
                     DocumentBlock.Table(
-                        id = "blk-5",
-                        headers = listOf("Platform", "Runtime", "Storage Engine"),
-                        rows = listOf(
-                            listOf("Android", "Jetpack Compose / ART", "Local SQLite + Sync"),
-                            listOf("Windows (x64 & ARM64)", "Compose Desktop / Skiko", "Local AppData Store + Sync"),
-                            listOf("Web (notes.overbay.app)", "Kotlin/Wasm PWA", "Browser Local Store + Sync")
-                        )
-                    ),
-                    DocumentBlock.Paragraph(
                         id = "blk-6",
-                        text = "Use the toolbar to insert new headings, paragraphs, interactive checklists, responsive tables, callouts, or code blocks.",
-                        isItalic = true
+                        headers = listOf("Action", "Shortcut"),
+                        rows = listOf(
+                            listOf("New Page", "Ctrl + N"),
+                            listOf("Quick Jump across notebooks", "Ctrl + P"),
+                            listOf("Bold / Italic / Underline", "Ctrl + B / I / U"),
+                            listOf("Insert Checklist", "Ctrl + Shift + L")
+                        )
                     )
                 )
             ),
             NotePage(
-                id = "page-design",
-                sectionId = "sec-allnotes",
-                title = "Material 3 Expressive Motion & Tokens",
+                id = "page-formatting",
+                sectionId = "sec-welcome",
+                title = "Formatting & Code Notes",
                 isPinned = false,
                 updatedAtEpochMs = 1762418000000L,
                 blocks = listOf(
-                    DocumentBlock.Heading(
-                        id = "blk-d1",
-                        text = "Kinetic Spring Transitions",
-                        level = 2
-                    ),
                     DocumentBlock.Paragraph(
-                        id = "blk-d2",
-                        text = "AllNotes uses low-bouncy physics springs and semantic Material 3 surface containers so hierarchy navigation and document editing feel tactile and immediate."
+                        id = "blk-f1",
+                        text = "Select any words to apply bold, italic, highlight, links, or inline code. Pages also export cleanly to GitHub-Flavored Markdown."
                     ),
                     DocumentBlock.CodeSnippet(
-                        id = "blk-d3",
+                        id = "blk-f2",
                         language = "kotlin",
-                        code = "spring(\n    dampingRatio = Spring.DampingRatioLowBouncy,\n    stiffness = Spring.StiffnessLow\n)"
+                        code = "// Clean monospace snippets with horizontal scroll\nfun greet(name: String): String {\n    return \"Welcome back, \$name\"\n}"
                     )
                 )
             ),
             NotePage(
-                id = "page-hal",
-                sectionId = "sec-server",
-                title = "Cloudflare Tunnel & Authentik Notes",
+                id = "page-trip",
+                sectionId = "sec-ideas",
+                title = "Weekend Escape Plan",
                 isPinned = true,
                 updatedAtEpochMs = 1762415000000L,
                 blocks = listOf(
-                    DocumentBlock.Paragraph(
-                        id = "blk-h1",
-                        text = "Self-hosted sync runs on The Overbay HAL 9000 (192.168.86.200) behind Cloudflare Tunnel and Authentik OIDC."
+                    DocumentBlock.Callout(
+                        id = "blk-t1",
+                        title = "Departure Reminder",
+                        text = "Leave before 7:30 AM Saturday to beat highway traffic and catch morning coffee in town.",
+                        tone = CalloutTone.IMPORTANT
                     ),
                     DocumentBlock.BulletList(
-                        id = "blk-h2",
+                        id = "blk-t2",
                         isNumbered = false,
                         items = listOf(
-                            "External Docker network: web_proxy",
-                            "Identity branding: Overbay.app",
-                            "Daily backups via C:\\Scripts\\DailyBackup.ps1"
+                            "Book cabin check-in code & offline map",
+                            "Pack light rain shell, camera, and charger",
+                            "Reserve dinner table for 6:30 PM"
                         )
                     )
                 )
             ),
             NotePage(
-                id = "page-home-1",
-                sectionId = "sec-home",
-                title = "Weekend Project Checklist",
+                id = "page-focus-1",
+                sectionId = "sec-focus",
+                title = "This Week's Priorities",
                 isPinned = false,
                 updatedAtEpochMs = 1762410000000L,
                 blocks = listOf(
                     DocumentBlock.Checklist(
                         id = "blk-p1",
-                        title = "Priority Tasks",
+                        title = "Top 3 Outcomes",
                         items = listOf(
-                            ChecklistItem("chk-p1", "Organize server rack cabling", isChecked = true),
-                            ChecklistItem("chk-p2", "Test AllNotes on Windows ARM64 & Android", isChecked = false)
+                            ChecklistItem("chk-p1", "Finish project milestone review", isChecked = true),
+                            ChecklistItem("chk-p2", "Clear inbox and organize reference notes", isChecked = false),
+                            ChecklistItem("chk-p3", "Plan next month's reading list", isChecked = false)
                         )
                     )
                 )

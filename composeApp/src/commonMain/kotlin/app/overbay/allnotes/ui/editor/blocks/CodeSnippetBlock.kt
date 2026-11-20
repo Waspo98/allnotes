@@ -1,6 +1,8 @@
 package app.overbay.allnotes.ui.editor.blocks
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,15 +13,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,16 +33,37 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.theme.LocalAllNotesMonoFont
 import app.overbay.allnotes.ui.workspace.EditorFocusRequest
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import kotlinx.coroutines.delay
+
+private val CodeKeywords = setOf(
+    "fun", "val", "var", "class", "object", "interface", "return", "if", "else", "when",
+    "for", "while", "import", "package", "private", "internal", "public", "suspend", "data",
+    "def", "async", "await", "const", "let", "function", "export", "from", "true", "false",
+    "null", "SELECT", "FROM", "WHERE", "INSERT", "UPDATE", "CREATE", "TABLE", "fn", "pub"
+)
+
+private val CodeTokenRegex = Regex(
+    "(//[^\\n]*|#[^\\n]*|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'|\\b[A-Za-z_][A-Za-z0-9_]*\\b)"
+)
 
 @Composable
 internal fun CodeSnippetBlockContent(
@@ -51,6 +74,8 @@ internal fun CodeSnippetBlockContent(
     onAction: (WorkspaceAction) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val monoFont = LocalAllNotesMonoFont.current
+    val haptics = LocalHapticFeedback.current
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
     val focusRequester = remember(block.id) { FocusRequester() }
@@ -73,7 +98,14 @@ internal fun CodeSnippetBlockContent(
         }
     }
 
-    val searchVisual = rememberSearchHighlightTransformation(searchQuery)
+    val syntaxVisual = remember(searchQuery, colorScheme) {
+        VisualTransformation { raw ->
+            TransformedText(
+                buildSyntaxHighlightedCode(raw.text, colorScheme, searchQuery),
+                OffsetMapping.Identity
+            )
+        }
+    }
 
     val languages = remember {
         listOf(
@@ -81,11 +113,19 @@ internal fun CodeSnippetBlockContent(
             "bash", "powershell", "sql", "json", "yaml", "dockerfile", "markdown", "text"
         )
     }
+
+    val copyBg by animateColorAsState(
+        targetValue = if (copiedRecently) colorScheme.tertiaryContainer else colorScheme.surfaceContainer,
+        animationSpec = AllNotesMotion.effectsFast(),
+        label = "CodeCopyBg"
+    )
+    val copyFg = if (copiedRecently) colorScheme.onTertiaryContainer else colorScheme.onSurfaceVariant
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = colorScheme.surfaceContainerHighest,
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.4f))
+        color = colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -97,17 +137,17 @@ internal fun CodeSnippetBlockContent(
                     Surface(
                         onClick = { if (isActive) languageMenuOpen = true },
                         color = colorScheme.surfaceContainer,
-                        shape = RoundedCornerShape(8.dp)
+                        shape = MaterialTheme.shapes.extraSmall
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
                         ) {
                             Icon(
                                 AllNotesIcons.Code,
                                 contentDescription = null,
                                 tint = colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
@@ -117,12 +157,12 @@ internal fun CodeSnippetBlockContent(
                                 color = colorScheme.primary
                             )
                             if (isActive) {
-                                Spacer(modifier = Modifier.width(2.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Icon(
                                     AllNotesIcons.ChevronDown,
                                     contentDescription = "Select code language",
                                     tint = colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                             }
                         }
@@ -150,26 +190,42 @@ internal fun CodeSnippetBlockContent(
                     }
                 }
 
-                TextButton(
+                Surface(
                     onClick = {
                         @Suppress("DEPRECATION")
                         clipboard.setText(AnnotatedString(codeHolder.fieldValue.text))
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         copiedRecently = true
-                    }
+                    },
+                    color = copyBg,
+                    contentColor = copyFg,
+                    shape = MaterialTheme.shapes.extraSmall
                 ) {
-                    Icon(
-                        imageVector = if (copiedRecently) AllNotesIcons.Check else AllNotesIcons.Copy,
-                        contentDescription = "Copy code",
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (copiedRecently) "Copied" else "Copy", style = MaterialTheme.typography.labelSmall)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (copiedRecently) AllNotesIcons.Check else AllNotesIcons.Copy,
+                            contentDescription = "Copy code",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = if (copiedRecently) "Copied" else "Copy",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(modifier = Modifier.fillMaxWidth()) {
-                val monoFont = LocalAllNotesMonoFont.current
-                if (codeHolder.fieldValue.text.isEmpty()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+            ) {
+                if (codeHolder.fieldValue.text.isEmpty() && isActive) {
                     Text(
                         text = "// Write or paste code…",
                         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = monoFont),
@@ -187,12 +243,45 @@ internal fun CodeSnippetBlockContent(
                         fontFamily = monoFont,
                         color = colorScheme.onSurface
                     ),
-                    visualTransformation = searchVisual,
+                    visualTransformation = syntaxVisual,
                     cursorBrush = SolidColor(colorScheme.primary),
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
                 )
+            }
+        }
+    }
+}
+
+private fun buildSyntaxHighlightedCode(
+    text: String,
+    colorScheme: ColorScheme,
+    searchQuery: String
+): AnnotatedString {
+    if (text.isEmpty()) return AnnotatedString("")
+    if (searchQuery.isNotBlank()) {
+        return RichSpanEngine.buildSearchHighlightedString(text, colorScheme, searchQuery)
+    }
+    return buildAnnotatedString {
+        append(text)
+        val commentStyle = SpanStyle(
+            color = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+            fontStyle = FontStyle.Italic
+        )
+        val stringStyle = SpanStyle(color = colorScheme.tertiary)
+        val keywordStyle = SpanStyle(color = colorScheme.primary, fontWeight = FontWeight.SemiBold)
+
+        for (match in CodeTokenRegex.findAll(text)) {
+            val token = match.value
+            val style = when {
+                token.startsWith("//") || token.startsWith("#") -> commentStyle
+                token.startsWith("\"") || token.startsWith("'") -> stringStyle
+                token in CodeKeywords -> keywordStyle
+                else -> null
+            }
+            if (style != null) {
+                addStyle(style, match.range.first, match.range.last + 1)
             }
         }
     }

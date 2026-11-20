@@ -1,5 +1,6 @@
 package app.overbay.allnotes.ui.editor.blocks
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -170,21 +170,24 @@ internal fun CalloutBlockContent(
         }
     }
 
-    val (container, content, badge) = when (block.tone) {
-        CalloutTone.INFO -> Triple(
+    val (container, content, badge, toneIcon) = when (block.tone) {
+        CalloutTone.INFO -> CalloutVisuals(
             colorScheme.secondaryContainer,
             colorScheme.onSecondaryContainer,
-            colorScheme.secondary
+            colorScheme.secondary,
+            AllNotesIcons.Callout
         )
-        CalloutTone.TIP -> Triple(
+        CalloutTone.TIP -> CalloutVisuals(
             colorScheme.tertiaryContainer,
             colorScheme.onTertiaryContainer,
-            colorScheme.tertiary
+            colorScheme.tertiary,
+            AllNotesIcons.Lightbulb
         )
-        CalloutTone.IMPORTANT -> Triple(
+        CalloutTone.IMPORTANT -> CalloutVisuals(
             colorScheme.primaryContainer,
             colorScheme.onPrimaryContainer,
-            colorScheme.primary
+            colorScheme.primary,
+            AllNotesIcons.Spark
         )
     }
 
@@ -192,21 +195,22 @@ internal fun CalloutBlockContent(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = container.copy(alpha = 0.65f),
+        color = container.copy(alpha = 0.56f),
         contentColor = content,
-        shape = RoundedCornerShape(12.dp)
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, badge.copy(alpha = 0.24f))
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.Top
         ) {
             Icon(
-                imageVector = AllNotesIcons.Callout,
-                contentDescription = null,
+                imageVector = toneIcon,
+                contentDescription = block.tone.label,
                 tint = badge,
-                modifier = Modifier.padding(top = 2.dp).size(18.dp)
+                modifier = Modifier.padding(top = 2.dp).size(19.dp)
             )
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     if (titleHolder.fieldValue.text.isEmpty()) {
@@ -277,3 +281,10 @@ internal fun CalloutBlockContent(
         }
     }
 }
+
+private data class CalloutVisuals(
+    val container: androidx.compose.ui.graphics.Color,
+    val content: androidx.compose.ui.graphics.Color,
+    val badge: androidx.compose.ui.graphics.Color,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)

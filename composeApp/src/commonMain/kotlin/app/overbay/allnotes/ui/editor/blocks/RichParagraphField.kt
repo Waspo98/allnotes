@@ -111,11 +111,11 @@ internal fun RichParagraphField(
                 .fillMaxWidth()
                 .padding(horizontal = 2.dp, vertical = 4.dp)
         ) {
-            if (fieldValue.text.isEmpty()) {
+            if (fieldValue.text.isEmpty() && (isActive || isFocused)) {
                 Text(
-                    text = if (isActive) "Type text, '/' for commands, or '# ' for heading…" else "Type paragraph text…",
+                    text = "Write, or type '/' for blocks…",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                 )
             }
 

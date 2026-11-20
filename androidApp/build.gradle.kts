@@ -131,6 +131,7 @@ tasks.register<CopyDebugApkTask>("copyReleaseApkToRoot") {
     inputFile.set(targetReleaseApk)
     betaBuild.set(isBetaApp)
     rootDirectory.set(layout.projectDirectory.dir(".."))
+    mustRunAfter("assembleRelease")
 }
 
 val targetBundle = layout.buildDirectory.file("outputs/bundle/release/androidApp-release.aab")

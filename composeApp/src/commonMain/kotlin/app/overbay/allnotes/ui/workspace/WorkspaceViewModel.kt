@@ -204,62 +204,52 @@ class WorkspaceViewModel(
     fun createNotebook(title: String, subtitle: String, accent: SectionAccentKey) {
         val created = repository.createNotebook(title, subtitle, accent)
         _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        selectNotebook(created.id)
-        scheduleAutoSyncIfEnabled()
+        selectNotebook(created.id); scheduleAutoSyncIfEnabled()
     }
 
     fun updateActiveNotebook(title: String, subtitle: String, accent: SectionAccentKey) {
         val nbId = _uiState.value.activeNotebook?.id ?: return
         repository.updateNotebook(nbId, title, subtitle, accent)
         _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        syncStateFromRepository()
-        scheduleAutoSyncIfEnabled()
+        syncStateFromRepository(); scheduleAutoSyncIfEnabled()
     }
 
     fun reorderActiveNotebook(delta: Int) {
         val nbId = _uiState.value.activeNotebook?.id ?: return
-        repository.reorderNotebook(nbId, delta)
-        syncStateFromRepository()
-        scheduleAutoSyncIfEnabled()
+        repository.reorderNotebook(nbId, delta); syncStateFromRepository(); scheduleAutoSyncIfEnabled()
     }
 
     fun deleteActiveNotebook() {
         val nbId = _uiState.value.activeNotebook?.id ?: return
         repository.deleteNotebook(nbId)
         _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        syncStateFromRepository()
-        scheduleAutoSyncIfEnabled()
+        syncStateFromRepository(); scheduleAutoSyncIfEnabled()
     }
 
     fun createSection(title: String, accent: SectionAccentKey) {
         val nbId = _uiState.value.activeNotebook?.id ?: return
         val created = repository.createSection(nbId, title, accent)
         _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        selectSection(created.id)
-        scheduleAutoSyncIfEnabled()
+        selectSection(created.id); scheduleAutoSyncIfEnabled()
     }
 
     fun updateActiveSection(title: String, accent: SectionAccentKey) {
         val secId = _uiState.value.activeSection?.id ?: return
         repository.updateSection(secId, title, accent)
         _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        syncStateFromRepository()
-        scheduleAutoSyncIfEnabled()
+        syncStateFromRepository(); scheduleAutoSyncIfEnabled()
     }
 
     fun reorderActiveSection(delta: Int) {
         val secId = _uiState.value.activeSection?.id ?: return
-        repository.reorderSection(secId, delta)
-        syncStateFromRepository()
-        scheduleAutoSyncIfEnabled()
+        repository.reorderSection(secId, delta); syncStateFromRepository(); scheduleAutoSyncIfEnabled()
     }
 
     fun deleteActiveSection() {
         val secId = _uiState.value.activeSection?.id ?: return
         repository.deleteSection(secId)
         _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-        syncStateFromRepository()
-        scheduleAutoSyncIfEnabled()
+        syncStateFromRepository(); scheduleAutoSyncIfEnabled()
     }
 
     fun createPageInstant(asSubpageOfActive: Boolean = false) {

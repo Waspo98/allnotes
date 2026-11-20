@@ -1,5 +1,7 @@
 package app.overbay.allnotes.ui.editor.blocks
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -25,11 +27,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -47,8 +47,10 @@ import app.overbay.allnotes.ui.media.ImageBitmapCache
 import app.overbay.allnotes.ui.media.formatAttachmentSize
 import app.overbay.allnotes.ui.media.rememberPlatformAttachmentExporter
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -69,12 +71,16 @@ internal fun AttachmentLightboxDialog(
         onError = { msg -> onAction(WorkspaceAction.ShowStatusBanner(msg)) }
     )
 
-    var scale by remember(attachment.id) { mutableFloatStateOf(1f) }
-    var offset by remember(attachment.id) { mutableStateOf(Offset.Zero) }
+    val coroutineScope = rememberCoroutineScope()
+    val scaleAnim = remember(attachment.id) { Animatable(1f) }
+    val offsetAnim = remember(attachment.id) { Animatable(Offset.Zero, Offset.VectorConverter) }
     val transformState = rememberTransformableState { _, zoomChange, panChange, _ ->
-        val nextScale = (scale * zoomChange).coerceIn(1f, 4f)
-        scale = nextScale
-        offset = if (nextScale > 1.02f) offset + panChange else Offset.Zero
+        val nextScale = (scaleAnim.value * zoomChange).coerceIn(1f, 4f)
+        val nextOffset = if (nextScale > 1.02f) offsetAnim.value + panChange else Offset.Zero
+        coroutineScope.launch {
+            scaleAnim.snapTo(nextScale)
+            offsetAnim.snapTo(nextOffset)
+        }
     }
 
     Dialog(
@@ -155,11 +161,13 @@ internal fun AttachmentLightboxDialog(
                         .pointerInput(attachment.id) {
                             detectTapGestures(
                                 onDoubleTap = {
-                                    if (scale > 1.2f) {
-                                        scale = 1f
-                                        offset = Offset.Zero
-                                    } else {
-                                        scale = 2.25f
+                                    coroutineScope.launch {
+                                        if (scaleAnim.value > 1.2f) {
+                                            launch { scaleAnim.animateTo(1f, AllNotesMotion.spatialFast()) }
+                                            launch { offsetAnim.animateTo(Offset.Zero, AllNotesMotion.spatialFast()) }
+                                        } else {
+                                            launch { scaleAnim.animateTo(2.25f, AllNotesMotion.spatialFast()) }
+                                        }
                                     }
                                 }
                             )
@@ -177,10 +185,10 @@ internal fun AttachmentLightboxDialog(
                                 .fillMaxSize()
                                 .padding(16.dp)
                                 .graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
-                                    translationX = offset.x
-                                    translationY = offset.y
+                                    scaleX = scaleAnim.value
+                                    scaleY = scaleAnim.value
+                                    translationX = offsetAnim.value.x
+                                    translationY = offsetAnim.value.y
                                 }
                         )
                     } else {

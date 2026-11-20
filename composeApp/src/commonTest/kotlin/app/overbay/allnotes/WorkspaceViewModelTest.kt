@@ -664,4 +664,34 @@ class WorkspaceViewModelTest {
         vm.dispatch(WorkspaceAction.DismissAttachmentPreview)
         assertNull(vm.uiState.value.previewAttachment)
     }
+
+    @Test
+    fun createPageInstantFocusesTitleAndDeleteBlockProvidesUndoFeedback() {
+        val (vm, _) = createTestFixture()
+        vm.dispatch(WorkspaceAction.SetMobileHierarchySheetOpen(true))
+        vm.dispatch(WorkspaceAction.CreatePageInstant(asSubpageOfActive = false))
+
+        val createdState = vm.uiState.value
+        assertNotNull(createdState.activePage)
+        assertEquals("", createdState.activePage!!.title)
+        assertFalse(createdState.isMobileHierarchySheetOpen)
+        assertTrue(createdState.titleFocusRequestToken > 0L)
+        assertNull(createdState.activeBlockId)
+
+        val tok = createdState.titleFocusRequestToken
+        vm.dispatch(WorkspaceAction.ConsumeTitleFocusRequest(tok))
+        assertEquals(0L, vm.uiState.value.titleFocusRequestToken)
+
+        vm.insertParagraphBlock()
+        val targetBlockId = vm.uiState.value.activePage!!.blocks.last().id
+        vm.dispatch(WorkspaceAction.DeleteBlock(targetBlockId))
+
+        val afterDelete = vm.uiState.value
+        assertEquals("Block removed", afterDelete.statusBannerMessage)
+        assertEquals("Undo", afterDelete.statusBannerActionLabel)
+        assertEquals(WorkspaceAction.Undo, afterDelete.statusBannerAction)
+
+        vm.dispatch(afterDelete.statusBannerAction!!)
+        assertTrue(vm.uiState.value.activePage!!.blocks.any { it.id == targetBlockId })
+    }
 }
