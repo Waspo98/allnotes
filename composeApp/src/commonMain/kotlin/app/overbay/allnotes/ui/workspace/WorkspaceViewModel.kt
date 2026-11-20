@@ -262,6 +262,35 @@ class WorkspaceViewModel(
         scheduleAutoSyncIfEnabled()
     }
 
+    fun createPageInstant(asSubpageOfActive: Boolean = false) {
+        val secId = _uiState.value.activeSection?.id ?: return
+        val parentId = if (asSubpageOfActive) {
+            val active = _uiState.value.activePage
+            active?.parentPageId ?: active?.id
+        } else null
+        val created = repository.createPage(secId, "", parentId)
+        val blankTitlePage = created.copy(title = "")
+        repository.updatePageTitle(created.id, "", debounced = false)
+        _uiState.update {
+            it.copy(
+                activeDialog = ActiveDialog.NONE,
+                isMobileHierarchySheetOpen = false,
+                isPageMenuOpen = false,
+                isMobileInsertMenuOpen = false,
+                isBlockInsertSheetOpen = false,
+                collapsedParentPageIds = if (parentId != null) it.collapsedParentPageIds - parentId else it.collapsedParentPageIds
+            )
+        }
+        selectPage(blankTitlePage.id)
+        _uiState.update {
+            it.copy(
+                activeBlockId = null,
+                titleFocusRequestToken = nextFocusToken()
+            )
+        }
+        scheduleAutoSyncIfEnabled()
+    }
+
     fun createPage(title: String, asSubpageOfActive: Boolean = false) {
         val secId = _uiState.value.activeSection?.id ?: return
         val parentId = if (asSubpageOfActive) {
@@ -498,10 +527,18 @@ class WorkspaceViewModel(
 
     fun deleteBlock(blockId: String) {
         val page = _uiState.value.activePage ?: return
+        if (page.blocks.none { it.id == blockId }) return
         undoRedo.recordBeforeMutation(page.id, page.blocks)
         repository.updatePageBlocks(page.id, page.blocks.filterNot { it.id == blockId })
         syncStateFromRepository()
-        if (_uiState.value.activeBlockId == blockId) _uiState.update { it.copy(activeBlockId = null) }
+        _uiState.update {
+            it.copy(
+                activeBlockId = if (it.activeBlockId == blockId) null else it.activeBlockId,
+                statusBannerMessage = "Block removed",
+                statusBannerActionLabel = "Undo",
+                statusBannerAction = WorkspaceAction.Undo
+            )
+        }
         scheduleAutoSyncIfEnabled()
     }
 
@@ -538,7 +575,14 @@ class WorkspaceViewModel(
             val subIdx = if (block is DocumentBlock.Checklist || block is DocumentBlock.BulletList) 0 else -1
             EditorFocusRequest(block.id, subItemIndex = subIdx, cursorOffset = Int.MAX_VALUE, requestToken = nextFocusToken())
         } else null
-        _uiState.update { it.copy(activeBlockId = block.id, focusRequest = req ?: it.focusRequest, isMobileInsertMenuOpen = false) }
+        _uiState.update {
+            it.copy(
+                activeBlockId = block.id,
+                focusRequest = req ?: it.focusRequest,
+                isMobileInsertMenuOpen = false,
+                isBlockInsertSheetOpen = false
+            )
+        }
         scheduleAutoSyncIfEnabled()
     }
 

@@ -15,14 +15,24 @@ internal object WorkspaceActionDispatcher {
             is WorkspaceAction.SetMobileHierarchySheetOpen -> vm.setMobileHierarchySheetOpen(action.open)
             is WorkspaceAction.SetPageMenuOpen -> vm.updateUiState { it.copy(isPageMenuOpen = action.open) }
             is WorkspaceAction.SetMobileInsertMenuOpen -> vm.updateUiState { it.copy(isMobileInsertMenuOpen = action.open) }
+            is WorkspaceAction.SetBlockInsertSheetOpen -> vm.updateUiState {
+                it.copy(isBlockInsertSheetOpen = action.open, isMobileInsertMenuOpen = false)
+            }
+            is WorkspaceAction.ConsumeTitleFocusRequest -> vm.updateUiState {
+                if (it.titleFocusRequestToken == action.requestToken) it.copy(titleFocusRequestToken = 0L) else it
+            }
             is WorkspaceAction.OpenDialog -> vm.openDialog(action.dialog)
             WorkspaceAction.DismissDialog -> vm.dismissDialog()
             is WorkspaceAction.OpenAttachmentPreview -> vm.updateUiState {
-                it.copy(previewAttachment = action.attachment, isPageMenuOpen = false, isMobileInsertMenuOpen = false)
+                it.copy(previewAttachment = action.attachment, isPageMenuOpen = false, isMobileInsertMenuOpen = false, isBlockInsertSheetOpen = false)
             }
             WorkspaceAction.DismissAttachmentPreview -> vm.updateUiState { it.copy(previewAttachment = null) }
-            is WorkspaceAction.ShowStatusBanner -> vm.updateUiState { it.copy(statusBannerMessage = action.message) }
-            WorkspaceAction.DismissStatusBanner -> vm.updateUiState { it.copy(statusBannerMessage = null) }
+            is WorkspaceAction.ShowStatusBanner -> vm.updateUiState {
+                it.copy(statusBannerMessage = action.message, statusBannerActionLabel = null, statusBannerAction = null)
+            }
+            WorkspaceAction.DismissStatusBanner -> vm.updateUiState {
+                it.copy(statusBannerMessage = null, statusBannerActionLabel = null, statusBannerAction = null)
+            }
             WorkspaceAction.TriggerSync -> vm.triggerManualSync()
             is WorkspaceAction.ConfigureSyncServer -> vm.configureSyncServer(action.endpointUrl, action.useRemoteHttp)
             is WorkspaceAction.SaveSyncAndAuthSettings -> vm.saveSyncAndAuthSettings(
@@ -39,6 +49,7 @@ internal object WorkspaceActionDispatcher {
             is WorkspaceAction.ReorderActiveSection -> vm.reorderActiveSection(action.delta)
             WorkspaceAction.DeleteActiveSection -> vm.deleteActiveSection()
             is WorkspaceAction.CreatePage -> vm.createPage(action.title, action.asSubpageOfActive)
+            is WorkspaceAction.CreatePageInstant -> vm.createPageInstant(action.asSubpageOfActive)
             is WorkspaceAction.TogglePageSubpageIndent -> vm.togglePageSubpageIndent(action.pageId)
             is WorkspaceAction.ToggleSubpageCollapse -> vm.toggleSubpageCollapse(action.parentPageId)
             is WorkspaceAction.MoveActivePageToSection -> vm.moveActivePageToSection(action.targetSectionId)

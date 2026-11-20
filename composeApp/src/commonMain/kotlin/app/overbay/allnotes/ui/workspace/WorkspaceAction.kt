@@ -18,6 +18,8 @@ sealed interface WorkspaceAction {
     data class SetMobileHierarchySheetOpen(val open: Boolean) : WorkspaceAction
     data class SetPageMenuOpen(val open: Boolean) : WorkspaceAction
     data class SetMobileInsertMenuOpen(val open: Boolean) : WorkspaceAction
+    data class SetBlockInsertSheetOpen(val open: Boolean) : WorkspaceAction
+    data class ConsumeTitleFocusRequest(val requestToken: Long) : WorkspaceAction
     data class OpenDialog(val dialog: ActiveDialog) : WorkspaceAction
     data object DismissDialog : WorkspaceAction
     data class OpenAttachmentPreview(val attachment: DocumentBlock.Attachment) : WorkspaceAction
@@ -44,6 +46,7 @@ sealed interface WorkspaceAction {
     data class ReorderActiveSection(val delta: Int) : WorkspaceAction
     data object DeleteActiveSection : WorkspaceAction
     data class CreatePage(val title: String, val asSubpageOfActive: Boolean = false) : WorkspaceAction
+    data class CreatePageInstant(val asSubpageOfActive: Boolean = false) : WorkspaceAction
     data class TogglePageSubpageIndent(val pageId: String) : WorkspaceAction
     data class ToggleSubpageCollapse(val parentPageId: String) : WorkspaceAction
     data class MoveActivePageToSection(val targetSectionId: String) : WorkspaceAction

@@ -60,14 +60,18 @@ data class WorkspaceUiState(
     val isMobileHierarchySheetOpen: Boolean = false,
     val isPageMenuOpen: Boolean = false,
     val isMobileInsertMenuOpen: Boolean = false,
+    val isBlockInsertSheetOpen: Boolean = false,
     val activeDialog: ActiveDialog = ActiveDialog.NONE,
     val syncStatus: SyncStatus = SyncStatus.LOCAL_READY,
     val syncEndpointUrl: String = "https://notes.overbay.app/api/v1/sync",
     val useRemoteHttpSync: Boolean = false,
     val preferences: WorkspacePreferences = WorkspacePreferences(),
     val statusBannerMessage: String? = null,
+    val statusBannerActionLabel: String? = null,
+    val statusBannerAction: WorkspaceAction? = null,
     val revision: Long = 1L,
     val searchFocusRequestToken: Long = 0L,
+    val titleFocusRequestToken: Long = 0L,
     val previewAttachment: DocumentBlock.Attachment? = null,
     val pendingDeletePageId: String? = null
 ) {

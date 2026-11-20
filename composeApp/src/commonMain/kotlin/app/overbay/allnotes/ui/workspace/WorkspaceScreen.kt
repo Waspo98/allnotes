@@ -67,6 +67,10 @@ fun WorkspaceScreen(
             viewModel.dispatch(WorkspaceAction.DismissDialog)
             true
         }
+        state.isBlockInsertSheetOpen -> {
+            viewModel.dispatch(WorkspaceAction.SetBlockInsertSheetOpen(false))
+            true
+        }
         state.isMobileInsertMenuOpen -> {
             viewModel.dispatch(WorkspaceAction.SetMobileInsertMenuOpen(false))
             true
@@ -89,6 +93,7 @@ fun WorkspaceScreen(
     PlatformBackHandler(
         enabled = state.previewAttachment != null ||
             state.activeDialog != ActiveDialog.NONE ||
+            state.isBlockInsertSheetOpen ||
             state.isMobileInsertMenuOpen ||
             state.isMobileHierarchySheetOpen ||
             state.isPageMenuOpen ||
@@ -148,7 +153,7 @@ fun WorkspaceScreen(
                             true
                         }
                         Key.N -> {
-                            viewModel.dispatch(WorkspaceAction.OpenDialog(ActiveDialog.NEW_PAGE))
+                            viewModel.dispatch(WorkspaceAction.CreatePageInstant(asSubpageOfActive = event.isShiftPressed))
                             true
                         }
                         Key.L -> {
