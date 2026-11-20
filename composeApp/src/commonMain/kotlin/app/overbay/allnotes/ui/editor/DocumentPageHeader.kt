@@ -1,16 +1,11 @@
 package app.overbay.allnotes.ui.editor
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -21,9 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -47,6 +40,7 @@ internal fun DocumentPageHeader(
     wordCount: Int,
     readingTimeMinutes: Int,
     accentColor: Color,
+    isCompactMobile: Boolean,
     titleFocusToken: Long,
     onTitleFocusConsumed: (Long) -> Unit,
     onTitleChange: (String) -> Unit,
@@ -82,7 +76,7 @@ internal fun DocumentPageHeader(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 6.dp)
+            .padding(top = if (isCompactMobile) 2.dp else 6.dp)
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             if (titleHolder.fieldValue.text.isEmpty()) {
@@ -129,26 +123,15 @@ internal fun DocumentPageHeader(
         }
 
         if (metaText.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(accentColor.copy(alpha = 0.85f))
-                )
-                Text(
-                    text = metaText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
-                )
-            }
+            Spacer(modifier = Modifier.height(if (isCompactMobile) 4.dp else 8.dp))
+            Text(
+                text = metaText,
+                style = MaterialTheme.typography.labelSmall,
+                color = colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+            )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(if (isCompactMobile) 10.dp else 16.dp))
         HorizontalDivider(
             thickness = 1.dp,
             color = colorScheme.outlineVariant.copy(alpha = 0.45f)

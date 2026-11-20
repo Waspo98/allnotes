@@ -88,7 +88,7 @@ fun DocumentBlockView(
         block is DocumentBlock.Checklist ||
         block is DocumentBlock.BulletList
     val focusCushionColor = animateColorAsState(
-        targetValue = if (isActive && isPlainTextBlock) {
+        targetValue = if (!isCompactMobile && isActive && isPlainTextBlock) {
             MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.42f)
         } else {
             Color.Transparent
@@ -107,7 +107,7 @@ fun DocumentBlockView(
                     drawRoundRect(color = c, cornerRadius = CornerRadius(r, r))
                 }
             }
-            .then(if (isPlainTextBlock) Modifier.padding(horizontal = 6.dp, vertical = 2.dp) else Modifier)
+            .then(if (!isCompactMobile && isPlainTextBlock) Modifier.padding(horizontal = 6.dp, vertical = 2.dp) else Modifier)
             .onFocusChanged { focusState ->
                 if (focusState.hasFocus && !isActive) {
                     onAction(WorkspaceAction.SetActiveBlock(block.id))

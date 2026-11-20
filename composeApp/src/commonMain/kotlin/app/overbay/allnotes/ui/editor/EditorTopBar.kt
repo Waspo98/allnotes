@@ -36,7 +36,7 @@ internal fun EditorTopBar(
     val section = state.activeSection
     val page = state.activePage
     val haptics = LocalHapticFeedback.current
-    val buttonSize = if (isCompactMobile) 44.dp else 40.dp
+    val buttonSize = 40.dp
     val showTooltips = !isCompactMobile
 
     Row(
@@ -63,7 +63,7 @@ internal fun EditorTopBar(
                                 onAction(WorkspaceAction.ToggleSidebar)
                             }
                         },
-                        modifier = Modifier.size(if (isCompactMobile) 48.dp else 40.dp)
+                        modifier = Modifier.size(if (isCompactMobile) 44.dp else 40.dp)
                     ) {
                         Icon(
                             imageVector = if (isCompactMobile) AllNotesIcons.Menu else AllNotesIcons.Sidebar,
@@ -88,7 +88,7 @@ internal fun EditorTopBar(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isCompactMobile) 0.dp else 2.dp)
         ) {
             if (page != null) {
                 StudioTooltip(label = "Undo  ·  Ctrl+Z", enabled = showTooltips) {
@@ -106,39 +106,43 @@ internal fun EditorTopBar(
                         )
                     }
                 }
-                StudioTooltip(label = "Redo  ·  Ctrl+Y", enabled = showTooltips) {
-                    IconButton(
-                        onClick = { onAction(WorkspaceAction.Redo) },
-                        enabled = state.canRedo,
-                        modifier = Modifier.size(buttonSize)
-                    ) {
-                        Icon(
-                            AllNotesIcons.Redo,
-                            contentDescription = "Redo (Ctrl+Y)",
-                            tint = if (state.canRedo) MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                            modifier = Modifier.size(19.dp)
-                        )
+                if (!isCompactMobile || state.canRedo) {
+                    StudioTooltip(label = "Redo  ·  Ctrl+Y", enabled = showTooltips) {
+                        IconButton(
+                            onClick = { onAction(WorkspaceAction.Redo) },
+                            enabled = state.canRedo,
+                            modifier = Modifier.size(buttonSize)
+                        ) {
+                            Icon(
+                                AllNotesIcons.Redo,
+                                contentDescription = "Redo (Ctrl+Y)",
+                                tint = if (state.canRedo) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
                     }
                 }
-                StudioTooltip(
-                    label = if (page.isPinned) "Unpin page" else "Pin page to top",
-                    enabled = showTooltips
-                ) {
-                    IconButton(
-                        onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onAction(WorkspaceAction.ToggleActivePagePin)
-                        },
-                        modifier = Modifier.size(buttonSize)
+                if (!isCompactMobile) {
+                    StudioTooltip(
+                        label = if (page.isPinned) "Unpin page" else "Pin page to top",
+                        enabled = showTooltips
                     ) {
-                        Icon(
-                            if (page.isPinned) AllNotesIcons.PinFilled else AllNotesIcons.Pin,
-                            contentDescription = if (page.isPinned) "Unpin Page" else "Pin Page",
-                            tint = if (page.isPinned) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp)
-                        )
+                        IconButton(
+                            onClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onAction(WorkspaceAction.ToggleActivePagePin)
+                            },
+                            modifier = Modifier.size(buttonSize)
+                        ) {
+                            Icon(
+                                if (page.isPinned) AllNotesIcons.PinFilled else AllNotesIcons.Pin,
+                                contentDescription = if (page.isPinned) "Unpin Page" else "Pin Page",
+                                tint = if (page.isPinned) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -163,6 +167,25 @@ internal fun EditorTopBar(
                     onDismissRequest = { onAction(WorkspaceAction.SetPageMenuOpen(false)) }
                 ) {
                     if (page != null) {
+                        if (isCompactMobile) {
+                            DropdownMenuItem(
+                                text = { Text(if (page.isPinned) "Unpin Page" else "Pin Page to Top") },
+                                leadingIcon = {
+                                    Icon(
+                                        if (page.isPinned) AllNotesIcons.Pin else AllNotesIcons.PinFilled,
+                                        contentDescription = null,
+                                        tint = if (page.isPinned) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                onClick = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onAction(WorkspaceAction.SetPageMenuOpen(false))
+                                    onAction(WorkspaceAction.ToggleActivePagePin)
+                                }
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("New Subpage") },
                             leadingIcon = {

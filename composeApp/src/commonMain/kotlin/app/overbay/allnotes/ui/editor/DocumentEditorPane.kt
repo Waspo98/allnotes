@@ -247,6 +247,7 @@ fun DocumentEditorPane(
                                         wordCount = state.wordCount,
                                         readingTimeMinutes = state.readingTimeMinutes,
                                         accentColor = sectionAccent,
+                                        isCompactMobile = isCompactMobile,
                                         titleFocusToken = state.titleFocusRequestToken,
                                         onTitleFocusConsumed = { tok -> onAction(WorkspaceAction.ConsumeTitleFocusRequest(tok)) },
                                         onTitleChange = { onAction(WorkspaceAction.UpdateActivePageTitle(it)) },

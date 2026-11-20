@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,168 +55,73 @@ internal fun EditorBreadcrumbBar(
     var sectionMenuOpen by remember { mutableStateOf(false) }
     val colorScheme = MaterialTheme.colorScheme
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-    ) {
-        Box(modifier = Modifier.weight(1f, fill = false)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(MaterialTheme.shapes.extraSmall)
-                    .clickable { notebookMenuOpen = true }
-                    .padding(horizontal = 6.dp, vertical = 7.dp)
-            ) {
-                Box(
+    Layout(
+        modifier = modifier,
+        content = {
+            Box {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(section.accent.accentColor())
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = notebook.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Icon(
-                    imageVector = AllNotesIcons.ChevronDown,
-                    contentDescription = "Switch notebook",
-                    tint = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    modifier = Modifier.size(13.dp)
-                )
-            }
-
-            DropdownMenu(
-                expanded = notebookMenuOpen,
-                onDismissRequest = { notebookMenuOpen = false }
-            ) {
-                state.notebooks.forEach { item ->
-                    val current = item.id == notebook.id
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = item.title,
-                                fontWeight = if (current) FontWeight.Bold else FontWeight.Medium
-                            )
-                        },
-                        leadingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(item.accent.containerColor()),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = titleMonogram(item.title),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = item.accent.contentColor()
-                                )
-                            }
-                        },
-                        trailingIcon = if (current) {
-                            {
-                                Icon(
-                                    AllNotesIcons.Check,
-                                    contentDescription = null,
-                                    tint = colorScheme.primary,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            }
-                        } else null,
-                        onClick = {
-                            notebookMenuOpen = false
-                            onAction(WorkspaceAction.SelectNotebook(item.id))
-                        }
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .clickable { notebookMenuOpen = true }
+                        .padding(horizontal = 6.dp, vertical = 7.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(section.accent.accentColor())
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = notebook.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Icon(
+                        imageVector = AllNotesIcons.ChevronDown,
+                        contentDescription = "Switch notebook",
+                        tint = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                        modifier = Modifier.size(13.dp)
                     )
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                DropdownMenuItem(
-                    text = { Text("New Notebook…", color = colorScheme.primary, fontWeight = FontWeight.SemiBold) },
-                    leadingIcon = {
-                        Icon(AllNotesIcons.Add, contentDescription = null, tint = colorScheme.primary, modifier = Modifier.size(17.dp))
-                    },
-                    onClick = {
-                        notebookMenuOpen = false
-                        onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_NOTEBOOK))
-                    }
-                )
-            }
-        }
 
-        Text(
-            text = "›",
-            style = MaterialTheme.typography.titleSmall,
-            color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
-
-        Box(modifier = Modifier.weight(1f, fill = false)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(MaterialTheme.shapes.extraSmall)
-                    .clickable { sectionMenuOpen = true }
-                    .padding(horizontal = 6.dp, vertical = 7.dp)
-            ) {
-                Text(
-                    text = section.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Icon(
-                    imageVector = AllNotesIcons.ChevronDown,
-                    contentDescription = "Switch or organize section",
-                    tint = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    modifier = Modifier.size(13.dp)
-                )
-            }
-
-            DropdownMenu(
-                expanded = sectionMenuOpen,
-                onDismissRequest = { sectionMenuOpen = false }
-            ) {
-                state.sectionsForNotebook.forEach { sec ->
-                    val current = sec.id == section.id
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = sec.title,
-                                fontWeight = if (current) FontWeight.Bold else FontWeight.Medium
-                            )
-                        },
-                        leadingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(9.dp)
-                                    .clip(CircleShape)
-                                    .background(sec.accent.accentColor())
-                            )
-                        },
-                        trailingIcon = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (sec.isPinned) {
-                                    Icon(
-                                        AllNotesIcons.PinFilled,
-                                        contentDescription = "Pinned",
-                                        tint = colorScheme.primary,
-                                        modifier = Modifier.size(13.dp)
+                DropdownMenu(
+                    expanded = notebookMenuOpen,
+                    onDismissRequest = { notebookMenuOpen = false }
+                ) {
+                    state.notebooks.forEach { item ->
+                        val current = item.id == notebook.id
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = item.title,
+                                    fontWeight = if (current) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            leadingIcon = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(item.accent.containerColor()),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = titleMonogram(item.title),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = item.accent.contentColor()
                                     )
                                 }
-                                if (current) {
-                                    Spacer(modifier = Modifier.width(6.dp))
+                            },
+                            trailingIcon = if (current) {
+                                {
                                     Icon(
                                         AllNotesIcons.Check,
                                         contentDescription = null,
@@ -223,50 +129,180 @@ internal fun EditorBreadcrumbBar(
                                         modifier = Modifier.size(15.dp)
                                     )
                                 }
+                            } else null,
+                            onClick = {
+                                notebookMenuOpen = false
+                                onAction(WorkspaceAction.SelectNotebook(item.id))
                             }
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    DropdownMenuItem(
+                        text = { Text("New Notebook…", color = colorScheme.primary, fontWeight = FontWeight.SemiBold) },
+                        leadingIcon = {
+                            Icon(AllNotesIcons.Add, contentDescription = null, tint = colorScheme.primary, modifier = Modifier.size(17.dp))
                         },
                         onClick = {
-                            sectionMenuOpen = false
-                            onAction(WorkspaceAction.SelectSection(sec.id))
+                            notebookMenuOpen = false
+                            onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_NOTEBOOK))
                         }
                     )
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                DropdownMenuItem(
-                    text = { Text(if (section.isPinned) "Unpin \"${section.title}\"" else "Pin \"${section.title}\"") },
-                    leadingIcon = {
-                        Icon(
-                            if (section.isPinned) AllNotesIcons.Pin else AllNotesIcons.PinFilled,
-                            contentDescription = null,
-                            modifier = Modifier.size(17.dp)
-                        )
-                    },
-                    onClick = {
-                        sectionMenuOpen = false
-                        onAction(WorkspaceAction.TogglePinSection(section.id))
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Manage & Reorder Sections…") },
-                    leadingIcon = {
-                        Icon(AllNotesIcons.Menu, contentDescription = null, modifier = Modifier.size(17.dp))
-                    },
-                    onClick = {
-                        sectionMenuOpen = false
-                        onAction(WorkspaceAction.OpenDialog(ActiveDialog.MANAGE_SECTIONS))
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("New Section…", color = colorScheme.primary, fontWeight = FontWeight.SemiBold) },
-                    leadingIcon = {
-                        Icon(AllNotesIcons.Add, contentDescription = null, tint = colorScheme.primary, modifier = Modifier.size(17.dp))
-                    },
-                    onClick = {
-                        sectionMenuOpen = false
-                        onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_SECTION))
-                    }
-                )
             }
+
+            Text(
+                text = "›",
+                style = MaterialTheme.typography.titleSmall,
+                color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
+
+            Box {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .clickable { sectionMenuOpen = true }
+                        .padding(horizontal = 6.dp, vertical = 7.dp)
+                ) {
+                    Text(
+                        text = section.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Icon(
+                        imageVector = AllNotesIcons.ChevronDown,
+                        contentDescription = "Switch or organize section",
+                        tint = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = sectionMenuOpen,
+                    onDismissRequest = { sectionMenuOpen = false }
+                ) {
+                    state.sectionsForNotebook.forEach { sec ->
+                        val current = sec.id == section.id
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = sec.title,
+                                    fontWeight = if (current) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            leadingIcon = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(9.dp)
+                                        .clip(CircleShape)
+                                        .background(sec.accent.accentColor())
+                                )
+                            },
+                            trailingIcon = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (sec.isPinned) {
+                                        Icon(
+                                            AllNotesIcons.PinFilled,
+                                            contentDescription = "Pinned",
+                                            tint = colorScheme.primary,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                    if (current) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(
+                                            AllNotesIcons.Check,
+                                            contentDescription = null,
+                                            tint = colorScheme.primary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                sectionMenuOpen = false
+                                onAction(WorkspaceAction.SelectSection(sec.id))
+                            }
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    DropdownMenuItem(
+                        text = { Text(if (section.isPinned) "Unpin \"${section.title}\"" else "Pin \"${section.title}\"") },
+                        leadingIcon = {
+                            Icon(
+                                if (section.isPinned) AllNotesIcons.Pin else AllNotesIcons.PinFilled,
+                                contentDescription = null,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        },
+                        onClick = {
+                            sectionMenuOpen = false
+                            onAction(WorkspaceAction.TogglePinSection(section.id))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Manage & Reorder Sections…") },
+                        leadingIcon = {
+                            Icon(AllNotesIcons.Menu, contentDescription = null, modifier = Modifier.size(17.dp))
+                        },
+                        onClick = {
+                            sectionMenuOpen = false
+                            onAction(WorkspaceAction.OpenDialog(ActiveDialog.MANAGE_SECTIONS))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("New Section…", color = colorScheme.primary, fontWeight = FontWeight.SemiBold) },
+                        leadingIcon = {
+                            Icon(AllNotesIcons.Add, contentDescription = null, tint = colorScheme.primary, modifier = Modifier.size(17.dp))
+                        },
+                        onClick = {
+                            sectionMenuOpen = false
+                            onAction(WorkspaceAction.OpenDialog(ActiveDialog.NEW_SECTION))
+                        }
+                    )
+                }
+            }
+        }
+    ) { measurables, constraints ->
+        val maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth else Int.MAX_VALUE
+        val sepPlaceable = measurables[1].measure(constraints.copy(minWidth = 0))
+        val avail = (maxWidth - sepPlaceable.width).coerceAtLeast(0)
+
+        val nbNaturalW = measurables[0].maxIntrinsicWidth(constraints.maxHeight)
+        val secNaturalW = measurables[2].maxIntrinsicWidth(constraints.maxHeight)
+
+        val (nbMax, secMax) = if (nbNaturalW + secNaturalW <= avail) {
+            nbNaturalW to secNaturalW
+        } else {
+            val secHalfCap = (avail * 0.48f).toInt()
+            val nbHalfCap = (avail * 0.52f).toInt()
+            when {
+                secNaturalW <= secHalfCap -> (avail - secNaturalW) to secNaturalW
+                nbNaturalW <= nbHalfCap -> nbNaturalW to (avail - nbNaturalW)
+                else -> nbHalfCap to (avail - nbHalfCap)
+            }
+        }
+
+        val nbPlaceable = measurables[0].measure(constraints.copy(minWidth = 0, maxWidth = nbMax.coerceAtLeast(0)))
+        val secPlaceable = measurables[2].measure(constraints.copy(minWidth = 0, maxWidth = secMax.coerceAtLeast(0)))
+        val totalW = (nbPlaceable.width + sepPlaceable.width + secPlaceable.width)
+            .coerceIn(constraints.minWidth, maxWidth)
+        val totalH = maxOf(nbPlaceable.height, sepPlaceable.height, secPlaceable.height)
+            .coerceIn(constraints.minHeight, constraints.maxHeight)
+
+        layout(totalW, totalH) {
+            var x = 0
+            nbPlaceable.placeRelative(x, (totalH - nbPlaceable.height) / 2)
+            x += nbPlaceable.width
+            sepPlaceable.placeRelative(x, (totalH - sepPlaceable.height) / 2)
+            x += sepPlaceable.width
+            secPlaceable.placeRelative(x, (totalH - secPlaceable.height) / 2)
         }
     }
 }
