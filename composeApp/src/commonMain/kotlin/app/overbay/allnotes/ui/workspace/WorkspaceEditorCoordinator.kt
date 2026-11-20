@@ -124,7 +124,6 @@ internal class WorkspaceEditorCoordinator(
             it.copy(
                 activeBlockId = block.id,
                 focusRequest = req ?: it.focusRequest,
-                isMobileInsertMenuOpen = false,
                 isBlockInsertSheetOpen = false
             )
         }

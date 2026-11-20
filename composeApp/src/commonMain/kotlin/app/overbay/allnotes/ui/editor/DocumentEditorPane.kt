@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -53,6 +54,7 @@ import app.overbay.allnotes.ui.editor.blocks.DocumentBlockView
 import app.overbay.allnotes.ui.editor.blocks.rememberSyncedFieldHolder
 import app.overbay.allnotes.ui.editor.toolbar.BlockInsertBottomSheet
 import app.overbay.allnotes.ui.editor.toolbar.DesktopFormattingRibbon
+import app.overbay.allnotes.ui.editor.toolbar.MobileKeyboardAccessoryBar
 import app.overbay.allnotes.ui.media.rememberPlatformAttachmentPicker
 import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.theme.accentColor
@@ -107,7 +109,7 @@ fun DocumentEditorPane(
     }
 
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
-    val isWritingMode = imeVisible || state.activeBlockId != null || state.isMobileInsertMenuOpen
+    val navBarBottomDp = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -155,7 +157,9 @@ fun DocumentEditorPane(
                     val sectionAmbientWash = state.activeSection?.accent?.ambientWashColor() ?: Color.Transparent
 
                     Surface(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
                         color = if (isCompactMobile) {
                             MaterialTheme.colorScheme.background
                         } else {
@@ -185,13 +189,19 @@ fun DocumentEditorPane(
                             val listState = rememberLazyListState()
                             val titleHolder = rememberSyncedFieldHolder("page-title-${renderedPage.id}", renderedPage.title)
 
-                            LaunchedEffect(state.focusRequest?.requestToken) {
-                                val req = state.focusRequest ?: return@LaunchedEffect
-                                val idx = renderedPage.blocks.indexOfFirst { it.id == req.blockId }
+                            LaunchedEffect(state.activeBlockId, imeVisible) {
+                                val targetBlockId = state.activeBlockId ?: return@LaunchedEffect
+                                val idx = renderedPage.blocks.indexOfFirst { it.id == targetBlockId }
                                 if (idx >= 0) {
                                     val listIdx = idx + 1
-                                    val isVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == listIdx }
-                                    if (!isVisible) {
+                                    val layoutInfo = listState.layoutInfo
+                                    val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == listIdx }
+                                    val viewportBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+                                    val itemTop = itemInfo?.offset ?: Int.MAX_VALUE
+                                    if (itemInfo == null ||
+                                        itemTop < layoutInfo.viewportStartOffset ||
+                                        itemTop >= viewportBottom
+                                    ) {
                                         listState.animateScrollToItem(listIdx)
                                     }
                                 }
@@ -215,15 +225,20 @@ fun DocumentEditorPane(
                                             )
                                         }
                                     }
-                                    .navigationBarsPadding()
-                                    .imePadding(),
+                                    .then(
+                                        if (isCompactMobile) Modifier else Modifier.navigationBarsPadding().imePadding()
+                                    ),
                                 contentPadding = PaddingValues(
                                     start = if (isCompactMobile) 22.dp else 52.dp,
                                     end = if (isCompactMobile) 22.dp else 52.dp,
-                                    top = if (isCompactMobile) 12.dp else 36.dp,
-                                    bottom = if (isCompactMobile) 168.dp else 104.dp
+                                    top = if (isCompactMobile) 4.dp else 36.dp,
+                                    bottom = when {
+                                        isCompactMobile && imeVisible -> 20.dp
+                                        isCompactMobile -> navBarBottomDp + 132.dp
+                                        else -> 104.dp
+                                    }
                                 ),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                verticalArrangement = Arrangement.spacedBy(if (isCompactMobile) 10.dp else 12.dp)
                             ) {
                                 item(key = "page-header-${renderedPage.id}", contentType = "page-header") {
                                     DocumentPageHeader(
@@ -265,7 +280,7 @@ fun DocumentEditorPane(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(140.dp)
+                                            .height(if (isCompactMobile) 72.dp else 140.dp)
                                             .clickable(
                                                 interactionSource = remember { MutableInteractionSource() },
                                                 indication = null
@@ -278,11 +293,24 @@ fun DocumentEditorPane(
                         }
                     }
                 }
+
+                if (isCompactMobile && page != null && imeVisible) {
+                    MobileKeyboardAccessoryBar(
+                        state = state,
+                        onRequestMediaPicker = requestMediaPicker,
+                        onAction = onAction,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .imePadding()
+                    )
+                }
             }
 
             EditorStatusSnackbar(
                 state = state,
                 isCompactMobile = isCompactMobile,
+                imeVisible = imeVisible,
                 onAction = onAction
             )
 
@@ -299,13 +327,10 @@ fun DocumentEditorPane(
                 )
             }
 
-            if (isCompactMobile && page != null) {
+            if (isCompactMobile && page != null && !imeVisible) {
                 MobileEditorChromeOverlay(
                     state = state,
-                    isWritingMode = isWritingMode,
-                    imeVisible = imeVisible,
                     readingPillHidden = readingPillHidden,
-                    onRequestMediaPicker = requestMediaPicker,
                     onAction = onAction
                 )
             }

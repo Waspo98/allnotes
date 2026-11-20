@@ -102,41 +102,6 @@ internal fun DesktopBottomPageBar(
 }
 
 /**
- * Compact floating page pill bar shown above the mobile formatting toolbar when writing.
- */
-@Composable
-internal fun MobileFloatingPageStrip(
-    state: WorkspaceUiState,
-    onAction: (WorkspaceAction) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val section = state.activeSection ?: return
-    val colorScheme = MaterialTheme.colorScheme
-    val sectionAccent = section.accent.accentColor()
-
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = colorScheme.surfaceContainerHigh,
-        contentColor = colorScheme.onSurface,
-        shape = CircleShape,
-        shadowElevation = 4.dp,
-        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.55f))
-    ) {
-        PagePillStripContent(
-            pages = state.pagesForSection,
-            activePageId = state.activePage?.id,
-            sectionAccent = sectionAccent,
-            compact = true,
-            onAction = onAction,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(42.dp)
-                .padding(horizontal = 6.dp)
-        )
-    }
-}
-
-/**
  * Shared horizontally scrollable row of page pills with active-page auto-centering and
  * an anchored `+` button to create a new page in the current section.
  */

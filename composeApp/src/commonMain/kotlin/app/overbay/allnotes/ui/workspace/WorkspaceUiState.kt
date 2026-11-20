@@ -61,9 +61,7 @@ data class WorkspaceUiState(
     val isSidebarOpen: Boolean = true,
     val isMobileHierarchySheetOpen: Boolean = false,
     val isPageMenuOpen: Boolean = false,
-    val isMobileInsertMenuOpen: Boolean = false,
     val isBlockInsertSheetOpen: Boolean = false,
-    val isMobileWritingPageStripOpen: Boolean = false,
     val activeDialog: ActiveDialog = ActiveDialog.NONE,
     val editingSectionId: String? = null,
     val syncStatus: SyncStatus = SyncStatus.LOCAL_READY,
@@ -371,7 +369,6 @@ internal object HierarchySelectionResolver {
             selectedSectionId = secId,
             selectedPageId = pageId,
             activeBlockId = retainedActiveBlockId,
-            isMobileWritingPageStripOpen = if (pageChanged) false else current.isMobileWritingPageStripOpen,
             revision = maxOf(effectiveSnap.revision, current.revision)
         )
     }

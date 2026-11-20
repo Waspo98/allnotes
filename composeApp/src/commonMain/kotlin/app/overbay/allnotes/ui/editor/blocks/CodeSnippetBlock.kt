@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -80,6 +81,8 @@ internal fun CodeSnippetBlockContent(
     val clipboard = LocalClipboardManager.current
     val focusRequester = remember(block.id) { FocusRequester() }
     val codeHolder = rememberSyncedFieldHolder(block.id, block.code)
+    var isFocused by remember(block.id) { mutableStateOf(false) }
+    val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, codeHolder.fieldValue.selection)
     var copiedRecently by remember(block.id) { mutableStateOf(false) }
     var languageMenuOpen by remember(block.id) { mutableStateOf(false) }
 
@@ -244,10 +247,13 @@ internal fun CodeSnippetBlockContent(
                         color = colorScheme.onSurface
                     ),
                     visualTransformation = syntaxVisual,
+                    onTextLayout = onTextLayout,
                     cursorBrush = SolidColor(colorScheme.primary),
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
+                        .then(cursorIntoViewModifier)
+                        .onFocusChanged { isFocused = it.isFocused }
                 )
             }
         }

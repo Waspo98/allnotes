@@ -66,6 +66,7 @@ internal fun RichParagraphField(
 
     val fieldHolder = rememberSyncedFieldHolder(block.id, block.text)
     val fieldValue = fieldHolder.fieldValue
+    val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldValue.selection)
 
     if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
         LaunchedEffect(focusRequest.requestToken) {
@@ -159,10 +160,12 @@ internal fun RichParagraphField(
                     color = colorScheme.onSurface
                 ),
                 visualTransformation = visualTransformation,
+                onTextLayout = onTextLayout,
                 cursorBrush = SolidColor(colorScheme.primary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
+                    .then(cursorIntoViewModifier)
                     .onFocusChanged { state ->
                         isFocused = state.isFocused
                         if (state.isFocused) {

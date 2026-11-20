@@ -170,7 +170,6 @@ class WorkspaceViewModel(
             it.copy(
                 isMobileHierarchySheetOpen = false,
                 isPageMenuOpen = false,
-                isMobileWritingPageStripOpen = false,
                 collapsedParentPageIds = if (parentToUncollapse != null) it.collapsedParentPageIds - parentToUncollapse else it.collapsedParentPageIds
             )
         }
@@ -198,8 +197,7 @@ class WorkspaceViewModel(
             activeDialog = dialog,
             editingSectionId = if (dialog == ActiveDialog.CONFIRM_DELETE_SECTION) it.editingSectionId else null,
             isPageMenuOpen = false,
-            isMobileHierarchySheetOpen = false,
-            isMobileInsertMenuOpen = false
+            isMobileHierarchySheetOpen = false
         )
     }
 
@@ -208,8 +206,7 @@ class WorkspaceViewModel(
             activeDialog = ActiveDialog.EDIT_SECTION,
             editingSectionId = sectionId,
             isPageMenuOpen = false,
-            isMobileHierarchySheetOpen = false,
-            isMobileInsertMenuOpen = false
+            isMobileHierarchySheetOpen = false
         )
     }
 
@@ -274,7 +271,7 @@ class WorkspaceViewModel(
         _uiState.update {
             it.copy(
                 activeDialog = ActiveDialog.NONE, isMobileHierarchySheetOpen = false,
-                isPageMenuOpen = false, isMobileInsertMenuOpen = false, isBlockInsertSheetOpen = false,
+                isPageMenuOpen = false, isBlockInsertSheetOpen = false,
                 collapsedParentPageIds = if (parentId != null) it.collapsedParentPageIds - parentId else it.collapsedParentPageIds
             )
         }
@@ -359,8 +356,7 @@ class WorkspaceViewModel(
                 activeDialog = ActiveDialog.CONFIRM_DELETE_PAGE,
                 pendingDeletePageId = pageId,
                 isPageMenuOpen = false,
-                isMobileHierarchySheetOpen = false,
-                isMobileInsertMenuOpen = false
+                isMobileHierarchySheetOpen = false
             )
         }
     }

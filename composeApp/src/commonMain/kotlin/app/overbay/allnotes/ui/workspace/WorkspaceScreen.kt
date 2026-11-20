@@ -70,10 +70,6 @@ fun WorkspaceScreen(
             viewModel.dispatch(WorkspaceAction.SetBlockInsertSheetOpen(false))
             true
         }
-        state.isMobileInsertMenuOpen -> {
-            viewModel.dispatch(WorkspaceAction.SetMobileInsertMenuOpen(false))
-            true
-        }
         state.isMobileHierarchySheetOpen -> {
             viewModel.dispatch(WorkspaceAction.SetMobileHierarchySheetOpen(false))
             true
@@ -93,7 +89,6 @@ fun WorkspaceScreen(
         enabled = state.previewAttachment != null ||
             state.activeDialog != ActiveDialog.NONE ||
             state.isBlockInsertSheetOpen ||
-            state.isMobileInsertMenuOpen ||
             state.isMobileHierarchySheetOpen ||
             state.isPageMenuOpen ||
             state.searchQuery.isNotEmpty()

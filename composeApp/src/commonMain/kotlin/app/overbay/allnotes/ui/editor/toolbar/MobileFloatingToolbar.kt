@@ -17,9 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.CalloutTone
@@ -47,11 +46,12 @@ import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 
 /**
  * Calm, unified mobile reading bottom dock combining a scrollable page switcher strip
- * with primary navigation and 1-tap capture in the thumb zone.
+ * (or contextual non-IME block actions) with primary navigation and 1-tap capture in the thumb zone.
  */
 @Composable
 fun MobileReadingPill(
     state: WorkspaceUiState,
+    showBlockActions: Boolean,
     onOpenDrawer: () -> Unit,
     onNewPage: () -> Unit,
     onOpenBlockSheet: () -> Unit,
@@ -60,18 +60,25 @@ fun MobileReadingPill(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val section = state.activeSection
-    val hasPageStrip = section != null
+    val activeBlock = if (showBlockActions) state.activeBlock else null
+    val hasTopStrip = activeBlock != null || section != null
 
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = colorScheme.surfaceContainerHigh,
         contentColor = colorScheme.onSurface,
-        shape = if (hasPageStrip) RoundedCornerShape(26.dp) else CircleShape,
+        shape = if (hasTopStrip) RoundedCornerShape(26.dp) else CircleShape,
         shadowElevation = 5.dp,
         border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            if (section != null) {
+            if (activeBlock != null) {
+                ReadingBlockActionsStrip(
+                    block = activeBlock,
+                    onAction = onAction
+                )
+                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.35f))
+            } else if (section != null) {
                 PagePillStripContent(
                     pages = state.pagesForSection,
                     activePageId = state.activePage?.id,
@@ -145,222 +152,341 @@ fun MobileReadingPill(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun MobileFloatingToolbar(
+private fun ReadingBlockActionsStrip(
+    block: DocumentBlock,
+    onAction: (WorkspaceAction) -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    val colorScheme = MaterialTheme.colorScheme
+    val nonConvertibleLabel = when (block) {
+        is DocumentBlock.Table -> "Table"
+        is DocumentBlock.Divider -> "Divider"
+        is DocumentBlock.Attachment -> "Attachment"
+        else -> null
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        if (nonConvertibleLabel != null) {
+            Text(
+                text = nonConvertibleLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 6.dp)
+            )
+        } else {
+            BlockTypeConverterPill(
+                activeBlock = block,
+                onAction = onAction
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(
+            onClick = { onAction(WorkspaceAction.MoveBlock(block.id, -1)) },
+            modifier = Modifier.size(38.dp)
+        ) {
+            Icon(
+                imageVector = AllNotesIcons.ArrowUp,
+                contentDescription = "Move block up",
+                tint = colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        IconButton(
+            onClick = { onAction(WorkspaceAction.MoveBlock(block.id, 1)) },
+            modifier = Modifier.size(38.dp)
+        ) {
+            Icon(
+                imageVector = AllNotesIcons.ArrowDown,
+                contentDescription = "Move block down",
+                tint = colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        IconButton(
+            onClick = { onAction(WorkspaceAction.DeleteBlock(block.id)) },
+            modifier = Modifier.size(38.dp)
+        ) {
+            Icon(
+                imageVector = AllNotesIcons.Delete,
+                contentDescription = "Remove block",
+                tint = colorScheme.error,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        IconButton(
+            onClick = {
+                focusManager.clearFocus(force = true)
+                onAction(WorkspaceAction.SetActiveBlock(null))
+            },
+            modifier = Modifier.size(38.dp)
+        ) {
+            Icon(
+                imageVector = AllNotesIcons.Check,
+                contentDescription = "Done selecting block",
+                tint = colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Compact, edge-to-edge keyboard accessory bar docked flush above the mobile soft keyboard.
+ * Keeps `+` insert on the left, contextual formatting in the center, and `⋮` / `✓` pinned on the right.
+ */
+@Composable
+fun MobileKeyboardAccessoryBar(
     state: WorkspaceUiState,
-    imeVisible: Boolean,
     onRequestMediaPicker: () -> Unit,
     onAction: (WorkspaceAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     val activeBlock = state.activeBlock
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     var blockActionsOpen by remember { mutableStateOf(false) }
 
-    HorizontalFloatingToolbar(
-        expanded = true,
-        modifier = modifier
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = colorScheme.surfaceContainerLow,
+        contentColor = colorScheme.onSurface,
+        tonalElevation = 2.dp
     ) {
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (imeVisible && state.activeSection != null) {
-                Surface(
-                    onClick = {
-                        onAction(
-                            WorkspaceAction.SetMobileWritingPageStripOpen(!state.isMobileWritingPageStripOpen)
-                        )
-                    },
-                    color = if (state.isMobileWritingPageStripOpen) {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    } else {
-                        Color.Transparent
-                    },
-                    contentColor = if (state.isMobileWritingPageStripOpen) {
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    shape = CircleShape
-                ) {
-                    Text(
-                        text = "Pages (${state.pagesForSection.size})",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
-                    )
-                }
-                VerticalDivider(modifier = Modifier.height(22.dp).padding(horizontal = 2.dp))
-            }
-
-            BlockTypeConverterPill(
-                activeBlock = activeBlock,
-                onAction = onAction
+        Column(modifier = Modifier.fillMaxWidth()) {
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = colorScheme.outlineVariant.copy(alpha = 0.45f)
             )
-            when (activeBlock) {
-                is DocumentBlock.Paragraph -> {
-                    ParagraphInlineFormatButtons(
-                        activeParagraph = activeBlock,
-                        selectionStart = state.selectionStart,
-                        selectionEnd = state.selectionEnd,
-                        showShortcuts = false,
-                        buttonSize = 44.dp,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    onClick = { onAction(WorkspaceAction.SetBlockInsertSheetOpen(true)) },
+                    color = colorScheme.primaryContainer,
+                    contentColor = colorScheme.onPrimaryContainer,
+                    shape = CircleShape,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = AllNotesIcons.Add,
+                            contentDescription = "Insert block",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                VerticalDivider(
+                    modifier = Modifier
+                        .height(22.dp)
+                        .padding(horizontal = 6.dp),
+                    color = colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BlockTypeConverterPill(
+                        activeBlock = activeBlock,
                         onAction = onAction
                     )
-                }
-                is DocumentBlock.Heading -> {
-                    (1..3).forEach { lvl ->
-                        val selected = activeBlock.level == lvl
-                        Surface(
-                            onClick = { onAction(WorkspaceAction.UpdateHeadingLevel(activeBlock.id, lvl)) },
-                            color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                            contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                            shape = MaterialTheme.shapes.extraSmall
-                        ) {
-                            Text(
-                                text = "H$lvl",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                    when (activeBlock) {
+                        is DocumentBlock.Paragraph -> {
+                            ParagraphInlineFormatButtons(
+                                activeParagraph = activeBlock,
+                                selectionStart = state.selectionStart,
+                                selectionEnd = state.selectionEnd,
+                                showShortcuts = false,
+                                buttonSize = 38.dp,
+                                onAction = onAction
                             )
                         }
-                    }
-                }
-                is DocumentBlock.BulletList -> {
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.BulletList,
-                        contentDescription = "Bulleted list",
-                        selected = !activeBlock.isNumbered,
-                        buttonSize = 44.dp,
-                        onClick = { if (activeBlock.isNumbered) onAction(WorkspaceAction.ToggleBulletListKind(activeBlock.id)) }
-                    )
-                    ToolbarToggleIcon(
-                        icon = AllNotesIcons.NumberedList,
-                        contentDescription = "Numbered list",
-                        selected = activeBlock.isNumbered,
-                        buttonSize = 44.dp,
-                        onClick = { if (!activeBlock.isNumbered) onAction(WorkspaceAction.ToggleBulletListKind(activeBlock.id)) }
-                    )
-                }
-                is DocumentBlock.Callout -> {
-                    CalloutTone.entries.forEach { tone ->
-                        val selected = activeBlock.tone == tone
-                        Surface(
-                            onClick = { onAction(WorkspaceAction.UpdateCalloutTone(activeBlock.id, tone)) },
-                            color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                            contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                            shape = MaterialTheme.shapes.extraSmall
-                        ) {
-                            Text(
-                                text = tone.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
-                            )
+                        is DocumentBlock.Heading -> {
+                            (1..3).forEach { lvl ->
+                                val selected = activeBlock.level == lvl
+                                Surface(
+                                    onClick = { onAction(WorkspaceAction.UpdateHeadingLevel(activeBlock.id, lvl)) },
+                                    color = if (selected) colorScheme.secondaryContainer else Color.Transparent,
+                                    contentColor = if (selected) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                                    shape = MaterialTheme.shapes.extraSmall
+                                ) {
+                                    Text(
+                                        text = "H$lvl",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                    )
+                                }
+                            }
                         }
-                    }
-                }
-                else -> {
-                    IconButton(
-                        onClick = { onAction(WorkspaceAction.InsertHeading(2, state.activeBlockId)) },
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(AllNotesIcons.Heading, contentDescription = "Insert Heading", modifier = Modifier.size(19.dp))
-                    }
-                    IconButton(
-                        onClick = { onAction(WorkspaceAction.InsertChecklist(state.activeBlockId)) },
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(AllNotesIcons.Checklist, contentDescription = "Insert Checklist", modifier = Modifier.size(19.dp))
-                    }
-                    IconButton(
-                        onClick = { onAction(WorkspaceAction.InsertTable(state.activeBlockId)) },
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(AllNotesIcons.Table, contentDescription = "Insert Table", modifier = Modifier.size(19.dp))
-                    }
-                    IconButton(
-                        onClick = onRequestMediaPicker,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(AllNotesIcons.Image, contentDescription = "Attach Image or File", modifier = Modifier.size(19.dp))
-                    }
-                }
-            }
-
-            if (activeBlock != null) {
-                VerticalDivider(modifier = Modifier.height(22.dp).padding(horizontal = 4.dp))
-                Box {
-                    IconButton(
-                        onClick = { blockActionsOpen = true },
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = AllNotesIcons.MoreVert,
-                            contentDescription = "Block actions",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = blockActionsOpen,
-                        onDismissRequest = { blockActionsOpen = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Move Up") },
-                            leadingIcon = { Icon(AllNotesIcons.ArrowUp, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                            onClick = {
-                                blockActionsOpen = false
-                                onAction(WorkspaceAction.MoveBlock(activeBlock.id, -1))
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Move Down") },
-                            leadingIcon = { Icon(AllNotesIcons.ArrowDown, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                            onClick = {
-                                blockActionsOpen = false
-                                onAction(WorkspaceAction.MoveBlock(activeBlock.id, 1))
-                            }
-                        )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                        DropdownMenuItem(
-                            text = { Text("Remove Block", color = MaterialTheme.colorScheme.error) },
-                            leadingIcon = {
-                                Icon(
-                                    AllNotesIcons.Delete,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(18.dp)
+                        is DocumentBlock.Checklist -> {
+                            Surface(
+                                onClick = { onAction(WorkspaceAction.InsertChecklistItemAfter(activeBlock.id, null)) },
+                                color = colorScheme.secondaryContainer,
+                                contentColor = colorScheme.onSecondaryContainer,
+                                shape = MaterialTheme.shapes.extraSmall
+                            ) {
+                                Text(
+                                    text = "+ Item",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
                                 )
-                            },
-                            onClick = {
-                                blockActionsOpen = false
-                                onAction(WorkspaceAction.DeleteBlock(activeBlock.id))
                             }
-                        )
+                        }
+                        is DocumentBlock.BulletList -> {
+                            ToolbarToggleIcon(
+                                icon = AllNotesIcons.BulletList,
+                                contentDescription = "Bulleted list",
+                                selected = !activeBlock.isNumbered,
+                                buttonSize = 38.dp,
+                                onClick = { if (activeBlock.isNumbered) onAction(WorkspaceAction.ToggleBulletListKind(activeBlock.id)) }
+                            )
+                            ToolbarToggleIcon(
+                                icon = AllNotesIcons.NumberedList,
+                                contentDescription = "Numbered list",
+                                selected = activeBlock.isNumbered,
+                                buttonSize = 38.dp,
+                                onClick = { if (!activeBlock.isNumbered) onAction(WorkspaceAction.ToggleBulletListKind(activeBlock.id)) }
+                            )
+                        }
+                        is DocumentBlock.Callout -> {
+                            CalloutTone.entries.forEach { tone ->
+                                val selected = activeBlock.tone == tone
+                                Surface(
+                                    onClick = { onAction(WorkspaceAction.UpdateCalloutTone(activeBlock.id, tone)) },
+                                    color = if (selected) colorScheme.secondaryContainer else Color.Transparent,
+                                    contentColor = if (selected) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                                    shape = MaterialTheme.shapes.extraSmall
+                                ) {
+                                    Text(
+                                        text = tone.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                        else -> {
+                            IconButton(
+                                onClick = { onAction(WorkspaceAction.InsertHeading(2, state.activeBlockId)) },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(AllNotesIcons.Heading, contentDescription = "Insert Heading", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(
+                                onClick = { onAction(WorkspaceAction.InsertChecklist(state.activeBlockId)) },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(AllNotesIcons.Checklist, contentDescription = "Insert Checklist", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(
+                                onClick = { onAction(WorkspaceAction.InsertTable(state.activeBlockId)) },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(AllNotesIcons.Table, contentDescription = "Insert Table", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(
+                                onClick = onRequestMediaPicker,
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(AllNotesIcons.Image, contentDescription = "Attach Image or File", modifier = Modifier.size(18.dp))
+                            }
+                        }
                     }
                 }
-            }
 
-            if (state.activeBlockId != null) {
-                VerticalDivider(modifier = Modifier.height(22.dp).padding(horizontal = 2.dp))
+                VerticalDivider(
+                    modifier = Modifier
+                        .height(22.dp)
+                        .padding(horizontal = 4.dp),
+                    color = colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
+
+                if (activeBlock != null) {
+                    Box {
+                        IconButton(
+                            onClick = { blockActionsOpen = true },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = AllNotesIcons.MoreVert,
+                                contentDescription = "Block actions",
+                                tint = colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = blockActionsOpen,
+                            onDismissRequest = { blockActionsOpen = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Move Up") },
+                                leadingIcon = { Icon(AllNotesIcons.ArrowUp, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                onClick = {
+                                    blockActionsOpen = false
+                                    onAction(WorkspaceAction.MoveBlock(activeBlock.id, -1))
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Move Down") },
+                                leadingIcon = { Icon(AllNotesIcons.ArrowDown, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                onClick = {
+                                    blockActionsOpen = false
+                                    onAction(WorkspaceAction.MoveBlock(activeBlock.id, 1))
+                                }
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            DropdownMenuItem(
+                                text = { Text("Remove Block", color = colorScheme.error) },
+                                leadingIcon = {
+                                    Icon(
+                                        AllNotesIcons.Delete,
+                                        contentDescription = null,
+                                        tint = colorScheme.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                onClick = {
+                                    blockActionsOpen = false
+                                    onAction(WorkspaceAction.DeleteBlock(activeBlock.id))
+                                }
+                            )
+                        }
+                    }
+                }
+
                 IconButton(
                     onClick = {
+                        keyboardController?.hide()
                         focusManager.clearFocus(force = true)
-                        onAction(WorkspaceAction.SetMobileWritingPageStripOpen(false))
                         onAction(WorkspaceAction.SetActiveBlock(null))
                     },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = AllNotesIcons.Check,
-                        contentDescription = "Finish editing block",
-                        tint = MaterialTheme.colorScheme.primary,
+                        contentDescription = "Finish editing",
+                        tint = colorScheme.primary,
                         modifier = Modifier.size(19.dp)
                     )
                 }

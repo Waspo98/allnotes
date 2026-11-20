@@ -1,15 +1,10 @@
 package app.overbay.allnotes.ui.editor
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -32,23 +27,25 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import app.overbay.allnotes.ui.editor.toolbar.ExpressiveInsertFabMenu
-import app.overbay.allnotes.ui.editor.toolbar.MobileFloatingToolbar
+import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.ui.editor.toolbar.MobileReadingPill
 import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun BoxScope.EditorStatusSnackbar(
     state: WorkspaceUiState,
     isCompactMobile: Boolean,
+    imeVisible: Boolean,
     onAction: (WorkspaceAction) -> Unit
 ) {
     AnimatedVisibility(
@@ -59,7 +56,10 @@ internal fun BoxScope.EditorStatusSnackbar(
             .align(Alignment.BottomCenter)
             .navigationBarsPadding()
             .imePadding()
-            .padding(horizontal = 16.dp, vertical = if (isCompactMobile) 140.dp else 76.dp)
+            .padding(
+                horizontal = 16.dp,
+                vertical = if (isCompactMobile) (if (imeVisible) 58.dp else 132.dp) else 76.dp
+            )
     ) {
         Surface(
             color = MaterialTheme.colorScheme.inverseSurface,
@@ -105,94 +105,47 @@ internal fun BoxScope.EditorStatusSnackbar(
 @Composable
 internal fun BoxScope.MobileEditorChromeOverlay(
     state: WorkspaceUiState,
-    isWritingMode: Boolean,
-    imeVisible: Boolean,
     readingPillHidden: Boolean,
-    onRequestMediaPicker: () -> Unit,
     onAction: (WorkspaceAction) -> Unit
 ) {
-    if (state.isMobileInsertMenuOpen) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.28f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    onAction(WorkspaceAction.SetMobileInsertMenuOpen(false))
-                }
-        )
+    val activeBlock = state.activeBlock
+    val showBlockActions by produceState(
+        initialValue = activeBlock is DocumentBlock.Divider || activeBlock is DocumentBlock.Attachment,
+        key1 = activeBlock?.id
+    ) {
+        value = when {
+            activeBlock == null -> false
+            activeBlock is DocumentBlock.Divider || activeBlock is DocumentBlock.Attachment -> true
+            else -> {
+                delay(160L)
+                true
+            }
+        }
     }
 
     AnimatedVisibility(
-        visible = isWritingMode || !readingPillHidden,
+        visible = !readingPillHidden || showBlockActions,
         enter = fadeIn(AllNotesMotion.effectsFast()) + slideInVertically(AllNotesMotion.spatialFast()) { it },
         exit = fadeOut(AllNotesMotion.effectsFast()) + slideOutVertically(AllNotesMotion.spatialFast()) { it },
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
             .navigationBarsPadding()
-            .imePadding()
             .padding(bottom = 14.dp, start = 12.dp, end = 12.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.BottomCenter
         ) {
-            AnimatedContent(
-                targetState = isWritingMode,
-                transitionSpec = {
-                    (fadeIn(AllNotesMotion.effectsFast()) + slideInVertically(AllNotesMotion.spatialFast()) { it / 3 }) togetherWith
-                        (fadeOut(AllNotesMotion.effectsFast()) + slideOutVertically(AllNotesMotion.spatialFast()) { it / 3 })
-                },
-                label = "MobileModeChrome"
-            ) { writing ->
-                if (writing) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        AnimatedVisibility(
-                            visible = (!imeVisible || state.isMobileWritingPageStripOpen) && state.activeSection != null,
-                            enter = fadeIn(AllNotesMotion.effectsFast()) + slideInVertically(AllNotesMotion.spatialFast()) { it / 2 },
-                            exit = fadeOut(AllNotesMotion.effectsFast()) + slideOutVertically(AllNotesMotion.spatialFast()) { it / 2 }
-                        ) {
-                            MobileFloatingPageStrip(
-                                state = state,
-                                onAction = onAction
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            MobileFloatingToolbar(
-                                state = state,
-                                imeVisible = imeVisible,
-                                onRequestMediaPicker = onRequestMediaPicker,
-                                onAction = onAction,
-                                modifier = Modifier.weight(1f)
-                            )
-                            ExpressiveInsertFabMenu(
-                                state = state,
-                                onRequestMediaPicker = onRequestMediaPicker,
-                                onAction = onAction
-                            )
-                        }
-                    }
-                } else {
-                    MobileReadingPill(
-                        state = state,
-                        onOpenDrawer = { onAction(WorkspaceAction.SetMobileHierarchySheetOpen(true)) },
-                        onNewPage = { onAction(WorkspaceAction.CreatePageInstant(false)) },
-                        onOpenBlockSheet = { onAction(WorkspaceAction.SetBlockInsertSheetOpen(true)) },
-                        onAction = onAction,
-                        modifier = Modifier.widthIn(max = 520.dp)
-                    )
-                }
-            }
+            MobileReadingPill(
+                state = state,
+                showBlockActions = showBlockActions,
+                onOpenDrawer = { onAction(WorkspaceAction.SetMobileHierarchySheetOpen(true)) },
+                onNewPage = { onAction(WorkspaceAction.CreatePageInstant(false)) },
+                onOpenBlockSheet = { onAction(WorkspaceAction.SetBlockInsertSheetOpen(true)) },
+                onAction = onAction,
+                modifier = Modifier.widthIn(max = 520.dp)
+            )
         }
     }
 }

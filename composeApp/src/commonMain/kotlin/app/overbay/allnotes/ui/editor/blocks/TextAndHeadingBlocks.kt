@@ -17,11 +17,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -49,6 +53,8 @@ internal fun HeadingBlockContent(
     val focusRequester = remember(block.id) { FocusRequester() }
     val fieldHolder = rememberSyncedFieldHolder(block.id, block.text)
     val fieldValue = fieldHolder.fieldValue
+    var isFocused by remember(block.id) { mutableStateOf(false) }
+    val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldValue.selection)
 
     if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
         LaunchedEffect(focusRequest.requestToken) {
@@ -106,10 +112,13 @@ internal fun HeadingBlockContent(
             },
             textStyle = headingStyle,
             visualTransformation = searchVisual,
+            onTextLayout = onTextLayout,
             cursorBrush = SolidColor(colorScheme.primary),
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(focusRequester)
+                .then(cursorIntoViewModifier)
+                .onFocusChanged { isFocused = it.isFocused }
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
@@ -160,6 +169,10 @@ internal fun CalloutBlockContent(
     val bodyFocusRequester = remember(block.id) { FocusRequester() }
     val titleHolder = rememberSyncedFieldHolder(block.id to "title", block.title)
     val bodyHolder = rememberSyncedFieldHolder(block.id to "body", block.text)
+    var titleFocused by remember(block.id) { mutableStateOf(false) }
+    var bodyFocused by remember(block.id) { mutableStateOf(false) }
+    val (titleIntoViewModifier, onTitleLayout) = rememberCursorIntoViewHandler(titleFocused, titleHolder.fieldValue.selection)
+    val (bodyIntoViewModifier, onBodyLayout) = rememberCursorIntoViewHandler(bodyFocused, bodyHolder.fieldValue.selection)
 
     if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
         LaunchedEffect(focusRequest.requestToken) {
@@ -235,8 +248,12 @@ internal fun CalloutBlockContent(
                         ),
                         singleLine = true,
                         visualTransformation = searchVisual,
+                        onTextLayout = onTitleLayout,
                         cursorBrush = SolidColor(badge),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(titleIntoViewModifier)
+                            .onFocusChanged { titleFocused = it.isFocused }
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -259,10 +276,13 @@ internal fun CalloutBlockContent(
                         },
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = content),
                         visualTransformation = searchVisual,
+                        onTextLayout = onBodyLayout,
                         cursorBrush = SolidColor(badge),
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(bodyFocusRequester)
+                            .then(bodyIntoViewModifier)
+                            .onFocusChanged { bodyFocused = it.isFocused }
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
                                     event.key == Key.Backspace &&

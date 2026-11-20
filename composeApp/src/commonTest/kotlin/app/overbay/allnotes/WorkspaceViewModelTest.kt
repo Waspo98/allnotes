@@ -749,10 +749,13 @@ class WorkspaceViewModelTest {
         assertEquals("Kyle M.", updatedS2.title)
         assertFalse(updatedS2.isPinned)
 
-        // Writing page strip resets cleanly when switching pages
-        vm.dispatch(WorkspaceAction.SetMobileWritingPageStripOpen(true))
-        assertTrue(vm.uiState.value.isMobileWritingPageStripOpen)
+        // Switching pages closes transient mobile chrome and resets active block selection
+        vm.dispatch(WorkspaceAction.SetMobileHierarchySheetOpen(true))
+        vm.dispatch(WorkspaceAction.SetPageMenuOpen(true))
+        assertTrue(vm.uiState.value.isMobileHierarchySheetOpen)
+        assertTrue(vm.uiState.value.isPageMenuOpen)
         vm.dispatch(WorkspaceAction.SelectPage(activePageId!!))
-        assertFalse(vm.uiState.value.isMobileWritingPageStripOpen)
+        assertFalse(vm.uiState.value.isMobileHierarchySheetOpen)
+        assertFalse(vm.uiState.value.isPageMenuOpen)
     }
 }

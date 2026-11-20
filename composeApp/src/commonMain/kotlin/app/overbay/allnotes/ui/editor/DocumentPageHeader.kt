@@ -17,12 +17,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -34,6 +38,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.data.currentEpochMillis
 import app.overbay.allnotes.ui.editor.blocks.SyncedFieldHolder
+import app.overbay.allnotes.ui.editor.blocks.rememberCursorIntoViewHandler
 
 @Composable
 internal fun DocumentPageHeader(
@@ -50,6 +55,8 @@ internal fun DocumentPageHeader(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val titleFocusRequester = remember { FocusRequester() }
+    var isTitleFocused by remember { mutableStateOf(false) }
+    val (titleIntoViewModifier, onTitleLayout) = rememberCursorIntoViewHandler(isTitleFocused, titleHolder.fieldValue.selection)
 
     if (titleFocusToken > 0L) {
         LaunchedEffect(titleFocusToken) {
@@ -103,10 +110,13 @@ internal fun DocumentPageHeader(
                 textStyle = MaterialTheme.typography.headlineLarge.copy(
                     color = colorScheme.onSurface
                 ),
+                onTextLayout = onTitleLayout,
                 cursorBrush = SolidColor(accentColor),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(titleFocusRequester)
+                    .then(titleIntoViewModifier)
+                    .onFocusChanged { isTitleFocused = it.isFocused }
                     .onPreviewKeyEvent { event ->
                         if (event.type == KeyEventType.KeyDown && event.key == Key.Enter && !event.isShiftPressed) {
                             onTitleEnter()

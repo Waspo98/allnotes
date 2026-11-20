@@ -17,9 +17,7 @@ sealed interface WorkspaceAction {
     data object ToggleSidebar : WorkspaceAction
     data class SetMobileHierarchySheetOpen(val open: Boolean) : WorkspaceAction
     data class SetPageMenuOpen(val open: Boolean) : WorkspaceAction
-    data class SetMobileInsertMenuOpen(val open: Boolean) : WorkspaceAction
     data class SetBlockInsertSheetOpen(val open: Boolean) : WorkspaceAction
-    data class SetMobileWritingPageStripOpen(val open: Boolean) : WorkspaceAction
     data class ConsumeTitleFocusRequest(val requestToken: Long) : WorkspaceAction
     data class OpenDialog(val dialog: ActiveDialog) : WorkspaceAction
     data class OpenEditSectionDialog(val sectionId: String) : WorkspaceAction

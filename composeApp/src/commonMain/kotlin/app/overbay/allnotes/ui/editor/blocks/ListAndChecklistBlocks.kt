@@ -25,12 +25,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
@@ -64,6 +67,8 @@ internal fun ChecklistBlockContent(
     val haptics = LocalHapticFeedback.current
     val searchVisual = rememberSearchHighlightTransformation(searchQuery)
     val titleHolder = rememberSyncedFieldHolder(block.id to "checklist-title", block.title)
+    var titleFocused by remember(block.id) { mutableStateOf(false) }
+    val (titleIntoViewModifier, onTitleLayout) = rememberCursorIntoViewHandler(titleFocused, titleHolder.fieldValue.selection)
 
     val totalCount = block.items.size
     val completedCount = remember(block.items) { block.items.count { it.isChecked } }
@@ -105,8 +110,12 @@ internal fun ChecklistBlockContent(
                         ),
                         singleLine = true,
                         visualTransformation = searchVisual,
+                        onTextLayout = onTitleLayout,
                         cursorBrush = SolidColor(colorScheme.primary),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(titleIntoViewModifier)
+                            .onFocusChanged { titleFocused = it.isFocused }
                     )
                 }
 
@@ -156,6 +165,8 @@ internal fun ChecklistBlockContent(
             key(item.id) {
                 val requester = remember(item.id) { FocusRequester() }
                 val fieldHolder = rememberSyncedFieldHolder(item.id, item.text)
+                var isFocused by remember(item.id) { mutableStateOf(false) }
+                val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldHolder.fieldValue.selection)
                 val itemAlpha by animateFloatAsState(
                     targetValue = if (item.isChecked) 0.62f else 1f,
                     animationSpec = AllNotesMotion.effectsFast(),
@@ -218,6 +229,7 @@ internal fun ChecklistBlockContent(
                                 color = colorScheme.onSurface
                             ),
                             visualTransformation = searchVisual,
+                            onTextLayout = onTextLayout,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             keyboardActions = KeyboardActions(
                                 onNext = { onAction(WorkspaceAction.ListEnterAtItem(block.id, index)) }
@@ -226,6 +238,8 @@ internal fun ChecklistBlockContent(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(requester)
+                                .then(cursorIntoViewModifier)
+                                .onFocusChanged { isFocused = it.isFocused }
                                 .onPreviewKeyEvent { event ->
                                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                     when {
@@ -282,6 +296,8 @@ internal fun BulletListBlockContent(
             key(block.id, index) {
                 val requester = remember(block.id, index) { FocusRequester() }
                 val fieldHolder = rememberSyncedFieldHolder(block.id to index, item)
+                var isFocused by remember(block.id, index) { mutableStateOf(false) }
+                val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldHolder.fieldValue.selection)
 
                 if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex == index) {
                     LaunchedEffect(focusRequest.requestToken) {
@@ -332,6 +348,7 @@ internal fun BulletListBlockContent(
                                 color = colorScheme.onSurface
                             ),
                             visualTransformation = searchVisual,
+                            onTextLayout = onTextLayout,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             keyboardActions = KeyboardActions(
                                 onNext = { onAction(WorkspaceAction.ListEnterAtItem(block.id, index)) }
@@ -340,6 +357,8 @@ internal fun BulletListBlockContent(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(requester)
+                                .then(cursorIntoViewModifier)
+                                .onFocusChanged { isFocused = it.isFocused }
                                 .onPreviewKeyEvent { event ->
                                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                     when {
