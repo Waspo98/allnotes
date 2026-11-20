@@ -30,10 +30,12 @@ class AllNotesServer(
 ) {
     private var httpServer: HttpServer? = null
     private val snapshotLock = Any()
+    private var webBundleVersion: String = "dev"
     val boundPort: Int get() = httpServer?.address?.port ?: port
 
     fun start(): HttpServer {
         dataDir.mkdirs()
+        webBundleVersion = computeWebBundleVersion()
         val snapshotFile = File(dataDir, "workspace_server.json")
 
         synchronized(snapshotLock) {
@@ -152,15 +154,20 @@ class AllNotesServer(
 
     private fun serveStatic(exchange: HttpExchange) {
         val rawPath = exchange.requestURI.path.removePrefix("/")
+        val rawQuery = exchange.requestURI.rawQuery
         val reqPath = rawPath.ifEmpty { "index.html" }
         val candidate = File(webDistDir, reqPath).canonicalFile
 
         if (webDistDir.exists() && candidate.startsWith(webDistDir.canonicalFile) && candidate.isFile) {
-            val contentType = resolveContentType(candidate.name)
-            sendBytes(exchange, 200, contentType, candidate.readBytes())
+            if (candidate.name == "index.html") {
+                serveIndexHtml(exchange, candidate)
+            } else {
+                val contentType = resolveContentType(candidate.name)
+                val cacheControl = resolveStaticCacheControl(candidate.name, rawQuery)
+                sendBytes(exchange, 200, contentType, candidate.readBytes(), cacheControl)
+            }
         } else if (webDistDir.exists() && !reqPath.contains(".") && File(webDistDir, "index.html").isFile) {
-            val indexFile = File(webDistDir, "index.html")
-            sendBytes(exchange, 200, "text/html; charset=utf-8", indexFile.readBytes())
+            serveIndexHtml(exchange, File(webDistDir, "index.html"))
         } else if (webDistDir.exists() && rawPath.isNotEmpty()) {
             sendJson(exchange, 404, serverJson.encodeToString(mapOf("error" to "Asset not found: $rawPath")))
         } else {
@@ -172,11 +179,51 @@ class AllNotesServer(
         }
     }
 
+    private fun serveIndexHtml(exchange: HttpExchange, indexFile: File) {
+        val rawHtml = indexFile.readText(Charsets.UTF_8)
+        // Stamp entry script & service worker URLs with the bundle digest so Cloudflare/browser caches
+        // never mix stale allnotes.js or sw.js with newly hashed .wasm artifacts across deploys.
+        val stampedHtml = rawHtml
+            .replace("""src="allnotes.js"""", """src="allnotes.js?v=$webBundleVersion"""")
+            .replace("""'sw.js'""", """'sw.js?v=$webBundleVersion'""")
+        sendBytes(
+            exchange = exchange,
+            status = 200,
+            contentType = "text/html; charset=utf-8",
+            bytes = stampedHtml.toByteArray(Charsets.UTF_8),
+            cacheControl = NO_STORE_CACHE_CONTROL
+        )
+    }
+
+    private fun computeWebBundleVersion(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        var hasInputs = false
+        for (name in listOf("allnotes.js", "sw.js", "index.html")) {
+            val file = File(webDistDir, name)
+            if (file.isFile) {
+                digest.update(name.toByteArray(Charsets.UTF_8))
+                digest.update(file.readBytes())
+                hasInputs = true
+            }
+        }
+        if (!hasInputs) return "dev"
+        return digest.digest().take(6).joinToString("") { "%02x".format(it) }
+    }
+
+    private fun resolveStaticCacheControl(fileName: String, rawQuery: String?): String = when {
+        HASHED_WASM_REGEX.matches(fileName) -> PRIVATE_IMMUTABLE_CACHE_CONTROL
+        fileName == "allnotes.js" && rawQuery?.contains("v=$webBundleVersion") == true -> PRIVATE_IMMUTABLE_CACHE_CONTROL
+        fileName in NO_STORE_ASSET_NAMES -> NO_STORE_CACHE_CONTROL
+        else -> "private, no-cache, must-revalidate"
+    }
+
     private fun resolveContentType(fileName: String): String = when {
         fileName.endsWith(".html") -> "text/html; charset=utf-8"
-        fileName.endsWith(".js") -> "application/javascript; charset=utf-8"
+        fileName.endsWith(".js") || fileName.endsWith(".mjs") -> "application/javascript; charset=utf-8"
         fileName.endsWith(".wasm") -> "application/wasm"
         fileName.endsWith(".css") -> "text/css; charset=utf-8"
+        fileName.endsWith(".ttf") -> "font/ttf"
+        fileName.endsWith(".woff2") -> "font/woff2"
         fileName.endsWith(".webmanifest") -> "application/manifest+json; charset=utf-8"
         fileName.endsWith(".json") -> "application/json; charset=utf-8"
         fileName.endsWith(".svg") -> "image/svg+xml"
@@ -227,12 +274,28 @@ class AllNotesServer(
     }
 
     private fun sendJson(exchange: HttpExchange, status: Int, jsonBody: String) {
-        sendBytes(exchange, status, "application/json; charset=utf-8", jsonBody.toByteArray(Charsets.UTF_8))
+        sendBytes(
+            exchange = exchange,
+            status = status,
+            contentType = "application/json; charset=utf-8",
+            bytes = jsonBody.toByteArray(Charsets.UTF_8),
+            cacheControl = NO_STORE_CACHE_CONTROL
+        )
     }
 
-    private fun sendBytes(exchange: HttpExchange, status: Int, contentType: String, bytes: ByteArray) {
+    private fun sendBytes(
+        exchange: HttpExchange,
+        status: Int,
+        contentType: String,
+        bytes: ByteArray,
+        cacheControl: String = NO_STORE_CACHE_CONTROL
+    ) {
         addCorsHeaders(exchange)
         exchange.responseHeaders.set("Content-Type", contentType)
+        exchange.responseHeaders.set("Cache-Control", cacheControl)
+        if (cacheControl == NO_STORE_CACHE_CONTROL) {
+            exchange.responseHeaders.set("Pragma", "no-cache")
+        }
         if (exchange.requestMethod.equals("HEAD", ignoreCase = true)) {
             exchange.responseHeaders.set("Content-Length", bytes.size.toString())
             exchange.sendResponseHeaders(status, -1)
@@ -267,6 +330,10 @@ class AllNotesServer(
 
     companion object {
         private const val MAX_SYNC_BODY_BYTES = 32 * 1024 * 1024
+        private const val NO_STORE_CACHE_CONTROL = "private, no-cache, no-store, must-revalidate"
+        private const val PRIVATE_IMMUTABLE_CACHE_CONTROL = "private, max-age=31536000, immutable"
+        private val NO_STORE_ASSET_NAMES = setOf("index.html", "sw.js", "manifest.json", "allnotes.js")
+        private val HASHED_WASM_REGEX = Regex("^[0-9a-f]{16,}\\.wasm$")
         private val LOCALHOST_ORIGIN_REGEX = Regex("^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$")
 
         fun parseAllowedOrigins(raw: String?): Set<String> {

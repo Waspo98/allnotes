@@ -250,6 +250,57 @@ class ApplicationTest {
         }
     }
 
+    @Test
+    fun testIndexHtmlCacheBustsBundleAndSetsAntiCacheHeaders() {
+        val stagedWeb = Files.createTempDirectory("allnotes_web_version_test").toFile()
+        val dataDir = Files.createTempDirectory("allnotes_web_version_data").toFile()
+        File(stagedWeb, "index.html").writeText(
+            """<html><body><script src="allnotes.js"></script><script>navigator.serviceWorker.register('sw.js');</script></body></html>"""
+        )
+        File(stagedWeb, "allnotes.js").writeText("console.log('bundle-v1');")
+        File(stagedWeb, "sw.js").writeText("const CACHE_NAME = 'v4';")
+        File(stagedWeb, "0123456789abcdef0123.wasm").writeBytes(byteArrayOf(0x00, 0x61, 0x73, 0x6d))
+        File(stagedWeb, "font.ttf").writeBytes(byteArrayOf(0x00, 0x01, 0x00, 0x00))
+
+        val stagedServer = AllNotesServer(port = 0, dataDir = dataDir, webDistDir = stagedWeb).apply { start() }
+        val stagedBase = "http://127.0.0.1:${stagedServer.boundPort}"
+        try {
+            val indexConn = (URL("$stagedBase/").openConnection() as HttpURLConnection).apply { requestMethod = "GET" }
+            assertEquals(200, indexConn.responseCode)
+            assertEquals("private, no-cache, no-store, must-revalidate", indexConn.getHeaderField("Cache-Control"))
+            assertEquals("no-cache", indexConn.getHeaderField("Pragma"))
+            val html = indexConn.inputStream.bufferedReader().use { it.readText() }
+            val match = Regex("""src="allnotes\.js\?v=([0-9a-f]{12})"""").find(html)
+            assertTrue(match != null, "Expected stamped allnotes.js?v=<12-hex> in HTML: $html")
+            val version = match.groupValues[1]
+            assertTrue(html.contains("'sw.js?v=$version'"), "Expected stamped sw.js?v=$version in HTML: $html")
+
+            val unversionedJsConn = (URL("$stagedBase/allnotes.js").openConnection() as HttpURLConnection)
+            assertEquals(200, unversionedJsConn.responseCode)
+            assertEquals("private, no-cache, no-store, must-revalidate", unversionedJsConn.getHeaderField("Cache-Control"))
+
+            val versionedJsConn = (URL("$stagedBase/allnotes.js?v=$version").openConnection() as HttpURLConnection)
+            assertEquals(200, versionedJsConn.responseCode)
+            assertEquals("private, max-age=31536000, immutable", versionedJsConn.getHeaderField("Cache-Control"))
+
+            val swConn = (URL("$stagedBase/sw.js?v=$version").openConnection() as HttpURLConnection)
+            assertEquals(200, swConn.responseCode)
+            assertEquals("private, no-cache, no-store, must-revalidate", swConn.getHeaderField("Cache-Control"))
+
+            val wasmConn = (URL("$stagedBase/0123456789abcdef0123.wasm").openConnection() as HttpURLConnection)
+            assertEquals(200, wasmConn.responseCode)
+            assertEquals("private, max-age=31536000, immutable", wasmConn.getHeaderField("Cache-Control"))
+
+            val fontConn = (URL("$stagedBase/font.ttf").openConnection() as HttpURLConnection)
+            assertEquals(200, fontConn.responseCode)
+            assertEquals("font/ttf", fontConn.getHeaderField("Content-Type"))
+        } finally {
+            stagedServer.stop(0)
+            stagedWeb.deleteRecursively()
+            dataDir.deleteRecursively()
+        }
+    }
+
     private fun sendRawGet(path: String, origin: String): String =
         java.net.Socket("127.0.0.1", server.boundPort).use { socket ->
             val out = socket.getOutputStream().bufferedWriter(Charsets.US_ASCII)

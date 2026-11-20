@@ -1,5 +1,5 @@
-const CACHE_NAME = 'allnotes-pwa-v3';
-const APP_SHELL = ['./', './index.html', './allnotes.js', './manifest.json', './icon.svg'];
+const CACHE_NAME = 'allnotes-pwa-v4';
+const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -21,7 +21,11 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.endsWith('/sw.js')
+  ) return;
 
   event.respondWith(
     fetch(req)
