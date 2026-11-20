@@ -2,6 +2,7 @@ package app.overbay.allnotes.ui.editor.blocks
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,13 +23,15 @@ internal class SyncedFieldHolder(initialText: String) {
         TextFieldValue(text = initialText, selection = TextRange(initialText.length))
     )
     var lastExternalText: String = initialText
+    private var currentLocalText: String = initialText
+    private var currentSelection: TextRange = TextRange(initialText.length)
     private val pendingLocalTexts = ArrayDeque<String>(8)
 
     fun syncExternal(externalText: String) {
         if (externalText == lastExternalText) return
         lastExternalText = externalText
 
-        if (externalText == fieldValue.text) {
+        if (externalText == currentLocalText) {
             consumeMatchingEcho(externalText)
             return
         }
@@ -38,16 +41,21 @@ internal class SyncedFieldHolder(initialText: String) {
         }
 
         pendingLocalTexts.clear()
-        val clampedStart = fieldValue.selection.start.coerceIn(0, externalText.length)
-        val clampedEnd = fieldValue.selection.end.coerceIn(0, externalText.length)
+        val clampedStart = currentSelection.start.coerceIn(0, externalText.length)
+        val clampedEnd = currentSelection.end.coerceIn(0, externalText.length)
+        val nextSelection = TextRange(clampedStart, clampedEnd)
+        currentLocalText = externalText
+        currentSelection = nextSelection
         fieldValue = TextFieldValue(
             text = externalText,
-            selection = TextRange(clampedStart, clampedEnd)
+            selection = nextSelection
         )
     }
 
     fun applyLocalChange(updated: TextFieldValue, emittedText: String = updated.text) {
-        val textChanged = emittedText != fieldValue.text
+        val textChanged = emittedText != currentLocalText
+        currentLocalText = emittedText
+        currentSelection = updated.selection
         fieldValue = updated
         if (textChanged && pendingLocalTexts.lastOrNull() != emittedText) {
             if (pendingLocalTexts.size >= 16) {
@@ -58,8 +66,10 @@ internal class SyncedFieldHolder(initialText: String) {
     }
 
     fun moveCursorTo(offset: Int) {
-        val pos = offset.coerceIn(0, fieldValue.text.length)
-        fieldValue = fieldValue.copy(selection = TextRange(pos))
+        val pos = offset.coerceIn(0, currentLocalText.length)
+        val nextSelection = TextRange(pos)
+        currentSelection = nextSelection
+        fieldValue = fieldValue.copy(selection = nextSelection)
     }
 
     private fun consumeMatchingEcho(text: String): Boolean {
@@ -78,7 +88,9 @@ internal fun rememberSyncedFieldHolder(
     externalText: String
 ): SyncedFieldHolder {
     val holder = remember(key) { SyncedFieldHolder(externalText) }
-    holder.syncExternal(externalText)
+    SideEffect {
+        holder.syncExternal(externalText)
+    }
     return holder
 }
 

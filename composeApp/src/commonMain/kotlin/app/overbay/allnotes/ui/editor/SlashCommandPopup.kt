@@ -30,7 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.ui.theme.AllNotesIcons
-import app.overbay.allnotes.ui.theme.allNotesSpring
+import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.workspace.SlashCommandKind
 
 @Composable
@@ -50,8 +50,8 @@ internal fun SlashCommandPopup(
 
     AnimatedVisibility(
         visible = commands.isNotEmpty(),
-        enter = expandVertically(animationSpec = allNotesSpring()) + fadeIn(animationSpec = allNotesSpring()),
-        exit = shrinkVertically(animationSpec = allNotesSpring()) + fadeOut(animationSpec = allNotesSpring()),
+        enter = expandVertically(animationSpec = AllNotesMotion.spatialFast()) + fadeIn(animationSpec = AllNotesMotion.effectsFast()),
+        exit = shrinkVertically(animationSpec = AllNotesMotion.spatialFast()) + fadeOut(animationSpec = AllNotesMotion.effectsFast()),
         modifier = modifier
     ) {
         Surface(

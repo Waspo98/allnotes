@@ -65,8 +65,8 @@ internal fun CodeSnippetBlockContent(
         }
     }
 
-    LaunchedEffect(focusRequest?.requestToken) {
-        if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
+    if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
+        LaunchedEffect(focusRequest.requestToken) {
             codeHolder.moveCursorTo(focusRequest.cursorOffset)
             runCatching { focusRequester.requestFocus() }
             onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))

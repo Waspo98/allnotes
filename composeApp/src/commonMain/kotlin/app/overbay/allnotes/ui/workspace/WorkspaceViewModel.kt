@@ -37,6 +37,7 @@ class WorkspaceViewModel(
 
     private val _uiState = MutableStateFlow(buildInitialState())
     val uiState: StateFlow<WorkspaceUiState> = _uiState.asStateFlow()
+    val preferencesFlow: StateFlow<app.overbay.allnotes.model.WorkspacePreferences> = repository.preferences
 
     private val syncController = WorkspaceSyncController(
         repository = repository,

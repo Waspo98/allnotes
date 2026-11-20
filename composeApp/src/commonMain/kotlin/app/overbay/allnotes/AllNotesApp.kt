@@ -17,10 +17,10 @@ fun AllNotesApp(
     viewModel: WorkspaceViewModel = remember { WorkspaceViewModel() },
     modifier: Modifier = Modifier
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val prefs by viewModel.preferencesFlow.collectAsState()
     AllNotesTheme(
-        themeMode = state.preferences.themeMode,
-        useDynamicColor = state.preferences.useDynamicColor
+        themeMode = prefs.themeMode,
+        useDynamicColor = prefs.useDynamicColor
     ) {
         Surface(
             modifier = modifier.fillMaxSize(),

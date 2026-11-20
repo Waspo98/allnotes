@@ -50,8 +50,8 @@ internal fun HeadingBlockContent(
     val fieldHolder = rememberSyncedFieldHolder(block.id, block.text)
     val fieldValue = fieldHolder.fieldValue
 
-    LaunchedEffect(focusRequest?.requestToken) {
-        if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
+    if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
+        LaunchedEffect(focusRequest.requestToken) {
             val pos = focusRequest.cursorOffset.coerceIn(0, block.text.length)
             fieldHolder.moveCursorTo(pos)
             runCatching { focusRequester.requestFocus() }
@@ -158,8 +158,8 @@ internal fun CalloutBlockContent(
     val titleHolder = rememberSyncedFieldHolder(block.id to "title", block.title)
     val bodyHolder = rememberSyncedFieldHolder(block.id to "body", block.text)
 
-    LaunchedEffect(focusRequest?.requestToken) {
-        if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
+    if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
+        LaunchedEffect(focusRequest.requestToken) {
             val pos = focusRequest.cursorOffset.coerceIn(0, block.text.length)
             bodyHolder.moveCursorTo(pos)
             runCatching { bodyFocusRequester.requestFocus() }

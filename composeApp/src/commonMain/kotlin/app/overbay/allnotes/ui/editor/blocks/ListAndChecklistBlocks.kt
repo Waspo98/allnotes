@@ -89,8 +89,8 @@ internal fun ChecklistBlockContent(
                 val requester = remember(item.id) { FocusRequester() }
                 val fieldHolder = rememberSyncedFieldHolder(item.id, item.text)
 
-                LaunchedEffect(focusRequest?.requestToken) {
-                    if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex == index) {
+                if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex == index) {
+                    LaunchedEffect(focusRequest.requestToken) {
                         val pos = focusRequest.cursorOffset.coerceIn(0, item.text.length)
                         fieldHolder.moveCursorTo(pos)
                         runCatching { requester.requestFocus() }
@@ -202,8 +202,8 @@ internal fun BulletListBlockContent(
                 val requester = remember(block.id, index) { FocusRequester() }
                 val fieldHolder = rememberSyncedFieldHolder(block.id to index, item)
 
-                LaunchedEffect(focusRequest?.requestToken) {
-                    if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex == index) {
+                if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex == index) {
+                    LaunchedEffect(focusRequest.requestToken) {
                         val pos = focusRequest.cursorOffset.coerceIn(0, item.length)
                         fieldHolder.moveCursorTo(pos)
                         runCatching { requester.requestFocus() }

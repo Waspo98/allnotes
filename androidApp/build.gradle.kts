@@ -119,9 +119,16 @@ configurations.all {
 }
 
 val targetApk = layout.buildDirectory.file("outputs/apk/debug/androidApp-debug.apk")
+val targetReleaseApk = layout.buildDirectory.file("outputs/apk/release/androidApp-release.apk")
 
 tasks.register<CopyDebugApkTask>("copyDebugApkToRoot") {
     inputFile.set(targetApk)
+    betaBuild.set(isBetaApp)
+    rootDirectory.set(layout.projectDirectory.dir(".."))
+}
+
+tasks.register<CopyDebugApkTask>("copyReleaseApkToRoot") {
+    inputFile.set(targetReleaseApk)
     betaBuild.set(isBetaApp)
     rootDirectory.set(layout.projectDirectory.dir(".."))
 }

@@ -1,30 +1,34 @@
 package app.overbay.allnotes.ui.workspace
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.Surface
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -33,14 +37,18 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.ui.editor.DocumentEditorPane
 import app.overbay.allnotes.ui.hierarchy.CollapsedWorkspaceRail
 import app.overbay.allnotes.ui.hierarchy.HierarchySidebar
-import app.overbay.allnotes.ui.theme.allNotesSpring
+import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.workspace.dialogs.WorkspaceDialogsHost
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun WorkspaceScreen(
@@ -89,7 +97,15 @@ fun WorkspaceScreen(
         dismissActiveOverlayOrSearch()
     }
 
-    BoxWithConstraints(
+    val density = LocalDensity.current
+    val containerWidthPx = LocalWindowInfo.current.containerSize.width
+    val windowWidthDp = remember(containerWidthPx, density) {
+        if (containerWidthPx > 0) with(density) { containerWidthPx.toDp() } else 1080.dp
+    }
+    val isCompactMobile = windowWidthDp < 680.dp
+    val isMediumOverlay = !isCompactMobile && windowWidthDp < 1040.dp
+
+    Box(
         modifier = modifier
             .fillMaxSize()
             .focusable()
@@ -166,8 +182,6 @@ fun WorkspaceScreen(
                 }
             }
     ) {
-        val isCompactMobile = maxWidth < 680.dp
-
         if (isCompactMobile) {
             val drawerState = rememberDrawerState(
                 initialValue = if (state.isMobileHierarchySheetOpen) DrawerValue.Open else DrawerValue.Closed
@@ -221,37 +235,111 @@ fun WorkspaceScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
-        } else {
-            Row(modifier = Modifier.fillMaxSize()) {
-                AnimatedVisibility(
-                    visible = state.isSidebarOpen,
-                    enter = expandHorizontally(animationSpec = allNotesSpring()) + fadeIn(animationSpec = allNotesSpring()),
-                    exit = shrinkHorizontally(animationSpec = allNotesSpring()) + fadeOut(animationSpec = allNotesSpring())
-                ) {
-                    Row(modifier = Modifier.fillMaxHeight()) {
+        } else if (isMediumOverlay) {
+            val sidebarProgress = animateFloatAsState(
+                targetValue = if (state.isSidebarOpen) 1f else 0f,
+                animationSpec = AllNotesMotion.spatialDefault(),
+                label = "MediumSidebarOverlay"
+            )
+            val sidebarWidthPx = with(density) { 320.dp.toPx() }
+            val scrimColor = MaterialTheme.colorScheme.scrim
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    CollapsedWorkspaceRail(
+                        state = state,
+                        onAction = viewModel::dispatch
+                    )
+                    VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                    DocumentEditorPane(
+                        state = state,
+                        isCompactMobile = false,
+                        onAction = viewModel::dispatch,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                if (state.isSidebarOpen || sidebarProgress.value > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = (sidebarProgress.value * 0.28f).coerceIn(0f, 0.28f) }
+                            .background(scrimColor)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                viewModel.dispatch(WorkspaceAction.ToggleSidebar)
+                            }
+                    )
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(320.dp)
+                            .graphicsLayer {
+                                translationX = -(1f - sidebarProgress.value) * sidebarWidthPx
+                            },
+                        shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
+                        shadowElevation = 8.dp,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow
+                    ) {
                         HierarchySidebar(
                             state = state,
                             onAction = viewModel::dispatch,
-                            modifier = Modifier.width(320.dp)
+                            modifier = Modifier.fillMaxSize()
                         )
-                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     }
                 }
+            }
+        } else {
+            val sidebarProgress = animateFloatAsState(
+                targetValue = if (state.isSidebarOpen) 1f else 0f,
+                animationSpec = AllNotesMotion.spatialDefault(),
+                label = "DesktopSidebarWidth"
+            )
+            val railWidthPx = with(density) { 60.dp.roundToPx() }
+            val expandedWidthPx = with(density) { 320.dp.roundToPx() }
 
-                AnimatedVisibility(
-                    visible = !state.isSidebarOpen,
-                    enter = expandHorizontally(animationSpec = allNotesSpring()) + fadeIn(animationSpec = allNotesSpring()),
-                    exit = shrinkHorizontally(animationSpec = allNotesSpring()) + fadeOut(animationSpec = allNotesSpring())
+            Row(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .clipToBounds()
+                        .layout { measurable, constraints ->
+                            val t = sidebarProgress.value.coerceIn(0f, 1f)
+                            val targetW = (railWidthPx + (expandedWidthPx - railWidthPx) * t).roundToInt()
+                            val placeable = measurable.measure(
+                                constraints.copy(minWidth = targetW, maxWidth = targetW)
+                            )
+                            layout(targetW, placeable.height) {
+                                placeable.placeRelative(0, 0)
+                            }
+                        }
                 ) {
-                    Row(modifier = Modifier.fillMaxHeight()) {
+                    if (sidebarProgress.value < 0.99f) {
                         CollapsedWorkspaceRail(
                             state = state,
-                            onAction = viewModel::dispatch
+                            onAction = viewModel::dispatch,
+                            modifier = Modifier.graphicsLayer {
+                                alpha = (1f - sidebarProgress.value * 1.4f).coerceIn(0f, 1f)
+                            }
                         )
-                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    }
+                    if (sidebarProgress.value > 0.01f) {
+                        HierarchySidebar(
+                            state = state,
+                            onAction = viewModel::dispatch,
+                            modifier = Modifier
+                                .width(320.dp)
+                                .fillMaxHeight()
+                                .graphicsLayer {
+                                    alpha = ((sidebarProgress.value - 0.15f) / 0.85f).coerceIn(0f, 1f)
+                                    translationX = -(1f - sidebarProgress.value) * 28f
+                                }
+                        )
                     }
                 }
-
+                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                 DocumentEditorPane(
                     state = state,
                     isCompactMobile = false,

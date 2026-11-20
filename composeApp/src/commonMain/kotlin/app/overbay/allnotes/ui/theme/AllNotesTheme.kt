@@ -1,11 +1,13 @@
 package app.overbay.allnotes.ui.theme
 
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -130,10 +132,31 @@ private fun SectionAccentKey.resolvePalette(isDark: Boolean): AccentPalette = wh
     }
 }
 
-fun <T> allNotesSpring() = spring<T>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
-    stiffness = Spring.StiffnessLow
-)
+/**
+ * Calibrated Material 3 Expressive motion specs separating snappy spatial springs
+ * from critically damped (zero-bounce) effects specs for fades and colors.
+ */
+object AllNotesMotion {
+    fun <T> spatialFast(): FiniteAnimationSpec<T> = spring(
+        dampingRatio = 0.82f,
+        stiffness = 900f
+    )
+
+    fun <T> spatialDefault(): FiniteAnimationSpec<T> = spring(
+        dampingRatio = 0.86f,
+        stiffness = 550f
+    )
+
+    fun <T> effectsFast(): FiniteAnimationSpec<T> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = 1600f
+    )
+
+    fun <T> effectsDefault(): FiniteAnimationSpec<T> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = 900f
+    )
+}
 
 @Composable
 fun SectionAccentKey.containerColor(): Color = resolvePalette(LocalIsDarkTheme.current).container
@@ -166,6 +189,7 @@ fun AllNotesTheme(
     CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme,
+            motionScheme = MotionScheme.expressive(),
             content = content
         )
     }

@@ -47,8 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.theme.accentColor
-import app.overbay.allnotes.ui.theme.allNotesSpring
 import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
@@ -319,7 +319,7 @@ fun HierarchySidebar(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (state.pagesForSection.isEmpty()) {
-                    item(key = "empty-pages-placeholder") {
+                    item(key = "empty-pages-placeholder", contentType = "empty-placeholder") {
                         EmptyPagesPlaceholder(
                             hasSearchQuery = state.searchQuery.isNotBlank(),
                             onClearSearch = { onAction(WorkspaceAction.SetSearchQuery("")) },
@@ -327,7 +327,11 @@ fun HierarchySidebar(
                         )
                     }
                 } else {
-                    items(state.pagesForSection, key = { it.id }) { page ->
+                    items(
+                        items = state.pagesForSection,
+                        key = { it.id },
+                        contentType = { if (it.parentPageId != null) "subpage" else "page" }
+                    ) { page ->
                         PageHierarchyItem(
                             page = page,
                             isSelected = page.id == state.activePage?.id,
@@ -338,13 +342,17 @@ fun HierarchySidebar(
                             searchQuery = state.searchQuery,
                             onTogglePin = { onAction(WorkspaceAction.TogglePinPage(page.id)) },
                             onRequestDelete = { onAction(WorkspaceAction.RequestDeletePage(page.id)) },
-                            modifier = Modifier.animateItem(placementSpec = allNotesSpring())
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = AllNotesMotion.effectsFast(),
+                                fadeOutSpec = AllNotesMotion.effectsFast(),
+                                placementSpec = AllNotesMotion.spatialFast()
+                            )
                         )
                     }
                 }
 
                 if (globalHits.isNotEmpty()) {
-                    item(key = "global-search-header") {
+                    item(key = "global-search-header", contentType = "global-header") {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "OTHER SECTIONS & NOTEBOOKS (${globalHits.size})",
@@ -354,7 +362,11 @@ fun HierarchySidebar(
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
-                    items(globalHits, key = { "global-${it.page.id}" }) { hit ->
+                    items(
+                        items = globalHits,
+                        key = { "global-${it.page.id}" },
+                        contentType = { "global-hit" }
+                    ) { hit ->
                         GlobalSearchResultCard(
                             hit = hit,
                             searchQuery = state.searchQuery,

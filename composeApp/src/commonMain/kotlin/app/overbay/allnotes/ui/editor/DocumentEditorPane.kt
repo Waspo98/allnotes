@@ -54,7 +54,7 @@ import app.overbay.allnotes.ui.editor.toolbar.ExpressiveInsertFabMenu
 import app.overbay.allnotes.ui.editor.toolbar.MobileFloatingToolbar
 import app.overbay.allnotes.ui.media.rememberPlatformAttachmentPicker
 import app.overbay.allnotes.ui.theme.AllNotesIcons
-import app.overbay.allnotes.ui.theme.allNotesSpring
+import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
@@ -179,7 +179,7 @@ fun DocumentEditorPane(
                             ),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            item(key = "page-header-${page.id}") {
+                            item(key = "page-header-${page.id}", contentType = "page-header") {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Box(modifier = Modifier.fillMaxWidth()) {
                                         if (titleHolder.fieldValue.text.isEmpty()) {
@@ -221,20 +221,29 @@ fun DocumentEditorPane(
                                 }
                             }
 
-                            items(page.blocks, key = { it.id }) { block ->
+                            items(
+                                items = page.blocks,
+                                key = { it.id },
+                                contentType = { it::class.simpleName }
+                            ) { block ->
+                                val blockFocusRequest = state.focusRequest?.takeIf { it.blockId == block.id }
                                 DocumentBlockView(
                                     block = block,
                                     isActive = block.id == state.activeBlockId,
                                     isCompactMobile = isCompactMobile,
                                     searchQuery = state.searchQuery,
-                                    focusRequest = state.focusRequest,
+                                    focusRequest = blockFocusRequest,
                                     onRequestMediaPicker = requestMediaPicker,
                                     onAction = onAction,
-                                    modifier = Modifier.animateItem(placementSpec = allNotesSpring())
+                                    modifier = Modifier.animateItem(
+                                        fadeInSpec = AllNotesMotion.effectsFast(),
+                                        fadeOutSpec = AllNotesMotion.effectsFast(),
+                                        placementSpec = AllNotesMotion.spatialFast()
+                                    )
                                 )
                             }
 
-                            item(key = "trailing-canvas-${page.id}") {
+                            item(key = "trailing-canvas-${page.id}", contentType = "trailing-canvas") {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -254,8 +263,8 @@ fun DocumentEditorPane(
 
             AnimatedVisibility(
                 visible = state.statusBannerMessage != null,
-                enter = fadeIn(allNotesSpring()),
-                exit = fadeOut(allNotesSpring()),
+                enter = fadeIn(AllNotesMotion.effectsFast()),
+                exit = fadeOut(AllNotesMotion.effectsFast()),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
