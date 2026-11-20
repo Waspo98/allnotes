@@ -15,8 +15,11 @@ import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class NoteRepository(
@@ -36,6 +39,9 @@ class NoteRepository(
     private val _preferences = MutableStateFlow(storage.loadPreferences())
     val preferences: StateFlow<WorkspacePreferences> = _preferences.asStateFlow()
 
+    private val _storageErrors = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val storageErrors: SharedFlow<String> = _storageErrors.asSharedFlow()
+
     private val stateLock = Any()
     private val persistence = WorkspacePersistenceCoordinator(
         storage = storage,
@@ -52,6 +58,7 @@ class NoteRepository(
     private var lastEpochMs = maxKnownEntityEpochMs
 
     init {
+        storage.storageErrorHandler = { msg -> _storageErrors.tryEmit(msg) }
         val prefs = _preferences.value
         if (prefs.useRemoteHttpSync && syncProvider is LocalLoopbackSyncProvider) {
             syncProvider = HttpSyncProvider(
@@ -192,10 +199,7 @@ class NoteRepository(
             title = "Welcome to $cleanTitle",
             blocks = listOf(
                 DocumentBlock.Heading(id = nextId("blk"), text = cleanTitle, level = 2),
-                DocumentBlock.Paragraph(
-                    id = nextId("blk"),
-                    text = "Start typing or add structured blocks below."
-                )
+                DocumentBlock.Paragraph(id = nextId("blk"), text = "Start typing or add structured blocks below.")
             ),
             updatedAtEpochMs = now
         )
@@ -292,12 +296,7 @@ class NoteRepository(
             id = nextId("page"),
             sectionId = newSection.id,
             title = "Untitled Page",
-            blocks = listOf(
-                DocumentBlock.Paragraph(
-                    id = nextId("blk"),
-                    text = ""
-                )
-            ),
+            blocks = listOf(DocumentBlock.Paragraph(id = nextId("blk"), text = "")),
             updatedAtEpochMs = now
         )
         commitFullSnapshot { current ->
@@ -361,23 +360,20 @@ class NoteRepository(
         }
     }
 
-    fun createPage(sectionId: String, title: String = "Untitled Page", parentPageId: String? = null): NotePage {
+    fun createPage(sectionId: String, title: String = "Untitled Page", parentPageId: String? = null, allowBlankTitle: Boolean = false): NotePage {
         flushPendingWrites()
         val now = nextTimestampMs()
-        val newPage = NotePage(
-            id = nextId("page"),
-            sectionId = sectionId,
-            parentPageId = parentPageId,
-            title = title.trim().ifEmpty { "Untitled Page" },
-            blocks = listOf(
-                DocumentBlock.Paragraph(
-                    id = nextId("blk"),
-                    text = ""
-                )
-            ),
-            updatedAtEpochMs = now
+        val resolvedTitle = if (allowBlankTitle) title.trim() else title.trim().ifEmpty { "Untitled Page" }
+        return insertConstructedPage(
+            NotePage(
+                id = nextId("page"),
+                sectionId = sectionId,
+                parentPageId = parentPageId,
+                title = resolvedTitle,
+                blocks = listOf(DocumentBlock.Paragraph(id = nextId("blk"), text = "")),
+                updatedAtEpochMs = now
+            )
         )
-        return insertConstructedPage(newPage)
     }
 
     fun insertConstructedPage(newPage: NotePage): NotePage {
@@ -503,14 +499,8 @@ class NoteRepository(
                 updatedAtEpochMs = now,
                 blocks = page.blocks.map { block ->
                     if (block.id == blockId && block is DocumentBlock.Checklist) {
-                        block.copy(
-                            items = block.items.map { item ->
-                                if (item.id == itemId) item.copy(isChecked = !item.isChecked) else item
-                            }
-                        )
-                    } else {
-                        block
-                    }
+                        block.copy(items = block.items.map { item -> if (item.id == itemId) item.copy(isChecked = !item.isChecked) else item })
+                    } else block
                 }
             )
         }
@@ -525,11 +515,7 @@ class NoteRepository(
             page.copy(
                 updatedAtEpochMs = now,
                 blocks = page.blocks.map { block ->
-                    if (block.id == blockId && block is DocumentBlock.Checklist) {
-                        block.copy(items = block.items + newItem)
-                    } else {
-                        block
-                    }
+                    if (block.id == blockId && block is DocumentBlock.Checklist) block.copy(items = block.items + newItem) else block
                 }
             )
         }

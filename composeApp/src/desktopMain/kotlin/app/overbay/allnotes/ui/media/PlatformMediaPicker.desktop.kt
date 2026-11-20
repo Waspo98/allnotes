@@ -148,19 +148,6 @@ private fun compressDesktopImage(rawBytes: ByteArray): ByteArray {
     }.getOrDefault(rawBytes)
 }
 
-private fun guessMimeFromName(name: String): String {
-    val ext = name.substringAfterLast('.', "").lowercase()
-    return when (ext) {
-        "png" -> "image/png"
-        "jpg", "jpeg" -> "image/jpeg"
-        "webp" -> "image/webp"
-        "gif" -> "image/gif"
-        "pdf" -> "application/pdf"
-        "md", "txt" -> "text/plain"
-        else -> "application/octet-stream"
-    }
-}
-
 actual fun decodeBytesToImageBitmap(bytes: ByteArray): ImageBitmap? {
     return try {
         Image.makeFromEncoded(bytes).toComposeImageBitmap()

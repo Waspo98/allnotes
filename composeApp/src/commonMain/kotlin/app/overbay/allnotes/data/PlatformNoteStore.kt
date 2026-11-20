@@ -7,6 +7,10 @@ import app.overbay.allnotes.model.WorkspacePreferences
 import app.overbay.allnotes.model.WorkspaceSnapshot
 
 interface NoteStorageBackend {
+    var storageErrorHandler: ((String) -> Unit)?
+        get() = null
+        set(_) {}
+
     fun loadSnapshot(): WorkspaceSnapshot?
     fun saveSnapshot(snapshot: WorkspaceSnapshot)
 
@@ -45,6 +49,7 @@ interface NoteStorageBackend {
 }
 
 expect class PlatformNoteStore() : NoteStorageBackend {
+    override var storageErrorHandler: ((String) -> Unit)?
     override fun loadSnapshot(): WorkspaceSnapshot?
     override fun saveSnapshot(snapshot: WorkspaceSnapshot)
     override fun savePage(page: NotePage, revision: Long)

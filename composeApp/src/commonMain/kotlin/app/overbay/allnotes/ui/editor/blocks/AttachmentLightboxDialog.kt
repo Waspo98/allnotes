@@ -27,9 +27,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -37,8 +39,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -74,9 +78,20 @@ internal fun AttachmentLightboxDialog(
     val coroutineScope = rememberCoroutineScope()
     val scaleAnim = remember(attachment.id) { Animatable(1f) }
     val offsetAnim = remember(attachment.id) { Animatable(Offset.Zero, Offset.VectorConverter) }
+    var viewportSize by remember(attachment.id) { mutableStateOf(IntSize.Zero) }
     val transformState = rememberTransformableState { _, zoomChange, panChange, _ ->
         val nextScale = (scaleAnim.value * zoomChange).coerceIn(1f, 4f)
-        val nextOffset = if (nextScale > 1.02f) offsetAnim.value + panChange else Offset.Zero
+        val maxOffsetX = (viewportSize.width * (nextScale - 1f)) / 2f
+        val maxOffsetY = (viewportSize.height * (nextScale - 1f)) / 2f
+        val nextOffset = if (nextScale > 1.02f) {
+            val raw = offsetAnim.value + panChange
+            Offset(
+                x = raw.x.coerceIn(-maxOffsetX, maxOffsetX),
+                y = raw.y.coerceIn(-maxOffsetY, maxOffsetY)
+            )
+        } else {
+            Offset.Zero
+        }
         coroutineScope.launch {
             scaleAnim.snapTo(nextScale)
             offsetAnim.snapTo(nextOffset)
@@ -158,6 +173,7 @@ internal fun AttachmentLightboxDialog(
                         .weight(1f)
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                        .onSizeChanged { viewportSize = it }
                         .pointerInput(attachment.id) {
                             detectTapGestures(
                                 onDoubleTap = {

@@ -315,5 +315,33 @@ class RichSpanAndEditorControllerTest {
         assertEquals(2, h2.level)
         assertEquals("Existing text", h2.text)
         assertEquals(0, prefixed.focusRequest?.cursorOffset)
+
+        // Code fence prefix waits for trailing space so typed language tags like ```python work
+        val typingFence = EditorInputController.editParagraphWithTriggers(
+            blocks = listOf(DocumentBlock.Paragraph(id = "p3", text = "")),
+            blockId = "p3",
+            newText = "```",
+            cursorOffset = 3,
+            nextId = nextId,
+            nextToken = nextTok
+        )
+        assertTrue(typingFence.blocks.single() is DocumentBlock.Paragraph)
+
+        val typedLang = EditorInputController.editParagraphWithTriggers(
+            blocks = typingFence.blocks,
+            blockId = "p3",
+            newText = "```python ",
+            cursorOffset = 10,
+            nextId = nextId,
+            nextToken = nextTok
+        )
+        val snippet = typedLang.blocks.single() as DocumentBlock.CodeSnippet
+        assertEquals("python", snippet.language)
+
+        // Collapsed cursor on whitespace in a non-empty paragraph does not toggle whole-block bold
+        val nonEmpty = DocumentBlock.Paragraph(id = "p4", text = "Hello ")
+        val untouched = RichSpanEngine.toggleSelectionSpan(nonEmpty, 6, 6, RichSpanKind.BOLD)
+        assertFalse(untouched.isBold)
+        assertTrue(untouched.spans.isEmpty())
     }
 }

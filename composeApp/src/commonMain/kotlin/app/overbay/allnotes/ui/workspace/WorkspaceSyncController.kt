@@ -8,6 +8,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Coordinates manual, startup, and debounced background synchronization for [WorkspaceViewModel].
@@ -18,13 +20,16 @@ internal class WorkspaceSyncController(
     private val onStatusChange: (SyncStatus) -> Unit,
     private val onSettingsSaved: (endpointUrl: String, useRemoteHttp: Boolean) -> Unit
 ) {
+    private val syncMutex = Mutex()
     private var autoSyncJob: Job? = null
 
     fun syncOnLaunchIfEnabled() {
         if (repository.preferences.value.useRemoteHttpSync) {
             scope.launch {
-                val res = repository.pullFromServer()
-                onStatusChange(if (res.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE)
+                syncMutex.withLock {
+                    val res = repository.pullFromServer()
+                    onStatusChange(if (res.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE)
+                }
             }
         } else {
             onStatusChange(SyncStatus.LOCAL_READY)
@@ -36,9 +41,11 @@ internal class WorkspaceSyncController(
         autoSyncJob?.cancel()
         autoSyncJob = scope.launch {
             delay(1500L)
-            onStatusChange(SyncStatus.SYNCING)
-            val result = repository.syncWithServer()
-            onStatusChange(if (result.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE)
+            syncMutex.withLock {
+                onStatusChange(SyncStatus.SYNCING)
+                val result = repository.syncWithServer()
+                onStatusChange(if (result.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE)
+            }
         }
     }
 
@@ -48,6 +55,7 @@ internal class WorkspaceSyncController(
         authToken: String,
         autoSync: Boolean
     ) {
+        autoSyncJob?.cancel()
         val cleanUrl = endpointUrl.trim().ifEmpty { DEFAULT_SYNC_ENDPOINT }
         val cleanToken = authToken.trim()
         repository.updatePreferences {
@@ -69,15 +77,18 @@ internal class WorkspaceSyncController(
     }
 
     fun triggerManualSync() {
+        autoSyncJob?.cancel()
         if (!repository.isRemoteSyncEnabled) {
             repository.flushPendingWrites()
             onStatusChange(SyncStatus.LOCAL_READY)
             return
         }
         scope.launch {
-            onStatusChange(SyncStatus.SYNCING)
-            val result = repository.syncWithServer()
-            onStatusChange(if (result.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE)
+            syncMutex.withLock {
+                onStatusChange(SyncStatus.SYNCING)
+                val result = repository.syncWithServer()
+                onStatusChange(if (result.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE)
+            }
         }
     }
 

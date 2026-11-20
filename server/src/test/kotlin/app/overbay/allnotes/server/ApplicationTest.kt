@@ -192,18 +192,72 @@ class ApplicationTest {
     @Test
     fun testCorsReflectsOriginWithCredentialsForBrowserWasmClient() {
         val origin = "https://notes.overbay.app"
-        val responseHeaders = java.net.Socket("127.0.0.1", server.boundPort).use { socket ->
+        val responseHeaders = sendRawGet("/api/v1/sync", origin)
+        assertTrue(responseHeaders.startsWith("HTTP/1.1 200"))
+        assertTrue(responseHeaders.contains("Access-control-allow-origin: $origin", ignoreCase = true))
+        assertTrue(responseHeaders.contains("Access-control-allow-credentials: true", ignoreCase = true))
+        assertTrue(responseHeaders.contains("Vary: Origin", ignoreCase = true))
+
+        val evilResponse = sendRawGet("/api/v1/sync", "https://evil.example")
+        assertTrue(evilResponse.startsWith("HTTP/1.1 200"))
+        assertTrue(!evilResponse.contains("Access-control-allow-origin", ignoreCase = true))
+        assertTrue(!evilResponse.contains("Access-control-allow-credentials", ignoreCase = true))
+        assertTrue(evilResponse.contains("Vary: Origin", ignoreCase = true))
+    }
+
+    @Test
+    fun testHeadRequestsReturnHeadersWithoutBody() {
+        val healthConn = (URL("$baseUrl/api/v1/health").openConnection() as HttpURLConnection).apply {
+            requestMethod = "HEAD"
+        }
+        assertEquals(200, healthConn.responseCode)
+        assertEquals("", healthConn.inputStream.bufferedReader().use { it.readText() })
+
+        val staticConn = (URL("$baseUrl/index.html").openConnection() as HttpURLConnection).apply {
+            requestMethod = "HEAD"
+        }
+        assertEquals(200, staticConn.responseCode)
+        assertEquals("text/html; charset=utf-8", staticConn.getHeaderField("Content-Type"))
+        assertEquals("", staticConn.inputStream.bufferedReader().use { it.readText() })
+    }
+
+    @Test
+    fun testAuthentikForwardAuthWithoutBearerTokenStillRejectsMissingHeader() {
+        val authDir = Files.createTempDirectory("allnotes_authentik_test").toFile()
+        val protectedServer = AllNotesServer(
+            port = 0,
+            dataDir = authDir,
+            webDistDir = webDir,
+            authToken = "",
+            trustAuthentikForwardAuth = true
+        )
+        protectedServer.start()
+        val authBase = "http://127.0.0.1:${protectedServer.boundPort}"
+        try {
+            val missingHeader = (URL("$authBase/api/v1/sync").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+            }
+            assertEquals(401, missingHeader.responseCode)
+
+            val withUser = (URL("$authBase/api/v1/sync").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("X-authentik-username", "neal")
+            }
+            assertEquals(200, withUser.responseCode)
+        } finally {
+            protectedServer.stop(0)
+            authDir.deleteRecursively()
+        }
+    }
+
+    private fun sendRawGet(path: String, origin: String): String =
+        java.net.Socket("127.0.0.1", server.boundPort).use { socket ->
             val out = socket.getOutputStream().bufferedWriter(Charsets.US_ASCII)
-            out.write("GET /api/v1/sync HTTP/1.1\r\n")
+            out.write("GET $path HTTP/1.1\r\n")
             out.write("Host: 127.0.0.1:${server.boundPort}\r\n")
             out.write("Origin: $origin\r\n")
             out.write("Connection: close\r\n\r\n")
             out.flush()
             socket.getInputStream().bufferedReader(Charsets.UTF_8).readText()
         }
-        assertTrue(responseHeaders.startsWith("HTTP/1.1 200"))
-        assertTrue(responseHeaders.contains("Access-control-allow-origin: $origin", ignoreCase = true))
-        assertTrue(responseHeaders.contains("Access-control-allow-credentials: true", ignoreCase = true))
-        assertTrue(responseHeaders.contains("Vary: Origin", ignoreCase = true))
-    }
 }

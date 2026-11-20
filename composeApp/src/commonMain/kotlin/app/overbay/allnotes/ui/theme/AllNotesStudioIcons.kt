@@ -1,13 +1,6 @@
 package app.overbay.allnotes.ui.theme
 
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathBuilder
-import androidx.compose.ui.graphics.vector.path
-import androidx.compose.ui.unit.dp
 
 /**
  * Extended optically balanced 24x24 rounded vector icons for studio formatting,
@@ -15,45 +8,8 @@ import androidx.compose.ui.unit.dp
  */
 internal object AllNotesStudioIcons {
 
-    private fun stroked(
-        name: String,
-        strokeWidth: Float = 1.85f,
-        block: PathBuilder.() -> Unit
-    ): ImageVector = ImageVector.Builder(
-        name = name,
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f
-    ).apply {
-        path(
-            fill = null,
-            stroke = SolidColor(Color.Black),
-            strokeLineWidth = strokeWidth,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round,
-            pathBuilder = block
-        )
-    }.build()
-
-    private fun filled(
-        name: String,
-        block: PathBuilder.() -> Unit
-    ): ImageVector = ImageVector.Builder(
-        name = name,
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f
-    ).apply {
-        path(
-            fill = SolidColor(Color.Black),
-            pathBuilder = block
-        )
-    }.build()
-
     val PinFilled: ImageVector by lazy {
-        filled("PinFilled") {
+        filledVectorIcon("PinFilled") {
             moveTo(15.2f, 3.6f)
             lineTo(20.4f, 8.8f)
             lineTo(18.8f, 10.4f)
@@ -77,7 +33,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Link: ImageVector by lazy {
-        stroked("Link") {
+        strokedVectorIcon("Link") {
             moveTo(10.2f, 13.8f)
             arcTo(4.5f, 4.5f, 0f, false, false, 16.6f, 13.8f)
             lineTo(18.8f, 11.6f)
@@ -92,7 +48,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Undo: ImageVector by lazy {
-        stroked("Undo") {
+        strokedVectorIcon("Undo") {
             moveTo(8.5f, 13.5f)
             lineTo(4.25f, 9.25f)
             lineTo(8.5f, 5f)
@@ -104,7 +60,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Redo: ImageVector by lazy {
-        stroked("Redo") {
+        strokedVectorIcon("Redo") {
             moveTo(15.5f, 13.5f)
             lineTo(19.75f, 9.25f)
             lineTo(15.5f, 5f)
@@ -116,7 +72,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Attach: ImageVector by lazy {
-        stroked("Attach") {
+        strokedVectorIcon("Attach") {
             moveTo(20.6f, 11.2f)
             lineTo(12f, 19.8f)
             arcTo(5.25f, 5.25f, 0f, false, true, 4.6f, 12.4f)
@@ -129,7 +85,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Image: ImageVector by lazy {
-        stroked("Image") {
+        strokedVectorIcon("Image") {
             moveTo(5.5f, 4.5f)
             lineTo(18.5f, 4.5f)
             arcTo(2f, 2f, 0f, false, true, 20.5f, 6.5f)
@@ -151,7 +107,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Divider: ImageVector by lazy {
-        stroked("Divider") {
+        strokedVectorIcon("Divider") {
             moveTo(4f, 12f)
             lineTo(20f, 12f)
             moveTo(7.5f, 7f)
@@ -162,7 +118,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Copy: ImageVector by lazy {
-        stroked("Copy") {
+        strokedVectorIcon("Copy") {
             moveTo(10f, 8.5f)
             lineTo(18.25f, 8.5f)
             arcTo(1.5f, 1.5f, 0f, false, true, 19.75f, 10f)
@@ -183,7 +139,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Settings: ImageVector by lazy {
-        stroked("Settings") {
+        strokedVectorIcon("Settings") {
             moveTo(12f, 8.75f)
             arcTo(3.25f, 3.25f, 0f, true, true, 11.99f, 8.75f)
             close()
@@ -207,7 +163,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Markdown: ImageVector by lazy {
-        stroked("Markdown") {
+        strokedVectorIcon("Markdown") {
             moveTo(4.75f, 6.5f)
             lineTo(19.25f, 6.5f)
             arcTo(1.75f, 1.75f, 0f, false, true, 21f, 8.25f)
@@ -232,7 +188,7 @@ internal object AllNotesStudioIcons {
     }
 
     val ChevronRight: ImageVector by lazy {
-        stroked("ChevronRight") {
+        strokedVectorIcon("ChevronRight") {
             moveTo(9.25f, 6.25f)
             lineTo(15f, 12f)
             lineTo(9.25f, 17.75f)
@@ -240,7 +196,7 @@ internal object AllNotesStudioIcons {
     }
 
     val ChevronDown: ImageVector by lazy {
-        stroked("ChevronDown") {
+        strokedVectorIcon("ChevronDown") {
             moveTo(6.25f, 9.25f)
             lineTo(12f, 15f)
             lineTo(17.75f, 9.25f)
@@ -248,7 +204,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Palette: ImageVector by lazy {
-        stroked("Palette") {
+        strokedVectorIcon("Palette") {
             moveTo(12f, 3.5f)
             arcTo(8.5f, 8.5f, 0f, true, false, 12f, 20.5f)
             arcTo(2.25f, 2.25f, 0f, false, false, 14.25f, 18.25f)
@@ -267,7 +223,7 @@ internal object AllNotesStudioIcons {
     }
 
     val FolderMove: ImageVector by lazy {
-        stroked("FolderMove") {
+        strokedVectorIcon("FolderMove") {
             moveTo(3.5f, 6.5f)
             arcTo(1.5f, 1.5f, 0f, false, true, 5f, 5f)
             lineTo(9.25f, 5f)
@@ -288,7 +244,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Check: ImageVector by lazy {
-        stroked("Check") {
+        strokedVectorIcon("Check") {
             moveTo(5.25f, 12.5f)
             lineTo(9.75f, 17f)
             lineTo(18.75f, 7.5f)
@@ -296,7 +252,7 @@ internal object AllNotesStudioIcons {
     }
 
     val ClearFormatting: ImageVector by lazy {
-        stroked("ClearFormatting") {
+        strokedVectorIcon("ClearFormatting") {
             moveTo(6.5f, 5.5f)
             lineTo(18.5f, 5.5f)
             moveTo(12.75f, 5.5f)
@@ -309,7 +265,7 @@ internal object AllNotesStudioIcons {
     }
 
     val Lightbulb: ImageVector by lazy {
-        stroked("Lightbulb") {
+        strokedVectorIcon("Lightbulb") {
             moveTo(9.25f, 17.5f)
             lineTo(14.75f, 17.5f)
             moveTo(10f, 20.25f)
@@ -325,76 +281,12 @@ internal object AllNotesStudioIcons {
     }
 
     val Spark: ImageVector by lazy {
-        stroked("Spark") {
+        strokedVectorIcon("Spark") {
             moveTo(12f, 3.5f)
             curveTo(12.6f, 8.2f, 15.8f, 11.4f, 20.5f, 12f)
             curveTo(15.8f, 12.6f, 12.6f, 15.8f, 12f, 20.5f)
             curveTo(11.4f, 15.8f, 8.2f, 12.6f, 3.5f, 12f)
             curveTo(8.2f, 11.4f, 11.4f, 8.2f, 12f, 3.5f)
-            close()
-        }
-    }
-
-    val EditNote: ImageVector by lazy {
-        stroked("EditNote") {
-            moveTo(11f, 4.75f)
-            lineTo(6.25f, 4.75f)
-            arcTo(2f, 2f, 0f, false, false, 4.25f, 6.75f)
-            lineTo(4.25f, 17.75f)
-            arcTo(2f, 2f, 0f, false, false, 6.25f, 19.75f)
-            lineTo(17.25f, 19.75f)
-            arcTo(2f, 2f, 0f, false, false, 19.25f, 17.75f)
-            lineTo(19.25f, 13f)
-            moveTo(16.75f, 4.25f)
-            arcTo(1.8f, 1.8f, 0f, false, true, 19.3f, 6.8f)
-            lineTo(12.2f, 13.9f)
-            lineTo(9.25f, 14.75f)
-            lineTo(10.1f, 11.8f)
-            close()
-        }
-    }
-
-    val GridApps: ImageVector by lazy {
-        stroked("GridApps") {
-            moveTo(5.5f, 4.5f)
-            lineTo(9.25f, 4.5f)
-            arcTo(1f, 1f, 0f, false, true, 10.25f, 5.5f)
-            lineTo(10.25f, 9.25f)
-            arcTo(1f, 1f, 0f, false, true, 9.25f, 10.25f)
-            lineTo(5.5f, 10.25f)
-            arcTo(1f, 1f, 0f, false, true, 4.5f, 9.25f)
-            lineTo(4.5f, 5.5f)
-            arcTo(1f, 1f, 0f, false, true, 5.5f, 4.5f)
-            close()
-            moveTo(14.75f, 4.5f)
-            lineTo(18.5f, 4.5f)
-            arcTo(1f, 1f, 0f, false, true, 19.5f, 5.5f)
-            lineTo(19.5f, 9.25f)
-            arcTo(1f, 1f, 0f, false, true, 18.5f, 10.25f)
-            lineTo(14.75f, 10.25f)
-            arcTo(1f, 1f, 0f, false, true, 13.75f, 9.25f)
-            lineTo(13.75f, 5.5f)
-            arcTo(1f, 1f, 0f, false, true, 14.75f, 4.5f)
-            close()
-            moveTo(5.5f, 13.75f)
-            lineTo(9.25f, 13.75f)
-            arcTo(1f, 1f, 0f, false, true, 10.25f, 14.75f)
-            lineTo(10.25f, 18.5f)
-            arcTo(1f, 1f, 0f, false, true, 9.25f, 19.5f)
-            lineTo(5.5f, 19.5f)
-            arcTo(1f, 1f, 0f, false, true, 4.5f, 18.5f)
-            lineTo(4.5f, 14.75f)
-            arcTo(1f, 1f, 0f, false, true, 5.5f, 13.75f)
-            close()
-            moveTo(14.75f, 13.75f)
-            lineTo(18.5f, 13.75f)
-            arcTo(1f, 1f, 0f, false, true, 19.5f, 14.75f)
-            lineTo(19.5f, 18.5f)
-            arcTo(1f, 1f, 0f, false, true, 18.5f, 19.5f)
-            lineTo(14.75f, 19.5f)
-            arcTo(1f, 1f, 0f, false, true, 13.75f, 18.5f)
-            lineTo(13.75f, 14.75f)
-            arcTo(1f, 1f, 0f, false, true, 14.75f, 13.75f)
             close()
         }
     }

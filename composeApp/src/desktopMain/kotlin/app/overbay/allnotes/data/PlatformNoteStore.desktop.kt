@@ -14,6 +14,8 @@ import kotlinx.serialization.json.Json
  * Migrates legacy `allnotes_workspace_v1.json` on first run if found.
  */
 actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
+    actual override var storageErrorHandler: ((String) -> Unit)? = null
+
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -58,6 +60,7 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             sqlStore.saveSnapshot(snapshot)
         } catch (e: Exception) {
             System.err.println("AllNotes DesktopStorage: Failed to save snapshot: ${e.message}")
+            storageErrorHandler?.invoke("Failed to save workspace locally: ${e.message ?: "storage error"}")
         }
     }
 
@@ -66,6 +69,7 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             sqlStore.savePage(page, revision)
         } catch (e: Exception) {
             System.err.println("AllNotes DesktopStorage: Failed to save page ${page.id}: ${e.message}")
+            storageErrorHandler?.invoke("Failed to save page locally: ${e.message ?: "storage error"}")
         }
     }
 
@@ -74,6 +78,7 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             sqlStore.deletePage(pageId, revision, deletedAtEpochMs)
         } catch (e: Exception) {
             System.err.println("AllNotes DesktopStorage: Failed to delete page $pageId: ${e.message}")
+            storageErrorHandler?.invoke("Failed to delete page locally: ${e.message ?: "storage error"}")
         }
     }
 
@@ -91,6 +96,7 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             sqlStore.savePreferences(preferences)
         } catch (e: Exception) {
             System.err.println("AllNotes DesktopStorage: Failed to save preferences: ${e.message}")
+            storageErrorHandler?.invoke("Failed to save settings locally: ${e.message ?: "storage error"}")
         }
     }
 }

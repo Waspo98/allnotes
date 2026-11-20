@@ -37,7 +37,7 @@ actual fun rememberPlatformAttachmentPicker(
                         reader.onload = {
                             val dataUrl = reader.result?.toString().orEmpty()
                             val base64 = dataUrl.substringAfter("base64,", "")
-                            val mime = file.type.ifBlank { "application/octet-stream" }
+                            val mime = file.type.ifBlank { guessMimeFromName(file.name) }
                             if (base64.isNotEmpty()) {
                                 currentOnPicked(
                                     PickedAttachmentData(

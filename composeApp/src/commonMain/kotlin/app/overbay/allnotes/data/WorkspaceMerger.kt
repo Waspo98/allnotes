@@ -2,8 +2,6 @@ package app.overbay.allnotes.data
 
 import app.overbay.allnotes.model.DeletedEntity
 import app.overbay.allnotes.model.EntityKind
-import app.overbay.allnotes.model.NotePage
-import app.overbay.allnotes.model.NoteSection
 import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.WorkspaceSnapshot
 

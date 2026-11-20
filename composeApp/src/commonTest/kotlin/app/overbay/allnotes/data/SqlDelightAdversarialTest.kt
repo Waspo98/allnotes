@@ -392,21 +392,10 @@ class SqlDelightAdversarialTest {
 
     @Test
     fun pageWithNonExistentParentPageId_failsForeignKeyConstraint() {
-        val fkBefore = driver.executeQuery(null, "PRAGMA foreign_keys;", { cursor ->
-            app.cash.sqldelight.db.QueryResult.Value(if (cursor.next().value) cursor.getLong(0) else -1L)
-        }, 0).value
-        println("Empirical: PRAGMA foreign_keys before saveSnapshot = $fkBefore")
-
         val nb = Notebook(id = "nb-fk", title = "FK Test", accent = SectionAccentKey.INDIGO)
         val sec = NoteSection(id = "sec-fk", notebookId = "nb-fk", title = "FK Sec", accent = SectionAccentKey.INDIGO)
         store.saveSnapshot(WorkspaceSnapshot(listOf(nb), listOf(sec), emptyList(), 1L))
 
-        val fkAfter = driver.executeQuery(null, "PRAGMA foreign_keys;", { cursor ->
-            app.cash.sqldelight.db.QueryResult.Value(if (cursor.next().value) cursor.getLong(0) else -1L)
-        }, 0).value
-        println("Empirical: PRAGMA foreign_keys after saveSnapshot = $fkAfter")
-
-        // Saving a page directly whose parentPageId does not exist
         val invalidChild = NotePage(
             id = "p-invalid-child",
             sectionId = "sec-fk",
@@ -414,26 +403,10 @@ class SqlDelightAdversarialTest {
             title = "Invalid Child"
         )
 
-        var threwException = false
-        try {
+        assertFailsWith<Exception> {
             store.savePage(invalidChild)
-        } catch (e: Exception) {
-            println("Caught expected FK exception on parentPageId: ${e::class.simpleName}: ${e.message}")
-            threwException = true
         }
-        println("Empirical: threwException on non-existent parentPageId = $threwException")
-
-        // Run PRAGMA foreign_key_check
-        driver.executeQuery(null, "PRAGMA foreign_key_check;", { cursor ->
-            while (cursor.next().value) {
-                val table = cursor.getString(0)
-                val rowid = cursor.getLong(1)
-                val target = cursor.getString(2)
-                val fkid = cursor.getLong(3)
-                println("PRAGMA foreign_key_check VIOLATION: table=$table, rowid=$rowid, target=$target, fkid=$fkid")
-            }
-            app.cash.sqldelight.db.QueryResult.Unit
-        }, 0)
+        assertNull(store.getPage("p-invalid-child"))
     }
 
     @Test
@@ -451,16 +424,11 @@ class SqlDelightAdversarialTest {
             revision = 1L
         )
 
-        // If pageA is inserted, pageB does not exist yet.
-        println("Testing mutually cyclic snapshot save...")
-        try {
-            store.saveSnapshot(cyclicSnapshot)
-            val loaded = store.loadSnapshot()
-            assertNotNull(loaded)
-            println("EMPIRICAL FINDING: Mutually cyclic snapshot succeeded: loaded ${loaded.pages.size} pages")
-        } catch (e: Exception) {
-            println("EMPIRICAL FINDING: Mutually cyclic snapshot failed: ${e.message}")
-        }
+        // Two-pass saveSnapshot inserts pages with null parent first, then wires parentPageId
+        store.saveSnapshot(cyclicSnapshot)
+        val loaded = store.loadSnapshot()
+        assertNotNull(loaded)
+        assertEquals(2, loaded.pages.size)
     }
 
     @Test
@@ -477,14 +445,9 @@ class SqlDelightAdversarialTest {
             revision = 1L
         )
 
-        println("Testing self cyclic snapshot save...")
-        try {
-            store.saveSnapshot(selfSnapshot)
-            val loaded = store.loadSnapshot()
-            assertNotNull(loaded)
-            println("EMPIRICAL FINDING: Self cyclic snapshot succeeded: loaded ${loaded.pages.size} pages")
-        } catch (e: Exception) {
-            println("EMPIRICAL FINDING: Self cyclic snapshot failed: ${e.message}")
-        }
+        store.saveSnapshot(selfSnapshot)
+        val loaded = store.loadSnapshot()
+        assertNotNull(loaded)
+        assertEquals(1, loaded.pages.size)
     }
 }

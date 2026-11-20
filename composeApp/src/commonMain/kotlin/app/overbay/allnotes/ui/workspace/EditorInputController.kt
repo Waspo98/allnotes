@@ -144,7 +144,7 @@ object EditorInputController {
                 DocumentBlock.Callout(id = blockId, title = "Note", text = rest, tone = CalloutTone.INFO) to
                     EditorFocusRequest(blockId, cursorOffset = shiftedCursor(2, rest), requestToken = nextToken())
             }
-            newText.startsWith("```") && (newText.endsWith(" ") || newText.length == 3) -> {
+            newText.startsWith("```") && newText.endsWith(" ") && !newText.removePrefix("```").dropLast(1).contains(' ') -> {
                 val lang = newText.removePrefix("```").trim().ifEmpty { "kotlin" }
                 DocumentBlock.CodeSnippet(id = blockId, language = lang, code = "") to
                     EditorFocusRequest(blockId, cursorOffset = 0, requestToken = nextToken())

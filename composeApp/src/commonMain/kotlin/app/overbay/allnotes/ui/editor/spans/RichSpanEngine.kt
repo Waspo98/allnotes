@@ -57,7 +57,7 @@ object RichSpanEngine {
         val targetRange = if (minSel < maxSel) {
             minSel to maxSel
         } else {
-            resolveWordRangeAtCursor(text, minSel) ?: return toggleWholeBlockBoolean(paragraph, kind)
+            resolveWordRangeAtCursor(text, minSel) ?: return paragraph
         }
 
         // Promote any whole-block legacy boolean for this kind into explicit spans before sub-range editing

@@ -78,3 +78,16 @@ fun formatAttachmentSize(bytes: Long): String = when {
         "${tenths / 10}.${tenths % 10} MB"
     }
 }
+
+internal fun guessMimeFromName(name: String): String {
+    return when (name.substringAfterLast('.', "").lowercase()) {
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "webp" -> "image/webp"
+        "gif" -> "image/gif"
+        "pdf" -> "application/pdf"
+        "md", "txt" -> "text/plain"
+        "json" -> "application/json"
+        else -> "application/octet-stream"
+    }
+}

@@ -25,7 +25,8 @@ class AllNotesServer(
     val dataDir: File = File(System.getenv("DATA_DIR") ?: "./data").apply { mkdirs() },
     val webDistDir: File = File(System.getenv("WEB_DIR") ?: System.getenv("WEB_DIST_DIR") ?: "./web"),
     val authToken: String = System.getenv("ALLNOTES_AUTH_TOKEN")?.trim().orEmpty(),
-    val trustAuthentikForwardAuth: Boolean = System.getenv("TRUST_AUTHENTIK_HEADERS")?.toBoolean() == true
+    val trustAuthentikForwardAuth: Boolean = System.getenv("TRUST_AUTHENTIK_HEADERS")?.toBoolean() == true,
+    val allowedCorsOrigins: Set<String> = parseAllowedOrigins(System.getenv("ALLNOTES_ALLOWED_ORIGINS"))
 ) {
     private var httpServer: HttpServer? = null
     private val snapshotLock = Any()
@@ -81,7 +82,11 @@ class AllNotesServer(
                     sendJson(exchange, 200, payload)
                 }
                 "POST", "PUT" -> {
-                    val body = exchange.requestBody.bufferedReader(Charsets.UTF_8).readText()
+                    val body = readBodyWithLimit(exchange, MAX_SYNC_BODY_BYTES)
+                    if (body == null) {
+                        sendJson(exchange, 413, """{"error":"Workspace snapshot payload exceeds size limit"}""")
+                        return@createContext
+                    }
                     try {
                         val incoming = serverJson.decodeFromString<WorkspaceSnapshot>(body)
                         val encoded = synchronized(snapshotLock) {
@@ -122,18 +127,22 @@ class AllNotesServer(
     }
 
     private fun isAuthorized(exchange: HttpExchange): Boolean {
-        if (authToken.isEmpty()) return true
+        if (authToken.isEmpty() && !trustAuthentikForwardAuth) return true
         if (trustAuthentikForwardAuth) {
             val authentikUser = exchange.requestHeaders.getFirst("X-authentik-username")?.trim().orEmpty()
             if (authentikUser.isNotEmpty()) return true
         }
-        val header = exchange.requestHeaders.getFirst("Authorization")?.trim().orEmpty()
-        if (!header.startsWith("Bearer ", ignoreCase = true)) return false
-        val provided = header.substring(7).trim()
-        return MessageDigest.isEqual(
-            provided.toByteArray(Charsets.UTF_8),
-            authToken.toByteArray(Charsets.UTF_8)
-        )
+        if (authToken.isNotEmpty()) {
+            val header = exchange.requestHeaders.getFirst("Authorization")?.trim().orEmpty()
+            if (header.startsWith("Bearer ", ignoreCase = true)) {
+                val provided = header.substring(7).trim()
+                return MessageDigest.isEqual(
+                    provided.toByteArray(Charsets.UTF_8),
+                    authToken.toByteArray(Charsets.UTF_8)
+                )
+            }
+        }
+        return false
     }
 
     fun stop(delaySeconds: Int = 0) {
@@ -148,20 +157,12 @@ class AllNotesServer(
 
         if (webDistDir.exists() && candidate.startsWith(webDistDir.canonicalFile) && candidate.isFile) {
             val contentType = resolveContentType(candidate.name)
-            val bytes = candidate.readBytes()
-            addCorsHeaders(exchange)
-            exchange.responseHeaders.set("Content-Type", contentType)
-            exchange.sendResponseHeaders(200, bytes.size.toLong())
-            exchange.responseBody.use { it.write(bytes) }
+            sendBytes(exchange, 200, contentType, candidate.readBytes())
         } else if (webDistDir.exists() && !reqPath.contains(".") && File(webDistDir, "index.html").isFile) {
             val indexFile = File(webDistDir, "index.html")
-            val bytes = indexFile.readBytes()
-            addCorsHeaders(exchange)
-            exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
-            exchange.sendResponseHeaders(200, bytes.size.toLong())
-            exchange.responseBody.use { it.write(bytes) }
+            sendBytes(exchange, 200, "text/html; charset=utf-8", indexFile.readBytes())
         } else if (webDistDir.exists() && rawPath.isNotEmpty()) {
-            sendJson(exchange, 404, """{"error":"Asset not found: $rawPath"}""")
+            sendJson(exchange, 404, serverJson.encodeToString(mapOf("error" to "Asset not found: $rawPath")))
         } else {
             sendJson(
                 exchange,
@@ -206,11 +207,13 @@ class AllNotesServer(
 
     private fun addCorsHeaders(exchange: HttpExchange) {
         val headers = exchange.responseHeaders
-        val requestOrigin = exchange.requestHeaders.getFirst("Origin")?.takeIf { it.isNotBlank() }
+        val requestOrigin = exchange.requestHeaders.getFirst("Origin")?.trim()?.takeIf { it.isNotEmpty() }
         if (requestOrigin != null) {
-            headers.set("Access-Control-Allow-Origin", requestOrigin)
-            headers.set("Access-Control-Allow-Credentials", "true")
             headers.set("Vary", "Origin")
+            if (isAllowedOrigin(requestOrigin)) {
+                headers.set("Access-Control-Allow-Origin", requestOrigin)
+                headers.set("Access-Control-Allow-Credentials", "true")
+            }
         } else {
             headers.set("Access-Control-Allow-Origin", "*")
         }
@@ -218,18 +221,62 @@ class AllNotesServer(
         headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
     }
 
+    private fun isAllowedOrigin(origin: String): Boolean {
+        if (origin in allowedCorsOrigins) return true
+        return LOCALHOST_ORIGIN_REGEX.matches(origin)
+    }
+
     private fun sendJson(exchange: HttpExchange, status: Int, jsonBody: String) {
-        val bytes = jsonBody.toByteArray(Charsets.UTF_8)
+        sendBytes(exchange, status, "application/json; charset=utf-8", jsonBody.toByteArray(Charsets.UTF_8))
+    }
+
+    private fun sendBytes(exchange: HttpExchange, status: Int, contentType: String, bytes: ByteArray) {
         addCorsHeaders(exchange)
-        exchange.responseHeaders.set("Content-Type", "application/json; charset=utf-8")
-        exchange.sendResponseHeaders(status, bytes.size.toLong())
-        exchange.responseBody.use { it.write(bytes) }
+        exchange.responseHeaders.set("Content-Type", contentType)
+        if (exchange.requestMethod.equals("HEAD", ignoreCase = true)) {
+            exchange.responseHeaders.set("Content-Length", bytes.size.toString())
+            exchange.sendResponseHeaders(status, -1)
+            exchange.responseBody.close()
+        } else {
+            exchange.sendResponseHeaders(status, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
     }
 
     private fun sendNoContent(exchange: HttpExchange) {
         addCorsHeaders(exchange)
         exchange.sendResponseHeaders(204, -1)
         exchange.responseBody.close()
+    }
+
+    private fun readBodyWithLimit(exchange: HttpExchange, maxBytes: Int): String? {
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(8192)
+        var total = 0
+        exchange.requestBody.use { stream ->
+            while (true) {
+                val read = stream.read(buf)
+                if (read <= 0) break
+                total += read
+                if (total > maxBytes) return null
+                out.write(buf, 0, read)
+            }
+        }
+        return out.toByteArray().toString(Charsets.UTF_8)
+    }
+
+    companion object {
+        private const val MAX_SYNC_BODY_BYTES = 32 * 1024 * 1024
+        private val LOCALHOST_ORIGIN_REGEX = Regex("^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$")
+
+        fun parseAllowedOrigins(raw: String?): Set<String> {
+            val defaults = setOf("https://notes.overbay.app")
+            val extras = raw.orEmpty()
+                .split(',')
+                .map { it.trim().trimEnd('/') }
+                .filter { it.isNotEmpty() }
+            return defaults + extras
+        }
     }
 }
 

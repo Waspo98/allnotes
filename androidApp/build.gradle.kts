@@ -102,18 +102,20 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel)
 }
 
+fun MinimalExternalModuleDependency.asNotation(): String = "${module}:${versionConstraint.requiredVersion}"
+
 configurations.all {
     resolutionStrategy {
         force(
-            "androidx.core:core:${libs.versions.androidxCore.get()}",
-            "androidx.core:core-ktx:${libs.versions.androidxCore.get()}",
-            "androidx.lifecycle:lifecycle-viewmodel-compose:${libs.versions.androidxLifecycle.get()}",
-            "androidx.lifecycle:lifecycle-runtime-compose:${libs.versions.androidxLifecycle.get()}",
-            "androidx.lifecycle:lifecycle-viewmodel:${libs.versions.androidxLifecycle.get()}",
-            "androidx.lifecycle:lifecycle-runtime:${libs.versions.androidxLifecycle.get()}",
-            "androidx.lifecycle:lifecycle-runtime-ktx:${libs.versions.androidxLifecycle.get()}",
-            "androidx.lifecycle:lifecycle-viewmodel-ktx:${libs.versions.androidxLifecycle.get()}",
-            "androidx.lifecycle:lifecycle-common:${libs.versions.androidxLifecycle.get()}"
+            libs.androidx.core.asProvider().get().asNotation(),
+            libs.androidx.core.ktx.get().asNotation(),
+            libs.androidx.lifecycle.viewmodel.compose.get().asNotation(),
+            libs.androidx.lifecycle.runtime.compose.get().asNotation(),
+            libs.androidx.lifecycle.viewmodel.asProvider().get().asNotation(),
+            libs.androidx.lifecycle.runtime.asProvider().get().asNotation(),
+            libs.androidx.lifecycle.runtime.ktx.get().asNotation(),
+            libs.androidx.lifecycle.viewmodel.ktx.get().asNotation(),
+            libs.androidx.lifecycle.common.get().asNotation()
         )
     }
 }

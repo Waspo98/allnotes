@@ -9,10 +9,13 @@ services:
       - DATA_DIR=/data
       - WEB_DIR=/app/web
       - WEB_DIST_DIR=/app/web
+      - ALLNOTES_AUTH_TOKEN=${ALLNOTES_AUTH_TOKEN:-}
+      - TRUST_AUTHENTIK_HEADERS=${TRUST_AUTHENTIK_HEADERS:-false}
+      - ALLNOTES_ALLOWED_ORIGINS=${ALLNOTES_ALLOWED_ORIGINS:-https://notes.overbay.app}
     volumes:
       - ./data:/data
     ports:
-      - "8094:8094"
+      - "127.0.0.1:8094:8094"
     networks:
       - web_proxy
 

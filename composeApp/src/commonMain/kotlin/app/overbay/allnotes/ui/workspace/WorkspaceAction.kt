@@ -27,7 +27,6 @@ sealed interface WorkspaceAction {
     data class ShowStatusBanner(val message: String) : WorkspaceAction
     data object DismissStatusBanner : WorkspaceAction
     data object TriggerSync : WorkspaceAction
-    data class ConfigureSyncServer(val endpointUrl: String, val useRemoteHttp: Boolean) : WorkspaceAction
     data class SaveSyncAndAuthSettings(
         val endpointUrl: String,
         val useRemoteHttp: Boolean,
@@ -58,7 +57,6 @@ sealed interface WorkspaceAction {
     data class TogglePinPage(val pageId: String) : WorkspaceAction
     data class RequestDeletePage(val pageId: String) : WorkspaceAction
     data class DeletePage(val pageId: String) : WorkspaceAction
-    data object DeleteActivePage : WorkspaceAction
     data object Undo : WorkspaceAction
     data object Redo : WorkspaceAction
 
@@ -106,7 +104,6 @@ sealed interface WorkspaceAction {
         val selEnd: Int? = null
     ) : WorkspaceAction
     data class ToggleParagraphStyle(val blockId: String, val style: String) : WorkspaceAction
-    data class ToggleActiveParagraphStyle(val style: String) : WorkspaceAction
     data object ClearActiveParagraphFormatting : WorkspaceAction
     data class ConvertActiveBlock(val command: SlashCommandKind) : WorkspaceAction
     data class UpdateHeadingLevel(val blockId: String, val level: Int) : WorkspaceAction
@@ -114,14 +111,12 @@ sealed interface WorkspaceAction {
     // Checklist Mutations
     data class UpdateChecklistTitle(val blockId: String, val title: String) : WorkspaceAction
     data class ToggleChecklistItem(val blockId: String, val itemId: String) : WorkspaceAction
-    data class AddChecklistItem(val blockId: String, val text: String) : WorkspaceAction
     data class InsertChecklistItemAfter(val blockId: String, val afterItemId: String? = null) : WorkspaceAction
     data class UpdateChecklistItemText(val blockId: String, val itemId: String, val text: String) : WorkspaceAction
     data class DeleteChecklistItem(val blockId: String, val itemId: String) : WorkspaceAction
 
     // Bullet / Numbered List Mutations
     data class ToggleBulletListKind(val blockId: String) : WorkspaceAction
-    data class AddBulletListItem(val blockId: String, val text: String) : WorkspaceAction
     data class InsertBulletListItemAfter(val blockId: String, val afterItemIndex: Int? = null) : WorkspaceAction
     data class UpdateBulletListItem(val blockId: String, val itemIndex: Int, val text: String) : WorkspaceAction
     data class DeleteBulletListItem(val blockId: String, val itemIndex: Int) : WorkspaceAction

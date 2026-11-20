@@ -213,11 +213,6 @@ object AllNotesMotion {
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = 1600f
     )
-
-    fun <T> effectsDefault(): FiniteAnimationSpec<T> = spring(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = 900f
-    )
 }
 
 @Composable

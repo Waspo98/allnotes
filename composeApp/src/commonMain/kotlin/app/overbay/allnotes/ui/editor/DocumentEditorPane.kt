@@ -176,7 +176,12 @@ fun DocumentEditorPane(
                             },
                             label = "PageFadeThrough"
                         ) { animatedPageId ->
-                            val renderedPage = state.pages.firstOrNull { it.id == animatedPageId } ?: page
+                            val livePage = state.pages.firstOrNull { it.id == animatedPageId }
+                            val cachedPageState = remember(animatedPageId) { mutableStateOf(livePage ?: page) }
+                            if (livePage != null && livePage != cachedPageState.value) {
+                                cachedPageState.value = livePage
+                            }
+                            val renderedPage = cachedPageState.value
                             val listState = rememberLazyListState()
                             val titleHolder = rememberSyncedFieldHolder("page-title-${renderedPage.id}", renderedPage.title)
 

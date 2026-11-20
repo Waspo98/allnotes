@@ -2,7 +2,6 @@ package app.overbay.allnotes.ui.editor
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -32,11 +31,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.ui.editor.toolbar.ExpressiveInsertFabMenu
@@ -126,56 +123,54 @@ internal fun BoxScope.MobileEditorChromeOverlay(
         )
     }
 
-    val pillVisibility by animateFloatAsState(
-        targetValue = if (!isWritingMode && readingPillHidden) 0f else 1f,
-        animationSpec = AllNotesMotion.spatialFast(),
-        label = "MobileChromeVisibility"
-    )
-    Box(
+    AnimatedVisibility(
+        visible = isWritingMode || !readingPillHidden,
+        enter = fadeIn(AllNotesMotion.effectsFast()) + slideInVertically(AllNotesMotion.spatialFast()) { it },
+        exit = fadeOut(AllNotesMotion.effectsFast()) + slideOutVertically(AllNotesMotion.spatialFast()) { it },
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
             .navigationBarsPadding()
             .imePadding()
             .padding(bottom = 14.dp, start = 12.dp, end = 12.dp)
-            .graphicsLayer {
-                alpha = pillVisibility
-                translationY = (1f - pillVisibility) * 84f
-            },
-        contentAlignment = Alignment.BottomCenter
     ) {
-        AnimatedContent(
-            targetState = isWritingMode,
-            transitionSpec = {
-                (fadeIn(AllNotesMotion.effectsFast()) + slideInVertically(AllNotesMotion.spatialFast()) { it / 3 }) togetherWith
-                    (fadeOut(AllNotesMotion.effectsFast()) + slideOutVertically(AllNotesMotion.spatialFast()) { it / 3 })
-            },
-            label = "MobileModeChrome"
-        ) { writing ->
-            if (writing) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    MobileFloatingToolbar(
-                        state = state,
-                        onRequestMediaPicker = onRequestMediaPicker,
-                        onAction = onAction,
-                        modifier = Modifier.weight(1f)
-                    )
-                    ExpressiveInsertFabMenu(
-                        state = state,
-                        onRequestMediaPicker = onRequestMediaPicker,
-                        onAction = onAction
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            AnimatedContent(
+                targetState = isWritingMode,
+                transitionSpec = {
+                    (fadeIn(AllNotesMotion.effectsFast()) + slideInVertically(AllNotesMotion.spatialFast()) { it / 3 }) togetherWith
+                        (fadeOut(AllNotesMotion.effectsFast()) + slideOutVertically(AllNotesMotion.spatialFast()) { it / 3 })
+                },
+                label = "MobileModeChrome"
+            ) { writing ->
+                if (writing) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        MobileFloatingToolbar(
+                            state = state,
+                            onRequestMediaPicker = onRequestMediaPicker,
+                            onAction = onAction,
+                            modifier = Modifier.weight(1f)
+                        )
+                        ExpressiveInsertFabMenu(
+                            state = state,
+                            onRequestMediaPicker = onRequestMediaPicker,
+                            onAction = onAction
+                        )
+                    }
+                } else {
+                    MobileReadingPill(
+                        onOpenDrawer = { onAction(WorkspaceAction.SetMobileHierarchySheetOpen(true)) },
+                        onNewPage = { onAction(WorkspaceAction.CreatePageInstant(false)) },
+                        onOpenBlockSheet = { onAction(WorkspaceAction.SetBlockInsertSheetOpen(true)) }
                     )
                 }
-            } else {
-                MobileReadingPill(
-                    onOpenDrawer = { onAction(WorkspaceAction.SetMobileHierarchySheetOpen(true)) },
-                    onNewPage = { onAction(WorkspaceAction.CreatePageInstant(false)) },
-                    onOpenBlockSheet = { onAction(WorkspaceAction.SetBlockInsertSheetOpen(true)) }
-                )
             }
         }
     }

@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.data.AndroidStoragePaths
 import app.overbay.allnotes.ui.theme.AllNotesTheme
-import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceViewModel
 import java.io.File

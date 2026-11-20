@@ -63,6 +63,13 @@ class WorkspaceViewModel(
                 }
             }
         }
+        scope.launch {
+            repository.storageErrors.collect { errMsg ->
+                _uiState.update {
+                    it.copy(statusBannerMessage = errMsg, statusBannerActionLabel = null, statusBannerAction = null)
+                }
+            }
+        }
         syncController.syncOnLaunchIfEnabled()
     }
 
@@ -255,8 +262,7 @@ class WorkspaceViewModel(
     fun createPageInstant(asSubpageOfActive: Boolean = false) {
         val secId = _uiState.value.activeSection?.id ?: return
         val parentId = if (asSubpageOfActive) _uiState.value.activePage?.let { it.parentPageId ?: it.id } else null
-        val created = repository.createPage(secId, "", parentId)
-        repository.updatePageTitle(created.id, "", debounced = false)
+        val created = repository.createPage(secId, "", parentId, allowBlankTitle = true)
         _uiState.update {
             it.copy(
                 activeDialog = ActiveDialog.NONE, isMobileHierarchySheetOpen = false,
@@ -311,8 +317,8 @@ class WorkspaceViewModel(
     }
 
     internal fun toggleSubpageCollapse(parentPageId: String) {
-        val activeChildParent = _uiState.value.activePage?.parentPageId
         _uiState.update { state ->
+            val activeChildParent = state.activePage?.parentPageId
             val nextSet = if (parentPageId in state.collapsedParentPageIds) state.collapsedParentPageIds - parentPageId
             else state.collapsedParentPageIds + parentPageId
             val nextPageId = if (parentPageId in nextSet && activeChildParent == parentPageId) parentPageId else state.selectedPageId
@@ -427,9 +433,8 @@ class WorkspaceViewModel(
     ) {
         val page = _uiState.value.activePage ?: return
         val updatedBlocks = transform(page.blocks)
-        if (updatedBlocks != page.blocks) {
-            undoRedo.recordBeforeMutation(page.id, page.blocks, debounced, keepBlockActive ?: _uiState.value.activeBlockId, currentEpochMillis())
-        }
+        if (updatedBlocks == page.blocks) return
+        undoRedo.recordBeforeMutation(page.id, page.blocks, debounced, keepBlockActive ?: _uiState.value.activeBlockId, currentEpochMillis())
         repository.updatePageBlocks(page.id, updatedBlocks, debounced = debounced)
         syncStateFromRepository()
         if (keepBlockActive != null) {
@@ -476,20 +481,6 @@ class WorkspaceViewModel(
     fun updateCalloutTitle(blockId: String, title: String) = mutateActivePageBlocks(blockId, true) { BlockMutationEngine.updateCalloutTitle(it, blockId, title) }
     fun updateCalloutTone(blockId: String, tone: CalloutTone) = mutateActivePageBlocks(blockId) { BlockMutationEngine.updateCalloutTone(it, blockId, tone) }
     fun updateCodeLanguage(blockId: String, language: String) = mutateActivePageBlocks(blockId) { BlockMutationEngine.updateCodeLanguage(it, blockId, language) }
-
-    fun toggleActiveParagraphStyle(style: String) {
-        val kind = when (style.lowercase()) {
-            "bold" -> RichSpanKind.BOLD
-            "italic" -> RichSpanKind.ITALIC
-            "underline" -> RichSpanKind.UNDERLINE
-            "strikethrough", "strike" -> RichSpanKind.STRIKETHROUGH
-            "highlight" -> RichSpanKind.HIGHLIGHT
-            "code" -> RichSpanKind.INLINE_CODE
-            "accent" -> RichSpanKind.COLOR_ACCENT
-            else -> return
-        }
-        toggleSelectionSpan(kind, null, null, null, null)
-    }
 
     fun clearActiveParagraphFormatting() {
         val targetId = _uiState.value.activeBlockId ?: return
@@ -592,11 +583,6 @@ class WorkspaceViewModel(
 
     internal fun saveSyncAndAuthSettings(endpointUrl: String, useRemoteHttp: Boolean, authToken: String, autoSync: Boolean) {
         syncController.saveSettingsAndSync(endpointUrl, useRemoteHttp, authToken, autoSync)
-    }
-
-    fun configureSyncServer(endpointUrl: String, useRemoteHttp: Boolean) {
-        val prefs = repository.preferences.value
-        syncController.saveSettingsAndSync(endpointUrl, useRemoteHttp, prefs.syncAuthToken, prefs.autoSyncOnEdit)
     }
 
     fun triggerManualSync() = syncController.triggerManualSync()

@@ -57,6 +57,8 @@ actual fun rememberPlatformAttachmentPicker(
                         }
                     }
 
+                    val isImage = mime.startsWith("image/")
+                    val streamLimit = if (isImage) 12_000_000L else MAX_ATTACHMENT_BYTES
                     val rawBytes = resolver.openInputStream(uri)?.use { stream ->
                         val buffer = ByteArrayOutputStream()
                         val chunk = ByteArray(8192)
@@ -65,15 +67,20 @@ actual fun rememberPlatformAttachmentPicker(
                             val read = stream.read(chunk)
                             if (read <= 0) break
                             total += read
-                            if (total > 12_000_000L) {
-                                error("Selected file is too large (max 2 MB for non-images, 12 MB for photos).")
+                            if (total > streamLimit) {
+                                val msg = if (isImage) {
+                                    "Selected photo is too large (max 12 MB before compression)."
+                                } else {
+                                    "File exceeds 2 MB sync limit."
+                                }
+                                error(msg)
                             }
                             buffer.write(chunk, 0, read)
                         }
                         buffer.toByteArray()
                     } ?: error("Unable to read selected file.")
 
-                    val needsReencode = mime.startsWith("image/") &&
+                    val needsReencode = isImage &&
                         (rawBytes.size > 900_000 || readExifOrientation(rawBytes) != ExifInterface.ORIENTATION_NORMAL)
                     val (finalBytes, finalMime) = if (needsReencode) {
                         compressAndOrientAndroidImage(rawBytes) to "image/jpeg"

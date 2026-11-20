@@ -10,6 +10,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
+    actual override var storageErrorHandler: ((String) -> Unit)? = null
+
     private val storageKey = "allnotes_workspace_v1"
     private val preferencesKey = "allnotes_preferences_v1"
     private val json = Json {
@@ -47,6 +49,7 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             localStorage.setItem(storageKey, json.encodeToString(snapshot))
         } catch (e: Exception) {
             println("AllNotes WasmStorage: Failed to persist workspace snapshot (quota/private mode): ${e.message}")
+            storageErrorHandler?.invoke("Browser storage full or blocked; changes may not persist locally.")
         }
     }
 
@@ -98,6 +101,7 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
             localStorage.setItem(preferencesKey, json.encodeToString(preferences))
         } catch (e: Exception) {
             println("AllNotes WasmStorage: Failed to persist preferences: ${e.message}")
+            storageErrorHandler?.invoke("Failed to save browser settings.")
         }
     }
 }

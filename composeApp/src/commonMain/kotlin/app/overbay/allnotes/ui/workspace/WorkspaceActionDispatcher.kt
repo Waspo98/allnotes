@@ -34,7 +34,6 @@ internal object WorkspaceActionDispatcher {
                 it.copy(statusBannerMessage = null, statusBannerActionLabel = null, statusBannerAction = null)
             }
             WorkspaceAction.TriggerSync -> vm.triggerManualSync()
-            is WorkspaceAction.ConfigureSyncServer -> vm.configureSyncServer(action.endpointUrl, action.useRemoteHttp)
             is WorkspaceAction.SaveSyncAndAuthSettings -> vm.saveSyncAndAuthSettings(
                 action.endpointUrl, action.useRemoteHttp, action.authToken, action.autoSync
             )
@@ -60,7 +59,6 @@ internal object WorkspaceActionDispatcher {
             is WorkspaceAction.TogglePinPage -> vm.togglePinPage(action.pageId)
             is WorkspaceAction.RequestDeletePage -> vm.requestDeletePage(action.pageId)
             is WorkspaceAction.DeletePage -> vm.deletePage(action.pageId)
-            WorkspaceAction.DeleteActivePage -> vm.deleteActivePage()
             WorkspaceAction.Undo -> vm.performUndo()
             WorkspaceAction.Redo -> vm.performRedo()
 
@@ -124,20 +122,17 @@ internal object WorkspaceActionDispatcher {
                 action.kind, action.url, action.blockId, action.selStart, action.selEnd
             )
             is WorkspaceAction.ToggleParagraphStyle -> vm.toggleParagraphStyle(action.blockId, action.style)
-            is WorkspaceAction.ToggleActiveParagraphStyle -> vm.toggleActiveParagraphStyle(action.style)
             WorkspaceAction.ClearActiveParagraphFormatting -> vm.clearActiveParagraphFormatting()
             is WorkspaceAction.ConvertActiveBlock -> vm.convertActiveBlock(action.command)
             is WorkspaceAction.UpdateHeadingLevel -> vm.updateHeadingLevel(action.blockId, action.level)
 
             is WorkspaceAction.UpdateChecklistTitle -> vm.updateChecklistTitle(action.blockId, action.title)
             is WorkspaceAction.ToggleChecklistItem -> vm.toggleChecklistItem(action.blockId, action.itemId)
-            is WorkspaceAction.AddChecklistItem -> vm.addChecklistItem(action.blockId, action.text)
             is WorkspaceAction.InsertChecklistItemAfter -> vm.insertChecklistItemAfter(action.blockId, action.afterItemId)
             is WorkspaceAction.UpdateChecklistItemText -> vm.updateChecklistItemText(action.blockId, action.itemId, action.text)
             is WorkspaceAction.DeleteChecklistItem -> vm.deleteChecklistItem(action.blockId, action.itemId)
 
             is WorkspaceAction.ToggleBulletListKind -> vm.toggleBulletListKind(action.blockId)
-            is WorkspaceAction.AddBulletListItem -> vm.addBulletListItem(action.blockId, action.text)
             is WorkspaceAction.InsertBulletListItemAfter -> vm.insertBulletListItemAfter(action.blockId, action.afterItemIndex)
             is WorkspaceAction.UpdateBulletListItem -> vm.updateBulletListItem(action.blockId, action.itemIndex, action.text)
             is WorkspaceAction.DeleteBulletListItem -> vm.deleteBulletListItem(action.blockId, action.itemIndex)
