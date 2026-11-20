@@ -24,20 +24,23 @@ internal class WorkspaceSyncController(
     private var autoSyncJob: Job? = null
 
     fun syncOnLaunchIfEnabled() {
-        if (repository.preferences.value.useRemoteHttpSync) {
-            scope.launch {
-                syncMutex.withLock {
-                    val res = repository.pullFromServer()
-                    onStatusChange(if (res.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE)
-                }
-            }
-        } else {
+        if (!repository.isRemoteSyncEnabled) {
             onStatusChange(SyncStatus.LOCAL_READY)
+            return
+        }
+        scope.launch {
+            syncMutex.withLock {
+                onStatusChange(SyncStatus.SYNCING)
+                val res = repository.syncOnLaunch(
+                    pushLocalIfAhead = repository.preferences.value.autoSyncOnEdit
+                )
+                onStatusChange(if (res.isSuccess) SyncStatus.SYNCED else SyncStatus.OFFLINE)
+            }
         }
     }
 
     fun scheduleAutoSyncIfEnabled(preferences: app.overbay.allnotes.model.WorkspacePreferences) {
-        if (!preferences.autoSyncOnEdit || !preferences.useRemoteHttpSync) return
+        if (!preferences.autoSyncOnEdit || !repository.isRemoteSyncEnabled) return
         autoSyncJob?.cancel()
         autoSyncJob = scope.launch {
             delay(1500L)
@@ -63,7 +66,8 @@ internal class WorkspaceSyncController(
                 syncEndpointUrl = cleanUrl,
                 useRemoteHttpSync = useRemoteHttp,
                 syncAuthToken = cleanToken,
-                autoSyncOnEdit = autoSync
+                autoSyncOnEdit = autoSync,
+                syncDefaultsMigrated = true
             )
         }
         val provider = if (useRemoteHttp) {

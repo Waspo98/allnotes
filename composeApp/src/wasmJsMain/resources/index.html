@@ -6,6 +6,11 @@
     <title>AllNotes — Overbay.app</title>
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <link rel="manifest" href="manifest.json">
+    <link rel="preload" href="./composeResources/app.overbay.allnotes.resources/font/plus_jakarta_regular.ttf" as="fetch" type="font/ttf" crossorigin>
+    <link rel="preload" href="./composeResources/app.overbay.allnotes.resources/font/plus_jakarta_medium.ttf" as="fetch" type="font/ttf" crossorigin>
+    <link rel="preload" href="./composeResources/app.overbay.allnotes.resources/font/plus_jakarta_semibold.ttf" as="fetch" type="font/ttf" crossorigin>
+    <link rel="preload" href="./composeResources/app.overbay.allnotes.resources/font/lora_semibold.ttf" as="fetch" type="font/ttf" crossorigin>
+    <link rel="preload" href="./composeResources/app.overbay.allnotes.resources/font/jetbrains_mono_regular.ttf" as="fetch" type="font/ttf" crossorigin>
     <meta name="theme-color" content="#1E2B7B">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,11 +23,65 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
-            background-color: #121318;
+            background-color: #F8F5F0;
+        }
+        @media (prefers-color-scheme: dark) {
+            html, body {
+                background-color: #121110;
+            }
+        }
+        #allnotes-viewport {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
+    <div id="allnotes-viewport"></div>
+    <script>
+        (function () {
+            var root = document.getElementById('allnotes-viewport');
+            if (!root) return;
+            var dprQuery = null;
+            function snapCssDim(avail, dpr) {
+                var maxInt = Math.max(1, Math.floor(avail));
+                if (!Number.isFinite(dpr) || dpr <= 0) return maxInt;
+                for (var delta = 0; delta <= 16; delta++) {
+                    var candidate = maxInt - delta;
+                    if (candidate < 1) break;
+                    var prod = candidate * dpr;
+                    if (Math.abs(prod - Math.round(prod)) < 1e-4) {
+                        return candidate;
+                    }
+                }
+                return maxInt;
+            }
+            function syncViewport() {
+                var dpr = window.devicePixelRatio || 1;
+                root.style.width = snapCssDim(window.innerWidth, dpr) + 'px';
+                root.style.height = snapCssDim(window.innerHeight, dpr) + 'px';
+            }
+            function watchDpr() {
+                if (dprQuery && dprQuery.removeEventListener) {
+                    dprQuery.removeEventListener('change', onDprChange);
+                }
+                if (window.matchMedia) {
+                    dprQuery = window.matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)');
+                    if (dprQuery.addEventListener) {
+                        dprQuery.addEventListener('change', onDprChange);
+                    }
+                }
+            }
+            function onDprChange() {
+                syncViewport();
+                watchDpr();
+            }
+            syncViewport();
+            watchDpr();
+            window.addEventListener('resize', syncViewport);
+        })();
+    </script>
     <script src="allnotes.js"></script>
     <script>
         if ('serviceWorker' in navigator) {

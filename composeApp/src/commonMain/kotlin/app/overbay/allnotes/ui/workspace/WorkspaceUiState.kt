@@ -64,7 +64,7 @@ data class WorkspaceUiState(
     val activeDialog: ActiveDialog = ActiveDialog.NONE,
     val syncStatus: SyncStatus = SyncStatus.LOCAL_READY,
     val syncEndpointUrl: String = "https://notes.overbay.app/api/v1/sync",
-    val useRemoteHttpSync: Boolean = false,
+    val useRemoteHttpSync: Boolean = true,
     val preferences: WorkspacePreferences = WorkspacePreferences(),
     val statusBannerMessage: String? = null,
     val statusBannerActionLabel: String? = null,

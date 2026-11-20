@@ -1,5 +1,10 @@
 package app.overbay.allnotes.data
 
+import app.overbay.allnotes.model.NotePage
+import app.overbay.allnotes.model.NoteSection
+import app.overbay.allnotes.model.Notebook
+import app.overbay.allnotes.model.SectionAccentKey
+import app.overbay.allnotes.model.WorkspacePreferences
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -144,5 +149,74 @@ class HttpSyncProviderTest {
         // Remains at 15L because 5L < 15L
         assertEquals(15L, repository.snapshot.value.revision)
         assertEquals(15L, storage.storedSnapshot?.revision)
+    }
+
+    @Test
+    fun testPreferencesDefaultToAutoSyncWhileTestStorageStaysIsolated() {
+        val defaults = WorkspacePreferences()
+        assertTrue(defaults.useRemoteHttpSync)
+        assertTrue(defaults.autoSyncOnEdit)
+
+        val isolatedRepo = NoteRepository(storage = FakeNoteStorageBackend())
+        assertFalse(isolatedRepo.isRemoteSyncEnabled)
+    }
+
+    @Test
+    fun testUntouchedStarterClientAdoptsRemoteWithoutPollutingWithStarterSample() = runTest {
+        val remoteWorkspace = WorkspaceSnapshot(
+            notebooks = listOf(
+                Notebook("nb-real", "Discipleships", "", SectionAccentKey.TEAL, 0, 1762425058873L)
+            ),
+            sections = listOf(
+                NoteSection("sec-real", "nb-real", "Kyle", SectionAccentKey.EMERALD, 0, 1762425077767L)
+            ),
+            pages = listOf(
+                NotePage("page-real", "sec-real", title = "Notes", updatedAtEpochMs = 1795194223243L)
+            ),
+            revision = 24L
+        )
+        var postCalls = 0
+        val transport = FakeHttpTransport(
+            getHandler = { HttpResponseData(200, json.encodeToString(remoteWorkspace)) },
+            postHandler = { _, body ->
+                postCalls++
+                HttpResponseData(200, body)
+            }
+        )
+        val storage = FakeNoteStorageBackend(initial = null)
+        val repository = NoteRepository(
+            storage = storage,
+            syncProvider = HttpSyncProvider(transport = transport)
+        )
+
+        val result = repository.syncOnLaunch(pushLocalIfAhead = true)
+        assertTrue(result.isSuccess)
+        assertEquals(0, postCalls, "Untouched starter seed must adopt remote without pushing sample notebooks")
+        assertEquals(listOf("nb-real"), repository.snapshot.value.notebooks.map { it.id })
+        assertEquals(24L, repository.snapshot.value.revision)
+    }
+
+    @Test
+    fun testSyncOnLaunchPushesOfflineLocalEditsWhenAutoSyncEnabled() = runTest {
+        val initial = SampleWorkspaceFactory.createStarterSnapshot().copy(revision = 5L)
+        val storage = FakeNoteStorageBackend(initial)
+        var pushedPayload: WorkspaceSnapshot? = null
+        val transport = FakeHttpTransport(
+            getHandler = { HttpResponseData(200, json.encodeToString(initial)) },
+            postHandler = { _, body ->
+                val decoded = json.decodeFromString<WorkspaceSnapshot>(body)
+                pushedPayload = decoded
+                HttpResponseData(200, json.encodeToString(decoded.copy(revision = decoded.revision + 1)))
+            }
+        )
+        val repository = NoteRepository(
+            storage = storage,
+            syncProvider = HttpSyncProvider(transport = transport)
+        )
+        repository.createNotebook("Offline Note", "", SectionAccentKey.INDIGO)
+
+        val result = repository.syncOnLaunch(pushLocalIfAhead = true)
+        assertTrue(result.isSuccess)
+        assertTrue(pushedPayload?.notebooks?.any { it.title == "Offline Note" } == true)
     }
 }

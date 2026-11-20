@@ -1,4 +1,4 @@
-const CACHE_NAME = 'allnotes-pwa-v2';
+const CACHE_NAME = 'allnotes-pwa-v3';
 const APP_SHELL = ['./', './index.html', './allnotes.js', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {

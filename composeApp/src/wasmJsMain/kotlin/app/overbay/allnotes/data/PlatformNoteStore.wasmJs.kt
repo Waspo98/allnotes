@@ -6,6 +6,7 @@ import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.WorkspacePreferences
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import kotlinx.browser.localStorage
+import kotlinx.browser.window
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -83,15 +84,61 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
         )
     }
 
+    private fun resolveDefaultWebEndpoint(): String = runCatching {
+        val protocol = window.location.protocol
+        if (protocol == "http:" || protocol == "https:") {
+            "${window.location.origin}/api/v1/sync"
+        } else {
+            "https://notes.overbay.app/api/v1/sync"
+        }
+    }.getOrDefault("https://notes.overbay.app/api/v1/sync")
+
     actual override fun loadPreferences(): WorkspacePreferences {
         cachedPreferences?.let { return it }
         return try {
-            val raw = localStorage.getItem(preferencesKey) ?: return WorkspacePreferences()
-            json.decodeFromString<WorkspacePreferences>(raw).also {
-                cachedPreferences = it
+            val raw = localStorage.getItem(preferencesKey)
+            var shouldPersist = false
+            val parsed = if (raw == null) {
+                shouldPersist = true
+                WorkspacePreferences(
+                    syncEndpointUrl = resolveDefaultWebEndpoint(),
+                    useRemoteHttpSync = true,
+                    autoSyncOnEdit = true,
+                    syncDefaultsMigrated = true
+                )
+            } else {
+                val loaded = json.decodeFromString<WorkspacePreferences>(raw)
+                if (!loaded.syncDefaultsMigrated) {
+                    shouldPersist = true
+                    val endpoint = if (loaded.syncEndpointUrl.isBlank() ||
+                        loaded.syncEndpointUrl == "https://notes.overbay.app/api/v1/sync"
+                    ) {
+                        resolveDefaultWebEndpoint()
+                    } else {
+                        loaded.syncEndpointUrl
+                    }
+                    loaded.copy(
+                        syncEndpointUrl = endpoint,
+                        useRemoteHttpSync = true,
+                        autoSyncOnEdit = true,
+                        syncDefaultsMigrated = true
+                    )
+                } else {
+                    loaded
+                }
             }
+            cachedPreferences = parsed
+            if (shouldPersist) {
+                runCatching { localStorage.setItem(preferencesKey, json.encodeToString(parsed)) }
+            }
+            parsed
         } catch (_: Exception) {
-            WorkspacePreferences()
+            WorkspacePreferences(
+                syncEndpointUrl = resolveDefaultWebEndpoint(),
+                useRemoteHttpSync = true,
+                autoSyncOnEdit = true,
+                syncDefaultsMigrated = true
+            )
         }
     }
 

@@ -84,7 +84,16 @@ actual class PlatformNoteStore actual constructor() : NoteStorageBackend {
 
     actual override fun loadPreferences(): WorkspacePreferences {
         return try {
-            sqlStore.loadPreferences()
+            val loaded = sqlStore.loadPreferences()
+            if (!loaded.syncDefaultsMigrated) {
+                loaded.copy(
+                    useRemoteHttpSync = true,
+                    autoSyncOnEdit = true,
+                    syncDefaultsMigrated = true
+                ).also { sqlStore.savePreferences(it) }
+            } else {
+                loaded
+            }
         } catch (e: Exception) {
             System.err.println("AllNotes DesktopStorage: Failed to load preferences: ${e.message}")
             WorkspacePreferences()

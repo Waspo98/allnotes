@@ -46,10 +46,11 @@ data class WorkspacePreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val useDynamicColor: Boolean = false,
     val syncEndpointUrl: String = "https://notes.overbay.app/api/v1/sync",
-    val useRemoteHttpSync: Boolean = false,
+    val useRemoteHttpSync: Boolean = true,
     val syncAuthToken: String = "",
-    val autoSyncOnEdit: Boolean = false,
-    val lastSyncedEpochMs: Long = 0L
+    val autoSyncOnEdit: Boolean = true,
+    val lastSyncedEpochMs: Long = 0L,
+    val syncDefaultsMigrated: Boolean = false
 )
 
 @Serializable

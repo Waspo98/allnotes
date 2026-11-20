@@ -10,12 +10,12 @@ import kotlinx.browser.window
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    val body = document.body ?: return
+    val container = document.getElementById("allnotes-viewport") ?: document.body ?: return
     val viewModel = WorkspaceViewModel()
     window.addEventListener("beforeunload") {
         viewModel.flushPendingWrites()
     }
-    ComposeViewport(body) {
+    ComposeViewport(container) {
         AllNotesApp(viewModel = viewModel)
     }
 }

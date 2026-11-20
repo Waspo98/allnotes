@@ -6,6 +6,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -55,97 +56,111 @@ internal fun rememberEditorialFonts(): Triple<FontFamily, FontFamily, FontFamily
 
 internal fun buildAllNotesTypography(
     displaySerif: FontFamily,
-    uiSans: FontFamily
+    uiSans: FontFamily,
+    platformStyle: PlatformTextStyle? = null
 ): Typography = Typography(
     displaySmall = TextStyle(
         fontFamily = displaySerif,
         fontWeight = FontWeight.Bold,
         fontSize = 34.sp,
         lineHeight = 42.sp,
-        letterSpacing = (-0.5).sp
+        letterSpacing = (-0.5).sp,
+        platformStyle = platformStyle
     ),
     headlineLarge = TextStyle(
         fontFamily = displaySerif,
         fontWeight = FontWeight.Bold,
         fontSize = 30.sp,
         lineHeight = 38.sp,
-        letterSpacing = (-0.4).sp
+        letterSpacing = (-0.4).sp,
+        platformStyle = platformStyle
     ),
     headlineMedium = TextStyle(
         fontFamily = displaySerif,
         fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
-        letterSpacing = (-0.25).sp
+        letterSpacing = (-0.25).sp,
+        platformStyle = platformStyle
     ),
     headlineSmall = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.Bold,
         fontSize = 20.sp,
         lineHeight = 28.sp,
-        letterSpacing = (-0.15).sp
+        letterSpacing = (-0.15).sp,
+        platformStyle = platformStyle
     ),
     titleLarge = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.SemiBold,
         fontSize = 18.sp,
         lineHeight = 25.sp,
-        letterSpacing = 0.sp
+        letterSpacing = 0.sp,
+        platformStyle = platformStyle
     ),
     titleMedium = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 23.sp,
-        letterSpacing = 0.sp
+        letterSpacing = 0.sp,
+        platformStyle = platformStyle
     ),
     titleSmall = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.05.sp
+        letterSpacing = 0.05.sp,
+        platformStyle = platformStyle
     ),
     bodyLarge = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 26.sp,
-        letterSpacing = 0.05.sp
+        letterSpacing = 0.05.sp,
+        platformStyle = platformStyle
     ),
     bodyMedium = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.Normal,
         fontSize = 14.5.sp,
         lineHeight = 22.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.1.sp,
+        platformStyle = platformStyle
     ),
     bodySmall = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.Normal,
         fontSize = 12.5.sp,
         lineHeight = 18.sp,
-        letterSpacing = 0.15.sp
+        letterSpacing = 0.15.sp,
+        platformStyle = platformStyle
     ),
     labelLarge = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.SemiBold,
         fontSize = 13.5.sp,
         lineHeight = 19.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.1.sp,
+        platformStyle = platformStyle
     ),
     labelMedium = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.25.sp
+        letterSpacing = 0.25.sp,
+        platformStyle = platformStyle
     ),
     labelSmall = TextStyle(
         fontFamily = uiSans,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 15.sp,
-        letterSpacing = 0.35.sp
+        letterSpacing = 0.35.sp,
+        platformStyle = platformStyle
     )
 )

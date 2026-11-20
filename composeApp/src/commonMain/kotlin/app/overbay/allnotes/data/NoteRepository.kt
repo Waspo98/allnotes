@@ -27,10 +27,14 @@ class NoteRepository(
     private var syncProvider: SyncProvider = LocalLoopbackSyncProvider(),
     private val typingDebounceMs: Long = 0L,
     private val repositoryScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-    private val persistOnBackground: Boolean = false
+    private val persistOnBackground: Boolean = false,
+    private val allowAutoHttpSync: Boolean = storage is PlatformNoteStore
 ) {
+    private val initialLoadedSnapshot = storage.loadSnapshot()
+    private var isUntouchedStarterSeed: Boolean = initialLoadedSnapshot == null
+
     private val _snapshot = MutableStateFlow(
-        storage.loadSnapshot() ?: SampleWorkspaceFactory.createStarterSnapshot().also {
+        initialLoadedSnapshot ?: SampleWorkspaceFactory.createStarterSnapshot().also {
             storage.saveSnapshot(it)
         }
     )
@@ -60,7 +64,7 @@ class NoteRepository(
     init {
         storage.storageErrorHandler = { msg -> _storageErrors.tryEmit(msg) }
         val prefs = _preferences.value
-        if (prefs.useRemoteHttpSync && syncProvider is LocalLoopbackSyncProvider) {
+        if (allowAutoHttpSync && prefs.useRemoteHttpSync && syncProvider is LocalLoopbackSyncProvider) {
             syncProvider = HttpSyncProvider(
                 endpointUrl = prefs.syncEndpointUrl,
                 authTokenProvider = { _preferences.value.syncAuthToken }
@@ -69,7 +73,7 @@ class NoteRepository(
     }
 
     val isRemoteSyncEnabled: Boolean
-        get() = _preferences.value.useRemoteHttpSync || syncProvider !is LocalLoopbackSyncProvider
+        get() = (allowAutoHttpSync && _preferences.value.useRemoteHttpSync) || syncProvider !is LocalLoopbackSyncProvider
 
     private fun computeMaxEpochMs(snap: WorkspaceSnapshot): Long {
         val maxPage = snap.pages.maxOfOrNull { it.updatedAtEpochMs } ?: 0L
@@ -130,6 +134,7 @@ class NoteRepository(
             persistence.flush()
         }
         val updated = platformSynchronized(stateLock) {
+            isUntouchedStarterSeed = false
             val next = transform(_snapshot.value).let { it.copy(revision = it.revision + 1) }
             _snapshot.value = next
             refreshMaxEpochLocked(next)
@@ -150,6 +155,7 @@ class NoteRepository(
                 if (page.id == pageId) mutatePage(page).also { mutatedTarget = it } else page
             }
             val target = mutatedTarget ?: return@platformSynchronized null
+            isUntouchedStarterSeed = false
             val nextRev = current.revision + 1
             val cleanedTombstones = current.tombstones.filterNot {
                 it.id == pageId && it.kind == EntityKind.PAGE
@@ -381,6 +387,7 @@ class NoteRepository(
             persistence.flush()
         }
         platformSynchronized(stateLock) {
+            isUntouchedStarterSeed = false
             val current = _snapshot.value
             val rev = current.revision + 1
             val cleanedTombstones = current.tombstones.filterNot {
@@ -431,6 +438,7 @@ class NoteRepository(
         val outcome = platformSynchronized(stateLock) {
             val current = _snapshot.value
             if (current.pages.none { it.id == pageId }) return@platformSynchronized null
+            isUntouchedStarterSeed = false
             val nextRev = current.revision + 1
             val hasOrphanedChildren = current.pages.any { it.parentPageId == pageId }
             val updatedPages = current.pages
@@ -523,14 +531,25 @@ class NoteRepository(
 
     suspend fun syncWithServer(): Result<WorkspaceSnapshot> {
         flushPendingWrites()
-        val (provider, pushed) = platformSynchronized(stateLock) {
-            syncProvider to _snapshot.value
+        val (provider, pushed, untouchedSeed) = platformSynchronized(stateLock) {
+            Triple(syncProvider, _snapshot.value, isUntouchedStarterSeed)
         }
-        val result = provider.pushSnapshot(pushed)
+        if (untouchedSeed) {
+            val pullOutcome = pullFromServerInternal()
+            if (pullOutcome.isFailure) return pullOutcome.map { it.first }
+            val (pulledSnapshot, needsPush) = pullOutcome.getOrThrow()
+            if (!needsPush) {
+                updatePreferences { it.copy(lastSyncedEpochMs = currentEpochMillis()) }
+                return Result.success(pulledSnapshot)
+            }
+        }
+        val latestPushed = platformSynchronized(stateLock) { _snapshot.value }
+        val result = provider.pushSnapshot(if (untouchedSeed) latestPushed else pushed)
         return result.map { acknowledged ->
             val committed = platformSynchronized(stateLock) {
+                isUntouchedStarterSeed = false
                 val currentLive = _snapshot.value
-                val resolved = if (currentLive.revision > pushed.revision) {
+                val resolved = if (currentLive.revision > latestPushed.revision) {
                     WorkspaceMerger.merge(acknowledged, currentLive)
                 } else {
                     acknowledged
@@ -545,29 +564,58 @@ class NoteRepository(
         }
     }
 
-    suspend fun pullFromServer(): Result<WorkspaceSnapshot> {
+    suspend fun pullFromServer(): Result<WorkspaceSnapshot> = pullFromServerInternal().map { it.first }
+
+    internal suspend fun syncOnLaunch(pushLocalIfAhead: Boolean): Result<WorkspaceSnapshot> {
+        val outcome = pullFromServerInternal()
+        if (outcome.isFailure) return outcome.map { it.first }
+        val (committed, needsPush) = outcome.getOrThrow()
+        return if (pushLocalIfAhead && needsPush) {
+            syncWithServer()
+        } else {
+            updatePreferences { it.copy(lastSyncedEpochMs = currentEpochMillis()) }
+            Result.success(committed)
+        }
+    }
+
+    private suspend fun pullFromServerInternal(): Result<Pair<WorkspaceSnapshot, Boolean>> {
         flushPendingWrites()
         val provider = platformSynchronized(stateLock) { syncProvider }
         val result = provider.pullSnapshot()
         return result.map { remote ->
             var didMutate = false
+            var needsPush = false
             val committed = platformSynchronized(stateLock) {
                 val current = _snapshot.value
+                val wasUntouchedSeed = isUntouchedStarterSeed
+                val remoteHasContent = remote.notebooks.isNotEmpty() || remote.tombstones.isNotEmpty()
                 when {
+                    wasUntouchedSeed && remoteHasContent -> {
+                        didMutate = true
+                        isUntouchedStarterSeed = false
+                        _snapshot.value = remote
+                        refreshMaxEpochLocked(remote)
+                        remote
+                    }
                     remote.revision <= current.revision && WorkspaceMerger.isSecondSubsumedByFirst(current, remote) -> {
+                        isUntouchedStarterSeed = false
+                        needsPush = wasUntouchedSeed || !WorkspaceMerger.isSecondSubsumedByFirst(remote, current)
                         current
                     }
                     remote.revision > current.revision && WorkspaceMerger.isSecondSubsumedByFirst(remote, current) -> {
                         didMutate = true
+                        isUntouchedStarterSeed = false
                         _snapshot.value = remote
                         refreshMaxEpochLocked(remote)
                         remote
                     }
                     else -> {
                         didMutate = true
+                        isUntouchedStarterSeed = false
                         val merged = WorkspaceMerger.merge(current, remote)
                         _snapshot.value = merged
                         refreshMaxEpochLocked(merged)
+                        needsPush = !WorkspaceMerger.isSecondSubsumedByFirst(remote, merged)
                         merged
                     }
                 }
@@ -575,7 +623,7 @@ class NoteRepository(
             if (didMutate) {
                 persistence.recordFullSnapshot(committed)
             }
-            committed
+            committed to needsPush
         }
     }
 }

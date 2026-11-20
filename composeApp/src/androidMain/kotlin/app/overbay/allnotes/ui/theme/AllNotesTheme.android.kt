@@ -6,6 +6,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.PlatformTextStyle
 
 @Composable
 internal actual fun resolvePlatformColorScheme(darkTheme: Boolean, useDynamicColor: Boolean): ColorScheme {
@@ -15,3 +16,5 @@ internal actual fun resolvePlatformColorScheme(darkTheme: Boolean, useDynamicCol
     }
     return if (darkTheme) AllNotesDarkColorScheme else AllNotesLightColorScheme
 }
+
+internal actual fun resolvePlatformTextStyle(): PlatformTextStyle? = null

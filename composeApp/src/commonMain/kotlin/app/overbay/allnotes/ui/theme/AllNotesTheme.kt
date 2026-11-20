@@ -16,6 +16,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.ThemeMode
 
@@ -230,6 +231,8 @@ fun SectionAccentKey.ambientWashColor(): Color = resolvePalette(LocalIsDarkTheme
 @Composable
 internal expect fun resolvePlatformColorScheme(darkTheme: Boolean, useDynamicColor: Boolean): ColorScheme
 
+internal expect fun resolvePlatformTextStyle(): PlatformTextStyle?
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AllNotesTheme(
@@ -246,8 +249,13 @@ fun AllNotesTheme(
     }
     val colorScheme = resolvePlatformColorScheme(darkTheme = darkTheme, useDynamicColor = useDynamicColor)
     val (displaySerif, uiSans, mono) = rememberEditorialFonts()
-    val typography = remember(displaySerif, uiSans) {
-        buildAllNotesTypography(displaySerif = displaySerif, uiSans = uiSans)
+    val platformTextStyle = remember { resolvePlatformTextStyle() }
+    val typography = remember(displaySerif, uiSans, platformTextStyle) {
+        buildAllNotesTypography(
+            displaySerif = displaySerif,
+            uiSans = uiSans,
+            platformStyle = platformTextStyle
+        )
     }
 
     CompositionLocalProvider(
