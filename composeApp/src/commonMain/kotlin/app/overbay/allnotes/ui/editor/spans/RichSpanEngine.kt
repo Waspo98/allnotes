@@ -266,7 +266,8 @@ object RichSpanEngine {
     fun buildParagraphAnnotatedString(
         paragraph: DocumentBlock.Paragraph,
         colorScheme: ColorScheme,
-        searchQuery: String = ""
+        searchQuery: String = "",
+        monoFontFamily: FontFamily = FontFamily.Monospace
     ): AnnotatedString = buildAnnotatedString {
         val text = paragraph.text
         append(text)
@@ -286,7 +287,7 @@ object RichSpanEngine {
                     color = colorScheme.onTertiaryContainer
                 )
                 RichSpanKind.INLINE_CODE -> SpanStyle(
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = monoFontFamily,
                     background = colorScheme.surfaceContainerHighest,
                     color = colorScheme.primary
                 )

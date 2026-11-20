@@ -13,80 +13,81 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.ThemeMode
 
 internal val AllNotesLightColorScheme = lightColorScheme(
-    primary = Color(0xFF3949AB),
+    primary = Color(0xFF34469E),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFDDE1FF),
-    onPrimaryContainer = Color(0xFF001258),
-    secondary = Color(0xFF5A5D72),
+    primaryContainer = Color(0xFFE1E6FF),
+    onPrimaryContainer = Color(0xFF0A1B66),
+    secondary = Color(0xFF635B52),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFDFE1F9),
-    onSecondaryContainer = Color(0xFF171B2C),
-    tertiary = Color(0xFF006B5E),
+    secondaryContainer = Color(0xFFEBE4D9),
+    onSecondaryContainer = Color(0xFF211C16),
+    tertiary = Color(0xFF0E6B5E),
     onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFF9EF2E2),
+    tertiaryContainer = Color(0xFFC5EFE6),
     onTertiaryContainer = Color(0xFF00201B),
-    error = Color(0xFFBA1A1A),
+    error = Color(0xFFB3261E),
     onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFFAF8FF),
-    onBackground = Color(0xFF1A1B21),
-    surface = Color(0xFFFAF8FF),
-    onSurface = Color(0xFF1A1B21),
-    surfaceVariant = Color(0xFFE2E1EC),
-    onSurfaceVariant = Color(0xFF45464F),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF4F3FA),
-    surfaceContainer = Color(0xFFEEEDF4),
-    surfaceContainerHigh = Color(0xFFE8E7EF),
-    surfaceContainerHighest = Color(0xFFE3E1E9),
-    inverseSurface = Color(0xFF2F3036),
-    inverseOnSurface = Color(0xFFF1F0F7),
-    inversePrimary = Color(0xFFB8C3FF),
-    outline = Color(0xFF767680),
-    outlineVariant = Color(0xFFC6C5D0),
-    scrim = Color(0xFF000000)
+    errorContainer = Color(0xFFFCE2DF),
+    onErrorContainer = Color(0xFF410E0B),
+    background = Color(0xFFF8F5F0),
+    onBackground = Color(0xFF1E1B18),
+    surface = Color(0xFFF8F5F0),
+    onSurface = Color(0xFF1E1B18),
+    surfaceVariant = Color(0xFFE6E0D6),
+    onSurfaceVariant = Color(0xFF5D564E),
+    surfaceContainerLowest = Color(0xFFFFFDFA),
+    surfaceContainerLow = Color(0xFFF2EEE7),
+    surfaceContainer = Color(0xFFECE7DF),
+    surfaceContainerHigh = Color(0xFFE4DED4),
+    surfaceContainerHighest = Color(0xFFDBD4C8),
+    inverseSurface = Color(0xFF2D2A26),
+    inverseOnSurface = Color(0xFFF5F1EB),
+    inversePrimary = Color(0xFFB6C4FF),
+    outline = Color(0xFF847C73),
+    outlineVariant = Color(0xFFDAD3C8),
+    scrim = Color(0xFF0F0D0B)
 )
 
 internal val AllNotesDarkColorScheme = darkColorScheme(
-    primary = Color(0xFFB8C3FF),
-    onPrimary = Color(0xFF00228B),
-    primaryContainer = Color(0xFF1E3093),
-    onPrimaryContainer = Color(0xFFDDE1FF),
-    secondary = Color(0xFFC3C5DD),
-    onSecondary = Color(0xFF2C2F42),
-    secondaryContainer = Color(0xFF424659),
-    onSecondaryContainer = Color(0xFFDFE1F9),
-    tertiary = Color(0xFF82D5C6),
+    primary = Color(0xFFB6C4FF),
+    onPrimary = Color(0xFF0E2378),
+    primaryContainer = Color(0xFF25357A),
+    onPrimaryContainer = Color(0xFFE1E6FF),
+    secondary = Color(0xFFCFC6BA),
+    onSecondary = Color(0xFF352F28),
+    secondaryContainer = Color(0xFF433D35),
+    onSecondaryContainer = Color(0xFFEFE8DF),
+    tertiary = Color(0xFF7FD7C7),
     onTertiary = Color(0xFF003730),
-    tertiaryContainer = Color(0xFF005046),
-    onTertiaryContainer = Color(0xFF9EF2E2),
+    tertiaryContainer = Color(0xFF0D5247),
+    onTertiaryContainer = Color(0xFFC5EFE6),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF121318),
-    onBackground = Color(0xFFE3E1E9),
-    surface = Color(0xFF121318),
-    onSurface = Color(0xFFE3E1E9),
-    surfaceVariant = Color(0xFF45464F),
-    onSurfaceVariant = Color(0xFFC6C5D0),
-    surfaceContainerLowest = Color(0xFF0D0E13),
-    surfaceContainerLow = Color(0xFF1A1B21),
-    surfaceContainer = Color(0xFF1E1F25),
-    surfaceContainerHigh = Color(0xFF292A30),
-    surfaceContainerHighest = Color(0xFF34343B),
-    inverseSurface = Color(0xFFE3E1E9),
-    inverseOnSurface = Color(0xFF2F3036),
-    inversePrimary = Color(0xFF3949AB),
-    outline = Color(0xFF90909A),
-    outlineVariant = Color(0xFF45464F),
+    errorContainer = Color(0xFF8C1D18),
+    onErrorContainer = Color(0xFFFCE2DF),
+    background = Color(0xFF121110),
+    onBackground = Color(0xFFEFEBE4),
+    surface = Color(0xFF121110),
+    onSurface = Color(0xFFEFEBE4),
+    surfaceVariant = Color(0xFF3D3833),
+    onSurfaceVariant = Color(0xFFB3ACA1),
+    surfaceContainerLowest = Color(0xFF171614),
+    surfaceContainerLow = Color(0xFF1A1917),
+    surfaceContainer = Color(0xFF22201D),
+    surfaceContainerHigh = Color(0xFF2B2824),
+    surfaceContainerHighest = Color(0xFF35312C),
+    inverseSurface = Color(0xFFEFEBE4),
+    inverseOnSurface = Color(0xFF2B2824),
+    inversePrimary = Color(0xFF34469E),
+    outline = Color(0xFF8C847A),
+    outlineVariant = Color(0xFF3A3530),
     scrim = Color(0xFF000000)
 )
 
@@ -94,41 +95,102 @@ internal val AllNotesDarkColorScheme = darkColorScheme(
 data class AccentPalette(
     val container: Color,
     val onContainer: Color,
-    val accent: Color
+    val accent: Color,
+    val ambientWash: Color
 )
 
 private val LocalIsDarkTheme = staticCompositionLocalOf { false }
 
 private fun SectionAccentKey.resolvePalette(isDark: Boolean): AccentPalette = when (this) {
     SectionAccentKey.INDIGO -> if (isDark) {
-        AccentPalette(container = Color(0xFF233288), onContainer = Color(0xFFDDE1FF), accent = Color(0xFF9FA8DA))
+        AccentPalette(
+            container = Color(0xFF243375),
+            onContainer = Color(0xFFE1E6FF),
+            accent = Color(0xFF9FB0FF),
+            ambientWash = Color(0xFF34469E).copy(alpha = 0.14f)
+        )
     } else {
-        AccentPalette(container = Color(0xFFDDE1FF), onContainer = Color(0xFF001258), accent = Color(0xFF3949AB))
+        AccentPalette(
+            container = Color(0xFFE1E6FF),
+            onContainer = Color(0xFF10206B),
+            accent = Color(0xFF3949AB),
+            ambientWash = Color(0xFF3949AB).copy(alpha = 0.065f)
+        )
     }
     SectionAccentKey.EMERALD -> if (isDark) {
-        AccentPalette(container = Color(0xFF0D5238), onContainer = Color(0xFFA7F3D0), accent = Color(0xFF34D399))
+        AccentPalette(
+            container = Color(0xFF104935),
+            onContainer = Color(0xFFBDF5DB),
+            accent = Color(0xFF4ADEA0),
+            ambientWash = Color(0xFF10855B).copy(alpha = 0.14f)
+        )
     } else {
-        AccentPalette(container = Color(0xFFD1FAE5), onContainer = Color(0xFF064E3B), accent = Color(0xFF059669))
+        AccentPalette(
+            container = Color(0xFFD6F5E7),
+            onContainer = Color(0xFF08422F),
+            accent = Color(0xFF0F7B58),
+            ambientWash = Color(0xFF0F7B58).copy(alpha = 0.065f)
+        )
     }
     SectionAccentKey.AMBER -> if (isDark) {
-        AccentPalette(container = Color(0xFF633B06), onContainer = Color(0xFFFDE68A), accent = Color(0xFFFBBF24))
+        AccentPalette(
+            container = Color(0xFF5A390E),
+            onContainer = Color(0xFFFDE7B8),
+            accent = Color(0xFFF5B84B),
+            ambientWash = Color(0xFFC47A16).copy(alpha = 0.15f)
+        )
     } else {
-        AccentPalette(container = Color(0xFFFEF3C7), onContainer = Color(0xFF78350F), accent = Color(0xFFD97706))
+        AccentPalette(
+            container = Color(0xFFFAE8C5),
+            onContainer = Color(0xFF5A3406),
+            accent = Color(0xFFB86B11),
+            ambientWash = Color(0xFFB86B11).copy(alpha = 0.075f)
+        )
     }
     SectionAccentKey.ROSE -> if (isDark) {
-        AccentPalette(container = Color(0xFF6E1433), onContainer = Color(0xFFFFD9E2), accent = Color(0xFFFB7185))
+        AccentPalette(
+            container = Color(0xFF631E32),
+            onContainer = Color(0xFFFFDCE5),
+            accent = Color(0xFFF57C96),
+            ambientWash = Color(0xFFBF3055).copy(alpha = 0.14f)
+        )
     } else {
-        AccentPalette(container = Color(0xFFFFE4E6), onContainer = Color(0xFF881337), accent = Color(0xFFE11D48))
+        AccentPalette(
+            container = Color(0xFFFBE0E6),
+            onContainer = Color(0xFF6B142C),
+            accent = Color(0xFFC22D54),
+            ambientWash = Color(0xFFC22D54).copy(alpha = 0.065f)
+        )
     }
     SectionAccentKey.TEAL -> if (isDark) {
-        AccentPalette(container = Color(0xFF0A4F5C), onContainer = Color(0xFFCCFBF1), accent = Color(0xFF2DD4BF))
+        AccentPalette(
+            container = Color(0xFF0E4A54),
+            onContainer = Color(0xFFC5F4FA),
+            accent = Color(0xFF48D1DF),
+            ambientWash = Color(0xFF0E808F).copy(alpha = 0.14f)
+        )
     } else {
-        AccentPalette(container = Color(0xFFCCFBF1), onContainer = Color(0xFF134E4A), accent = Color(0xFF0D9488))
+        AccentPalette(
+            container = Color(0xFFD0F2F6),
+            onContainer = Color(0xFF09424A),
+            accent = Color(0xFF0E7C8A),
+            ambientWash = Color(0xFF0E7C8A).copy(alpha = 0.065f)
+        )
     }
     SectionAccentKey.VIOLET -> if (isDark) {
-        AccentPalette(container = Color(0xFF46237A), onContainer = Color(0xFFEDE9FE), accent = Color(0xFFA78BFA))
+        AccentPalette(
+            container = Color(0xFF43276E),
+            onContainer = Color(0xFFECE2FF),
+            accent = Color(0xFFB799FA),
+            ambientWash = Color(0xFF7445C2).copy(alpha = 0.14f)
+        )
     } else {
-        AccentPalette(container = Color(0xFFEDE9FE), onContainer = Color(0xFF4C1D95), accent = Color(0xFF7C3AED))
+        AccentPalette(
+            container = Color(0xFFEBE2FD),
+            onContainer = Color(0xFF3E1C78),
+            accent = Color(0xFF6D40BD),
+            ambientWash = Color(0xFF6D40BD).copy(alpha = 0.065f)
+        )
     }
 }
 
@@ -168,13 +230,16 @@ fun SectionAccentKey.contentColor(): Color = resolvePalette(LocalIsDarkTheme.cur
 fun SectionAccentKey.accentColor(): Color = resolvePalette(LocalIsDarkTheme.current).accent
 
 @Composable
+fun SectionAccentKey.ambientWashColor(): Color = resolvePalette(LocalIsDarkTheme.current).ambientWash
+
+@Composable
 internal expect fun resolvePlatformColorScheme(darkTheme: Boolean, useDynamicColor: Boolean): ColorScheme
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AllNotesTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    useDynamicColor: Boolean = true,
+    useDynamicColor: Boolean = false,
     darkThemeOverride: Boolean? = null,
     content: @Composable () -> Unit
 ) {
@@ -185,11 +250,20 @@ fun AllNotesTheme(
         ThemeMode.DARK -> true
     }
     val colorScheme = resolvePlatformColorScheme(darkTheme = darkTheme, useDynamicColor = useDynamicColor)
+    val (displaySerif, uiSans, mono) = rememberEditorialFonts()
+    val typography = remember(displaySerif, uiSans) {
+        buildAllNotesTypography(displaySerif = displaySerif, uiSans = uiSans)
+    }
 
-    CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
+    CompositionLocalProvider(
+        LocalIsDarkTheme provides darkTheme,
+        LocalAllNotesMonoFont provides mono
+    ) {
         MaterialExpressiveTheme(
             colorScheme = colorScheme,
             motionScheme = MotionScheme.expressive(),
+            shapes = AllNotesShapes,
+            typography = typography,
             content = content
         )
     }

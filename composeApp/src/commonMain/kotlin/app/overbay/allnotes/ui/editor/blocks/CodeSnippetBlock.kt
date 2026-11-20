@@ -33,11 +33,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.theme.LocalAllNotesMonoFont
 import app.overbay.allnotes.ui.workspace.EditorFocusRequest
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import kotlinx.coroutines.delay
@@ -168,10 +168,11 @@ internal fun CodeSnippetBlockContent(
             }
             Spacer(modifier = Modifier.height(8.dp))
             Box(modifier = Modifier.fillMaxWidth()) {
+                val monoFont = LocalAllNotesMonoFont.current
                 if (codeHolder.fieldValue.text.isEmpty()) {
                     Text(
                         text = "// Write or paste code…",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = monoFont),
                         color = colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                 }
@@ -183,7 +184,7 @@ internal fun CodeSnippetBlockContent(
                         if (changed) onAction(WorkspaceAction.UpdateBlockText(block.id, updated.text))
                     },
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = monoFont,
                         color = colorScheme.onSurface
                     ),
                     visualTransformation = searchVisual,

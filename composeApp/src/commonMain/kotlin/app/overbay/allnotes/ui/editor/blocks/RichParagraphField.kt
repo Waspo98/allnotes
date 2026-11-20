@@ -45,6 +45,7 @@ import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.theme.LocalAllNotesMonoFont
 import app.overbay.allnotes.ui.workspace.EditorFocusRequest
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 
@@ -58,6 +59,7 @@ internal fun RichParagraphField(
     onSlashKeyEvent: ((KeyEvent) -> Boolean)? = null
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val monoFont = LocalAllNotesMonoFont.current
     val uriHandler = LocalUriHandler.current
     val focusRequester = remember(block.id) { FocusRequester() }
     var isFocused by remember(block.id) { mutableStateOf(false) }
@@ -75,7 +77,7 @@ internal fun RichParagraphField(
         }
     }
 
-    val visualTransformation = remember(block, searchQuery, colorScheme) {
+    val visualTransformation = remember(block, searchQuery, colorScheme, monoFont) {
         VisualTransformation { raw ->
             val previewBlock = if (raw.text == block.text) {
                 block
@@ -88,7 +90,8 @@ internal fun RichParagraphField(
             val annotated = RichSpanEngine.buildParagraphAnnotatedString(
                 paragraph = previewBlock,
                 colorScheme = colorScheme,
-                searchQuery = searchQuery
+                searchQuery = searchQuery,
+                monoFontFamily = monoFont
             )
             TransformedText(annotated, OffsetMapping.Identity)
         }

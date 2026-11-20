@@ -61,22 +61,25 @@ internal fun HeadingBlockContent(
 
     val headingStyle = when (block.level) {
         1 -> MaterialTheme.typography.headlineMedium.copy(
-            fontWeight = FontWeight.ExtraBold,
             color = colorScheme.onSurface
         )
         2 -> MaterialTheme.typography.headlineSmall.copy(
-            fontWeight = FontWeight.Bold,
             color = colorScheme.onSurface
         )
         else -> MaterialTheme.typography.titleLarge.copy(
-            fontWeight = FontWeight.SemiBold,
             color = colorScheme.primary
         )
     }
 
+    val topSpacing = when (block.level) {
+        1 -> 20.dp
+        2 -> 14.dp
+        else -> 10.dp
+    }
+
     val searchVisual = rememberSearchHighlightTransformation(searchQuery)
 
-    Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp)) {
+    Box(modifier = Modifier.fillMaxWidth().padding(top = topSpacing, bottom = 2.dp)) {
         if (fieldValue.text.isEmpty()) {
             Text(
                 text = "Heading ${block.level}…",

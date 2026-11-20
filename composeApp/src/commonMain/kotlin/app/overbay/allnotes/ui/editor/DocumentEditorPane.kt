@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -30,10 +31,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -43,8 +41,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.ui.editor.blocks.DocumentBlockView
@@ -55,6 +56,8 @@ import app.overbay.allnotes.ui.editor.toolbar.MobileFloatingToolbar
 import app.overbay.allnotes.ui.media.rememberPlatformAttachmentPicker
 import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.theme.AllNotesMotion
+import app.overbay.allnotes.ui.theme.accentColor
+import app.overbay.allnotes.ui.theme.ambientWashColor
 import app.overbay.allnotes.ui.workspace.ActiveDialog
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
@@ -151,6 +154,9 @@ fun DocumentEditorPane(
                         }
                     }
 
+                    val sectionAccent = state.activeSection?.accent?.accentColor() ?: MaterialTheme.colorScheme.primary
+                    val sectionAmbientWash = state.activeSection?.accent?.ambientWashColor() ?: Color.Transparent
+
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = if (isCompactMobile) {
@@ -158,67 +164,53 @@ fun DocumentEditorPane(
                         } else {
                             MaterialTheme.colorScheme.surfaceContainerLowest
                         },
-                        shape = if (isCompactMobile) RectangleShape else RoundedCornerShape(20.dp),
+                        shape = if (isCompactMobile) RectangleShape else MaterialTheme.shapes.large,
+                        shadowElevation = if (isCompactMobile) 0.dp else 1.dp,
                         border = if (isCompactMobile) {
                             null
                         } else {
-                            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
                         }
                     ) {
                         LazyColumn(
                             state = listState,
                             modifier = Modifier
                                 .fillMaxSize()
+                                .drawBehind {
+                                    if (sectionAmbientWash.alpha > 0f) {
+                                        val washHeight = 112.dp.toPx().coerceAtMost(size.height)
+                                        drawRect(
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(sectionAmbientWash, Color.Transparent),
+                                                startY = 0f,
+                                                endY = washHeight
+                                            ),
+                                            size = Size(size.width, washHeight)
+                                        )
+                                    }
+                                }
                                 .navigationBarsPadding()
                                 .imePadding(),
                             contentPadding = PaddingValues(
-                                start = if (isCompactMobile) 20.dp else 44.dp,
-                                end = if (isCompactMobile) 20.dp else 44.dp,
-                                top = if (isCompactMobile) 8.dp else 32.dp,
-                                bottom = if (isCompactMobile) 128.dp else 72.dp
+                                start = if (isCompactMobile) 22.dp else 52.dp,
+                                end = if (isCompactMobile) 22.dp else 52.dp,
+                                top = if (isCompactMobile) 12.dp else 36.dp,
+                                bottom = if (isCompactMobile) 128.dp else 84.dp
                             ),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             item(key = "page-header-${page.id}", contentType = "page-header") {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Box(modifier = Modifier.fillMaxWidth()) {
-                                        if (titleHolder.fieldValue.text.isEmpty()) {
-                                            Text(
-                                                text = "Untitled Page",
-                                                style = MaterialTheme.typography.headlineMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                                )
-                                            )
-                                        }
-                                        BasicTextField(
-                                            value = titleHolder.fieldValue,
-                                            onValueChange = { updated ->
-                                                val changed = updated.text != titleHolder.fieldValue.text
-                                                titleHolder.applyLocalChange(updated)
-                                                if (changed) onAction(WorkspaceAction.UpdateActivePageTitle(updated.text))
-                                            },
-                                            textStyle = MaterialTheme.typography.headlineMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            ),
-                                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    if (isCompactMobile && state.wordCount > 0) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "${state.wordCount} words · ${state.readingTimeMinutes} min read",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                                }
+                                DocumentPageHeader(
+                                    titleHolder = titleHolder,
+                                    updatedAtEpochMs = page.updatedAtEpochMs,
+                                    wordCount = state.wordCount,
+                                    readingTimeMinutes = state.readingTimeMinutes,
+                                    accentColor = sectionAccent,
+                                    titleFocusToken = 0L,
+                                    onTitleFocusConsumed = {},
+                                    onTitleChange = { onAction(WorkspaceAction.UpdateActivePageTitle(it)) },
+                                    onTitleEnter = { onAction(WorkspaceAction.FocusOrAppendTrailingParagraph) }
+                                )
                             }
 
                             items(
@@ -273,7 +265,7 @@ fun DocumentEditorPane(
                 Surface(
                     color = MaterialTheme.colorScheme.inverseSurface,
                     contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.small,
                     shadowElevation = 4.dp
                 ) {
                     Text(

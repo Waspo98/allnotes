@@ -158,7 +158,7 @@ internal fun EditorTopBar(
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        AllNotesIcons.Pin,
+                        if (page.isPinned) AllNotesIcons.PinFilled else AllNotesIcons.Pin,
                         contentDescription = if (page.isPinned) "Unpin Page" else "Pin Page",
                         tint = if (page.isPinned) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,

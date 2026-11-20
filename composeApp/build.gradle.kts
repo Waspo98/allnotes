@@ -123,6 +123,10 @@ sqldelight {
     }
 }
 
+compose.resources {
+    packageOfResClass = "app.overbay.allnotes.resources"
+}
+
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
