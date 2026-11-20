@@ -355,7 +355,8 @@ internal object HierarchySelectionResolver {
             }
         }
 
-        val retainedActiveBlockId = if (pageId != current.selectedPageId) {
+        val pageChanged = pageId != current.selectedPageId
+        val retainedActiveBlockId = if (pageChanged) {
             null
         } else {
             val activePageBlocks = effectiveSnap.pages.firstOrNull { it.id == pageId }?.blocks.orEmpty()
@@ -370,6 +371,7 @@ internal object HierarchySelectionResolver {
             selectedSectionId = secId,
             selectedPageId = pageId,
             activeBlockId = retainedActiveBlockId,
+            isMobileWritingPageStripOpen = if (pageChanged) false else current.isMobileWritingPageStripOpen,
             revision = maxOf(effectiveSnap.revision, current.revision)
         )
     }

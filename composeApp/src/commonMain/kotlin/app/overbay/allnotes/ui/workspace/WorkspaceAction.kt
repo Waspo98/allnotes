@@ -43,12 +43,9 @@ sealed interface WorkspaceAction {
     data class ReorderActiveNotebook(val delta: Int) : WorkspaceAction
     data object DeleteActiveNotebook : WorkspaceAction
     data class CreateSection(val title: String, val accent: SectionAccentKey) : WorkspaceAction
-    data class UpdateActiveSection(val title: String, val accent: SectionAccentKey, val isPinned: Boolean? = null) : WorkspaceAction
     data class UpdateSection(val sectionId: String, val title: String, val accent: SectionAccentKey, val isPinned: Boolean? = null) : WorkspaceAction
     data class TogglePinSection(val sectionId: String) : WorkspaceAction
-    data class ReorderActiveSection(val delta: Int) : WorkspaceAction
     data class ReorderSection(val sectionId: String, val delta: Int) : WorkspaceAction
-    data object DeleteActiveSection : WorkspaceAction
     data class DeleteSection(val sectionId: String) : WorkspaceAction
     data class CreatePage(val title: String, val asSubpageOfActive: Boolean = false) : WorkspaceAction
     data class CreatePageInstant(val asSubpageOfActive: Boolean = false) : WorkspaceAction

@@ -2,7 +2,6 @@ package app.overbay.allnotes.ui.workspace
 
 import app.overbay.allnotes.data.NoteRepository
 import app.overbay.allnotes.data.SyncStatus
-import app.overbay.allnotes.data.currentEpochMillis
 import app.overbay.allnotes.data.markdown.MarkdownCodec
 import app.overbay.allnotes.data.platformSynchronized
 import app.overbay.allnotes.model.CalloutTone
@@ -13,7 +12,6 @@ import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.ThemeMode
 import app.overbay.allnotes.model.WorkspaceSnapshot
-import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
@@ -31,7 +29,6 @@ class WorkspaceViewModel(
     private val coroutineDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + coroutineDispatcher)
 ) {
-    private val undoRedo = UndoRedoController()
     private val seqLock = Any()
     private var blockSeq = 5000L
     private var focusTokenSeq = 1L
@@ -39,6 +36,15 @@ class WorkspaceViewModel(
     private val _uiState = MutableStateFlow(buildInitialState())
     val uiState: StateFlow<WorkspaceUiState> = _uiState.asStateFlow()
     val preferencesFlow: StateFlow<app.overbay.allnotes.model.WorkspacePreferences> = repository.preferences
+
+    private val editorCoordinator = WorkspaceEditorCoordinator(
+        repository = repository,
+        uiState = _uiState,
+        nextBlockId = ::nextBlockId,
+        nextFocusToken = ::nextFocusToken,
+        syncState = ::syncStateFromRepository,
+        scheduleAutoSync = ::scheduleAutoSyncIfEnabled
+    )
 
     private val syncController = WorkspaceSyncController(
         repository = repository,
@@ -131,7 +137,10 @@ class WorkspaceViewModel(
                 current, effectiveSnap, targetNotebookId, targetSectionId, targetPageId
             )
             val activePageId = resolved.activePage?.id
-            resolved.copy(canUndo = undoRedo.canUndo(activePageId), canRedo = undoRedo.canRedo(activePageId))
+            resolved.copy(
+                canUndo = editorCoordinator.canUndo(activePageId),
+                canRedo = editorCoordinator.canRedo(activePageId)
+            )
         }
     }
 
@@ -161,6 +170,7 @@ class WorkspaceViewModel(
             it.copy(
                 isMobileHierarchySheetOpen = false,
                 isPageMenuOpen = false,
+                isMobileWritingPageStripOpen = false,
                 collapsedParentPageIds = if (parentToUncollapse != null) it.collapsedParentPageIds - parentToUncollapse else it.collapsedParentPageIds
             )
         }
@@ -209,22 +219,7 @@ class WorkspaceViewModel(
 
     fun setActiveBlockId(blockId: String?) = _uiState.update { it.copy(activeBlockId = blockId) }
 
-    internal fun focusOrAppendTrailingParagraph() {
-        val page = _uiState.value.activePage ?: return
-        val last = page.blocks.lastOrNull()
-        if (last is DocumentBlock.Paragraph) {
-            val req = EditorFocusRequest(last.id, cursorOffset = last.text.length, requestToken = nextFocusToken())
-            _uiState.update { it.copy(activeBlockId = last.id, focusRequest = req) }
-        } else {
-            val newBlock = DocumentBlock.Paragraph(id = nextBlockId(), text = "")
-            undoRedo.recordBeforeMutation(page.id, page.blocks)
-            repository.appendBlock(page.id, newBlock)
-            syncStateFromRepository()
-            val req = EditorFocusRequest(newBlock.id, cursorOffset = 0, requestToken = nextFocusToken())
-            _uiState.update { it.copy(activeBlockId = newBlock.id, focusRequest = req) }
-            scheduleAutoSyncIfEnabled()
-        }
-    }
+    internal fun focusOrAppendTrailingParagraph() = editorCoordinator.focusOrAppendTrailingParagraph()
 
     private inline fun commitHierarchyMutation(closeDialog: Boolean = false, mutate: () -> Unit) {
         mutate()
@@ -260,23 +255,14 @@ class WorkspaceViewModel(
         selectSection(created.id); scheduleAutoSyncIfEnabled()
     }
 
-    fun updateActiveSection(title: String, accent: SectionAccentKey, isPinned: Boolean? = null) =
-        _uiState.value.activeSection?.id?.let { updateSection(it, title, accent, isPinned) } ?: Unit
-
     fun updateSection(sectionId: String, title: String, accent: SectionAccentKey, isPinned: Boolean? = null) =
         commitHierarchyMutation(closeDialog = true) { repository.updateSection(sectionId, title, accent, isPinned) }
 
     fun toggleSectionPin(sectionId: String) =
         commitHierarchyMutation { repository.toggleSectionPin(sectionId) }
 
-    fun reorderActiveSection(delta: Int) =
-        _uiState.value.activeSection?.id?.let { reorderSection(it, delta) } ?: Unit
-
     fun reorderSection(sectionId: String, delta: Int) =
         commitHierarchyMutation { repository.reorderSection(sectionId, delta) }
-
-    fun deleteActiveSection() =
-        _uiState.value.activeSection?.id?.let { deleteSection(it) } ?: Unit
 
     fun deleteSection(sectionId: String) =
         commitHierarchyMutation(closeDialog = true) { repository.deleteSection(sectionId) }
@@ -385,7 +371,7 @@ class WorkspaceViewModel(
     }
 
     fun deletePage(pageId: String) {
-        undoRedo.clearPage(pageId)
+        editorCoordinator.clearPage(pageId)
         repository.deletePage(pageId)
         _uiState.update {
             it.copy(
@@ -416,68 +402,17 @@ class WorkspaceViewModel(
         scheduleAutoSyncIfEnabled()
     }
 
-    internal fun performUndo() {
-        val page = _uiState.value.activePage ?: return
-        val restored = undoRedo.undo(page.id, page.blocks) ?: return
-        repository.updatePageBlocks(page.id, restored, debounced = false)
-        syncStateFromRepository()
-        scheduleAutoSyncIfEnabled()
-    }
-
-    internal fun performRedo() {
-        val page = _uiState.value.activePage ?: return
-        val restored = undoRedo.redo(page.id, page.blocks) ?: return
-        repository.updatePageBlocks(page.id, restored, debounced = false)
-        syncStateFromRepository()
-        scheduleAutoSyncIfEnabled()
-    }
-
-    internal fun applyEditorResult(debounced: Boolean, compute: (List<DocumentBlock>) -> EditorMutationResult) {
-        val page = _uiState.value.activePage ?: return
-        val res = compute(page.blocks)
-        if (res.blocks == page.blocks && res.focusRequest == null) return
-        if (res.blocks != page.blocks) {
-            val coalesce = debounced && !res.isStructuralConversion
-            undoRedo.recordBeforeMutation(page.id, page.blocks, coalesce, res.activeBlockId, currentEpochMillis())
-            repository.updatePageBlocks(page.id, res.blocks, debounced = coalesce)
-            syncStateFromRepository()
-            scheduleAutoSyncIfEnabled()
-        }
-        _uiState.update {
-            it.copy(activeBlockId = res.activeBlockId ?: it.activeBlockId, focusRequest = res.focusRequest ?: it.focusRequest)
-        }
-    }
-
+    internal fun performUndo() = editorCoordinator.performUndo()
+    internal fun performRedo() = editorCoordinator.performRedo()
+    internal fun applyEditorResult(debounced: Boolean, compute: (List<DocumentBlock>) -> EditorMutationResult) =
+        editorCoordinator.applyEditorResult(debounced, compute)
     private fun mutateActivePageBlocks(
         keepBlockActive: String? = null,
         debounced: Boolean = false,
         transform: (List<DocumentBlock>) -> List<DocumentBlock>
-    ) {
-        val page = _uiState.value.activePage ?: return
-        val updatedBlocks = transform(page.blocks)
-        if (updatedBlocks == page.blocks) return
-        undoRedo.recordBeforeMutation(page.id, page.blocks, debounced, keepBlockActive ?: _uiState.value.activeBlockId, currentEpochMillis())
-        repository.updatePageBlocks(page.id, updatedBlocks, debounced = debounced)
-        syncStateFromRepository()
-        if (keepBlockActive != null) {
-            _uiState.update { it.copy(activeBlockId = keepBlockActive, canUndo = undoRedo.canUndo(page.id), canRedo = undoRedo.canRedo(page.id)) }
-        }
-        scheduleAutoSyncIfEnabled()
-    }
-
-    internal fun toggleSelectionSpan(kind: RichSpanKind, url: String?, explicitBlockId: String?, explicitStart: Int?, explicitEnd: Int?) {
-        val state = _uiState.value
-        val page = state.activePage ?: return
-        val targetId = explicitBlockId ?: state.activeBlockId
-        val paragraph = (if (targetId != null) page.blocks.firstOrNull { it.id == targetId } as? DocumentBlock.Paragraph else null)
-            ?: page.blocks.filterIsInstance<DocumentBlock.Paragraph>().lastOrNull() ?: return
-        val s = explicitStart ?: if (state.activeBlockId == paragraph.id) state.selectionStart else 0
-        val e = explicitEnd ?: if (state.activeBlockId == paragraph.id) state.selectionEnd else paragraph.text.length
-        mutateActivePageBlocks(paragraph.id) { blocks ->
-            blocks.map { if (it.id == paragraph.id && it is DocumentBlock.Paragraph) RichSpanEngine.toggleSelectionSpan(it, s, e, kind, url) else it }
-        }
-        _uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
-    }
+    ) = editorCoordinator.mutateActivePageBlocks(keepBlockActive, debounced, transform)
+    internal fun toggleSelectionSpan(kind: RichSpanKind, url: String?, explicitBlockId: String?, explicitStart: Int?, explicitEnd: Int?) =
+        editorCoordinator.toggleSelectionSpan(kind, url, explicitBlockId, explicitStart, explicitEnd)
 
     fun moveBlock(blockId: String, delta: Int) = mutateActivePageBlocks(blockId) { BlockMutationEngine.moveBlock(it, blockId, delta) }
     fun updateBlockText(blockId: String, newText: String) = mutateActivePageBlocks(blockId, true) { BlockMutationEngine.updateBlockText(it, blockId, newText) }
@@ -519,7 +454,7 @@ class WorkspaceViewModel(
     fun deleteBlock(blockId: String) {
         val page = _uiState.value.activePage ?: return
         if (page.blocks.none { it.id == blockId }) return
-        undoRedo.recordBeforeMutation(page.id, page.blocks)
+        editorCoordinator.recordBeforeMutation(page.id, page.blocks)
         repository.updatePageBlocks(page.id, page.blocks.filterNot { it.id == blockId })
         syncStateFromRepository()
         _uiState.update {
@@ -533,7 +468,7 @@ class WorkspaceViewModel(
 
     fun toggleChecklistItem(blockId: String, itemId: String) {
         val page = _uiState.value.activePage ?: return
-        undoRedo.recordBeforeMutation(page.id, page.blocks)
+        editorCoordinator.recordBeforeMutation(page.id, page.blocks)
         repository.toggleChecklistItem(page.id, blockId, itemId)
         syncStateFromRepository()
         scheduleAutoSyncIfEnabled()
@@ -542,7 +477,7 @@ class WorkspaceViewModel(
     fun addChecklistItem(blockId: String, text: String) {
         val page = _uiState.value.activePage ?: return
         if (text.trim().isEmpty()) return
-        undoRedo.recordBeforeMutation(page.id, page.blocks)
+        editorCoordinator.recordBeforeMutation(page.id, page.blocks)
         repository.addChecklistItem(page.id, blockId, text)
         syncStateFromRepository()
         scheduleAutoSyncIfEnabled()
@@ -554,26 +489,8 @@ class WorkspaceViewModel(
         mutateActivePageBlocks(blockId) { BlockMutationEngine.addBulletListItem(it, blockId, clean) }
     }
 
-    private fun insertBlock(block: DocumentBlock, afterBlockId: String? = null, focusInserted: Boolean = true) {
-        val page = _uiState.value.activePage ?: return
-        undoRedo.recordBeforeMutation(page.id, page.blocks)
-        if (afterBlockId == null) repository.appendBlock(page.id, block)
-        else repository.updatePageBlocks(page.id, BlockMutationEngine.insertBlock(page.blocks, block, afterBlockId))
-        syncStateFromRepository()
-        val req = if (focusInserted) {
-            val subIdx = if (block is DocumentBlock.Checklist || block is DocumentBlock.BulletList) 0 else -1
-            EditorFocusRequest(block.id, subItemIndex = subIdx, cursorOffset = Int.MAX_VALUE, requestToken = nextFocusToken())
-        } else null
-        _uiState.update {
-            it.copy(
-                activeBlockId = block.id,
-                focusRequest = req ?: it.focusRequest,
-                isMobileInsertMenuOpen = false,
-                isBlockInsertSheetOpen = false
-            )
-        }
-        scheduleAutoSyncIfEnabled()
-    }
+    private fun insertBlock(block: DocumentBlock, afterBlockId: String? = null, focusInserted: Boolean = true) =
+        editorCoordinator.insertBlock(block, afterBlockId, focusInserted)
 
     fun insertHeadingBlock(level: Int = 2, afterBlockId: String? = null) = insertBlock(BlockMutationEngine.defaultHeading(nextBlockId(), level), afterBlockId)
     fun insertParagraphBlock(afterBlockId: String? = null) = insertBlock(DocumentBlock.Paragraph(nextBlockId(), ""), afterBlockId)

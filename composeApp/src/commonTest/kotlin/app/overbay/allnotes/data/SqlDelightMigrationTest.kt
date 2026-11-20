@@ -10,6 +10,7 @@ import app.overbay.allnotes.model.WorkspacePreferences
 import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -164,5 +165,32 @@ class SqlDelightMigrationTest {
         assertEquals(listOf("sec-b", "sec-a"), reloaded.sections.map { it.id })
         assertTrue(reloaded.sections.first().isPinned)
         assertEquals("hi page 2", reloaded.pages.single().title)
+    }
+
+    @Test
+    fun loadPreferencesWithSyncMigrationUpgradesLegacyDefaultsAndPreservesExplicitOptOut() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        AllNotesDatabase.Schema.create(driver)
+        val store = SqlDelightNoteStore(AllNotesDatabase(driver))
+
+        // Legacy stored prefs without syncDefaultsMigrated flag get upgraded once
+        store.savePreferences(
+            WorkspacePreferences(
+                useRemoteHttpSync = false,
+                autoSyncOnEdit = false,
+                syncDefaultsMigrated = false
+            )
+        )
+        val migrated = store.loadPreferencesWithSyncMigration()
+        assertTrue(migrated.useRemoteHttpSync)
+        assertTrue(migrated.autoSyncOnEdit)
+        assertTrue(migrated.syncDefaultsMigrated)
+
+        // Subsequent explicit opt-out after migration is preserved
+        store.savePreferences(migrated.copy(useRemoteHttpSync = false, autoSyncOnEdit = false))
+        val optedOut = store.loadPreferencesWithSyncMigration()
+        assertFalse(optedOut.useRemoteHttpSync)
+        assertFalse(optedOut.autoSyncOnEdit)
+        assertTrue(optedOut.syncDefaultsMigrated)
     }
 }

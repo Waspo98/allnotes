@@ -460,7 +460,8 @@ class WorkspaceViewModelTest {
         vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.CreateSection("API Specs", SectionAccentKey.ROSE))
         assertEquals("API Specs", vm.uiState.value.activeSection?.title)
 
-        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.UpdateActiveSection("REST & Sync Specs", SectionAccentKey.AMBER))
+        val createdSecId = vm.uiState.value.activeSection!!.id
+        vm.dispatch(app.overbay.allnotes.ui.workspace.WorkspaceAction.UpdateSection(createdSecId, "REST & Sync Specs", SectionAccentKey.AMBER))
         assertEquals("REST & Sync Specs", vm.uiState.value.activeSection?.title)
 
         // Create root page and nested subpage
@@ -747,5 +748,11 @@ class WorkspaceViewModelTest {
         val updatedS2 = vm.uiState.value.sections.first { it.id == s2.id }
         assertEquals("Kyle M.", updatedS2.title)
         assertFalse(updatedS2.isPinned)
+
+        // Writing page strip resets cleanly when switching pages
+        vm.dispatch(WorkspaceAction.SetMobileWritingPageStripOpen(true))
+        assertTrue(vm.uiState.value.isMobileWritingPageStripOpen)
+        vm.dispatch(WorkspaceAction.SelectPage(activePageId!!))
+        assertFalse(vm.uiState.value.isMobileWritingPageStripOpen)
     }
 }

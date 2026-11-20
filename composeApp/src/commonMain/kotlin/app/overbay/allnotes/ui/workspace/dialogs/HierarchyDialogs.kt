@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.NoteSection
+import app.overbay.allnotes.model.NoteSectionDisplayComparator
 import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.ui.theme.accentColor
@@ -129,7 +130,7 @@ internal fun SectionDialog(
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var accent by remember { mutableStateOf(initialAccent) }
-    var isPinned by remember(initialPinned) { mutableStateOf(initialPinned) }
+    var isPinned by remember { mutableStateOf(initialPinned) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -252,7 +253,9 @@ internal fun MovePageDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 notebooks.forEach { nb ->
-                    val nbSections = sections.filter { it.notebookId == nb.id }.sortedBy { it.sortOrder }
+                    val nbSections = sections
+                        .filter { it.notebookId == nb.id }
+                        .sortedWith(NoteSectionDisplayComparator)
                     if (nbSections.isNotEmpty()) {
                         Text(
                             text = nb.title,

@@ -219,4 +219,40 @@ class HttpSyncProviderTest {
         assertTrue(result.isSuccess)
         assertTrue(pushedPayload?.notebooks?.any { it.title == "Offline Note" } == true)
     }
+
+    @Test
+    fun testRestartAfterOfflineFirstLaunchStillAdoptsRemoteCleanly() = runTest {
+        val remoteWorkspace = WorkspaceSnapshot(
+            notebooks = listOf(
+                Notebook("nb-real", "Discipleships", "", SectionAccentKey.TEAL, 0, 1762425058873L)
+            ),
+            sections = listOf(
+                NoteSection("sec-real", "nb-real", "Kyle", SectionAccentKey.EMERALD, 0, 1762425077767L)
+            ),
+            pages = listOf(
+                NotePage("page-real", "sec-real", title = "Notes", updatedAtEpochMs = 1795194223243L)
+            ),
+            revision = 24L
+        )
+        var postCalls = 0
+        val transport = FakeHttpTransport(
+            getHandler = { HttpResponseData(200, json.encodeToString(remoteWorkspace)) },
+            postHandler = { _, body ->
+                postCalls++
+                HttpResponseData(200, body)
+            }
+        )
+        // Simulate Launch #1 offline having persisted untouched starter snapshot
+        val storage = FakeNoteStorageBackend(initial = SampleWorkspaceFactory.createStarterSnapshot())
+        val restartedRepo = NoteRepository(
+            storage = storage,
+            syncProvider = HttpSyncProvider(transport = transport)
+        )
+
+        val result = restartedRepo.syncOnLaunch(pushLocalIfAhead = true)
+        assertTrue(result.isSuccess)
+        assertEquals(0, postCalls, "Restarted untouched starter client must adopt remote without pushing sample notebooks")
+        assertEquals(listOf("nb-real"), restartedRepo.snapshot.value.notebooks.map { it.id })
+        assertEquals(24L, restartedRepo.snapshot.value.revision)
+    }
 }

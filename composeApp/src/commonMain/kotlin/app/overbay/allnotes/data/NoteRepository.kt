@@ -6,7 +6,6 @@ import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.EntityKind
 import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.model.NoteSection
-import app.overbay.allnotes.model.NoteSectionDisplayComparator
 import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.WorkspacePreferences
@@ -170,149 +169,58 @@ class NoteRepository(
         persistence.recordPageWrite(mutated.id, debounced = debounced)
     }
 
-    private fun upsertTombstones(existing: List<DeletedEntity>, additions: List<DeletedEntity>): List<DeletedEntity> {
-        if (additions.isEmpty()) return existing
-        val map = LinkedHashMap<Pair<String, EntityKind>, DeletedEntity>(existing.size + additions.size)
-        for (item in existing + additions) {
-            val key = item.id to item.kind
-            val prev = map[key]
-            if (prev == null || item.deletedAtEpochMs >= prev.deletedAtEpochMs) map[key] = item
-        }
-        return map.values.toList()
-    }
-
     fun createNotebook(title: String, subtitle: String, accent: SectionAccentKey): Notebook {
-        val cleanTitle = title.trim().ifEmpty { "Untitled Notebook" }
         val now = nextTimestampMs()
-        val newNotebook = Notebook(
-            id = nextId("nb"),
-            title = cleanTitle,
-            subtitle = subtitle.trim(),
-            accent = accent,
-            sortOrder = _snapshot.value.notebooks.size,
-            updatedAtEpochMs = now
-        )
-        val defaultSection = NoteSection(
-            id = nextId("sec"),
-            notebookId = newNotebook.id,
-            title = "General Notes",
-            accent = accent,
-            sortOrder = 0,
-            updatedAtEpochMs = now
-        )
-        val starterPage = NotePage(
-            id = nextId("page"),
-            sectionId = defaultSection.id,
-            title = "Welcome to $cleanTitle",
-            blocks = listOf(
-                DocumentBlock.Heading(id = nextId("blk"), text = cleanTitle, level = 2),
-                DocumentBlock.Paragraph(id = nextId("blk"), text = "Start typing or add structured blocks below.")
-            ),
-            updatedAtEpochMs = now
-        )
+        lateinit var created: Notebook
         commitFullSnapshot { current ->
-            current.copy(
-                notebooks = current.notebooks + newNotebook,
-                sections = current.sections + defaultSection,
-                pages = current.pages + starterPage
+            val (newNotebook, nextSnapshot) = WorkspaceHierarchyMutator.createNotebook(
+                current = current,
+                title = title,
+                subtitle = subtitle,
+                accent = accent,
+                now = now,
+                nextId = ::nextId
             )
+            created = newNotebook
+            nextSnapshot
         }
-        return newNotebook
+        return created
     }
 
     fun updateNotebook(notebookId: String, title: String, subtitle: String, accent: SectionAccentKey) {
-        val cleanTitle = title.trim().ifEmpty { "Untitled Notebook" }
         val now = nextTimestampMs()
-        commitFullSnapshot { current ->
-            current.copy(
-                notebooks = current.notebooks.map { nb ->
-                    if (nb.id == notebookId) {
-                        nb.copy(
-                            title = cleanTitle,
-                            subtitle = subtitle.trim(),
-                            accent = accent,
-                            updatedAtEpochMs = now
-                        )
-                    } else nb
-                }
-            )
-        }
+        commitFullSnapshot { WorkspaceHierarchyMutator.updateNotebook(it, notebookId, title, subtitle, accent, now) }
     }
 
     fun reorderNotebook(notebookId: String, delta: Int) {
         val now = nextTimestampMs()
-        commitFullSnapshot { current ->
-            val ordered = current.notebooks.sortedBy { it.sortOrder }.toMutableList()
-            val idx = ordered.indexOfFirst { it.id == notebookId }
-            if (idx < 0) return@commitFullSnapshot current
-            val targetIdx = (idx + delta).coerceIn(0, ordered.lastIndex)
-            if (targetIdx == idx) return@commitFullSnapshot current
-            val moved = ordered.removeAt(idx)
-            ordered.add(targetIdx, moved)
-            val reindexed = ordered.mapIndexed { i, nb ->
-                if (nb.sortOrder != i || nb.id == notebookId) {
-                    nb.copy(sortOrder = i, updatedAtEpochMs = now)
-                } else nb
-            }
-            current.copy(notebooks = reindexed)
-        }
+        commitFullSnapshot { WorkspaceHierarchyMutator.reorderNotebook(it, notebookId, delta, now) }
     }
 
     fun deleteNotebook(notebookId: String) {
         val now = nextTimestampMs()
-        commitFullSnapshot { current ->
-            val remainingNotebooks = current.notebooks.filterNot { it.id == notebookId }
-            val removedSections = current.sections.filter { it.notebookId == notebookId }
-            val removedSectionIds = removedSections.map { it.id }.toSet()
-            val removedPages = current.pages.filter { it.sectionId in removedSectionIds }
-            val remainingSections = current.sections.filterNot { it.notebookId == notebookId }
-            val remainingPages = current.pages.filterNot { it.sectionId in removedSectionIds }
-
-            val newTombstones = buildList {
-                if (current.notebooks.any { it.id == notebookId }) {
-                    add(DeletedEntity(notebookId, EntityKind.NOTEBOOK, now))
-                }
-                removedSections.forEach { add(DeletedEntity(it.id, EntityKind.SECTION, now)) }
-                removedPages.forEach { add(DeletedEntity(it.id, EntityKind.PAGE, now)) }
-            }
-
-            current.copy(
-                notebooks = remainingNotebooks,
-                sections = remainingSections,
-                pages = remainingPages,
-                tombstones = upsertTombstones(current.tombstones, newTombstones)
-            )
-        }
+        commitFullSnapshot { WorkspaceHierarchyMutator.deleteNotebook(it, notebookId, now) }
         if (_snapshot.value.notebooks.isEmpty()) {
             createNotebook("AllNotes Workspace", "Default notebook", SectionAccentKey.INDIGO)
         }
     }
 
     fun createSection(notebookId: String, title: String, accent: SectionAccentKey): NoteSection {
-        val cleanTitle = title.trim().ifEmpty { "New Section" }
         val now = nextTimestampMs()
-        val newSection = NoteSection(
-            id = nextId("sec"),
-            notebookId = notebookId,
-            title = cleanTitle,
-            accent = accent,
-            sortOrder = _snapshot.value.sections.count { it.notebookId == notebookId },
-            updatedAtEpochMs = now
-        )
-        val firstPage = NotePage(
-            id = nextId("page"),
-            sectionId = newSection.id,
-            title = "Untitled Page",
-            blocks = listOf(DocumentBlock.Paragraph(id = nextId("blk"), text = "")),
-            updatedAtEpochMs = now
-        )
+        lateinit var created: NoteSection
         commitFullSnapshot { current ->
-            current.copy(
-                sections = current.sections + newSection,
-                pages = current.pages + firstPage
+            val (newSection, nextSnapshot) = WorkspaceHierarchyMutator.createSection(
+                current = current,
+                notebookId = notebookId,
+                title = title,
+                accent = accent,
+                now = now,
+                nextId = ::nextId
             )
+            created = newSection
+            nextSnapshot
         }
-        return newSection
+        return created
     }
 
     fun updateSection(
@@ -321,101 +229,23 @@ class NoteRepository(
         accent: SectionAccentKey,
         isPinned: Boolean? = null
     ) {
-        val cleanTitle = title.trim().ifEmpty { "Untitled Section" }
         val now = nextTimestampMs()
-        commitFullSnapshot { current ->
-            val updated = current.sections.map { sec ->
-                if (sec.id == sectionId) {
-                    sec.copy(
-                        title = cleanTitle,
-                        accent = accent,
-                        isPinned = isPinned ?: sec.isPinned,
-                        updatedAtEpochMs = now
-                    )
-                } else sec
-            }
-            val target = updated.firstOrNull { it.id == sectionId } ?: return@commitFullSnapshot current
-            val reindexed = reindexNotebookSections(updated, target.notebookId, now, touchedId = sectionId)
-            current.copy(sections = reindexed)
-        }
+        commitFullSnapshot { WorkspaceHierarchyMutator.updateSection(it, sectionId, title, accent, isPinned, now) }
     }
 
     fun toggleSectionPin(sectionId: String) {
-        mutateNotebookSectionPartitions(sectionId) { target, pinned, unpinned, now ->
-            val updated = target.copy(isPinned = !target.isPinned, updatedAtEpochMs = now)
-            pinned.removeAll { it.id == sectionId }
-            unpinned.removeAll { it.id == sectionId }
-            if (updated.isPinned) pinned.add(updated) else unpinned.add(0, updated)
-            true
-        }
+        val now = nextTimestampMs()
+        commitFullSnapshot { WorkspaceHierarchyMutator.toggleSectionPin(it, sectionId, now) }
     }
 
     fun reorderSection(sectionId: String, delta: Int) {
-        mutateNotebookSectionPartitions(sectionId) { target, pinned, unpinned, _ ->
-            val partition = if (target.isPinned) pinned else unpinned
-            val idx = partition.indexOfFirst { it.id == sectionId }
-            val targetIdx = if (idx >= 0) (idx + delta).coerceIn(0, partition.lastIndex) else -1
-            if (idx < 0 || targetIdx == idx) return@mutateNotebookSectionPartitions false
-            partition.add(targetIdx, partition.removeAt(idx))
-            true
-        }
-    }
-
-    private inline fun mutateNotebookSectionPartitions(
-        sectionId: String,
-        crossinline transform: (
-            target: NoteSection,
-            pinned: MutableList<NoteSection>,
-            unpinned: MutableList<NoteSection>,
-            now: Long
-        ) -> Boolean
-    ) {
         val now = nextTimestampMs()
-        commitFullSnapshot { current ->
-            val target = current.sections.firstOrNull { it.id == sectionId } ?: return@commitFullSnapshot current
-            val siblings = current.sections.filter { it.notebookId == target.notebookId }
-            val pinned = siblings.filter { it.isPinned }.sortedWith(NoteSectionDisplayComparator).toMutableList()
-            val unpinned = siblings.filter { !it.isPinned }.sortedWith(NoteSectionDisplayComparator).toMutableList()
-            if (!transform(target, pinned, unpinned, now)) return@commitFullSnapshot current
-            val reindexedById = (pinned + unpinned).mapIndexed { i, sec ->
-                val changed = sec.id == sectionId || sec.sortOrder != i
-                sec.id to if (changed) sec.copy(sortOrder = i, updatedAtEpochMs = now) else sec
-            }.toMap()
-            current.copy(sections = current.sections.map { reindexedById[it.id] ?: it })
-        }
-    }
-
-    private fun reindexNotebookSections(
-        sections: List<NoteSection>,
-        notebookId: String,
-        now: Long,
-        touchedId: String
-    ): List<NoteSection> {
-        val ordered = sections.filter { it.notebookId == notebookId }.sortedWith(NoteSectionDisplayComparator)
-        val reindexedById = ordered.mapIndexed { i, sec ->
-            sec.id to if (sec.sortOrder != i || sec.id == touchedId) {
-                sec.copy(sortOrder = i, updatedAtEpochMs = now)
-            } else sec
-        }.toMap()
-        return sections.map { reindexedById[it.id] ?: it }
+        commitFullSnapshot { WorkspaceHierarchyMutator.reorderSection(it, sectionId, delta, now) }
     }
 
     fun deleteSection(sectionId: String) {
         val now = nextTimestampMs()
-        commitFullSnapshot { current ->
-            val removedPages = current.pages.filter { it.sectionId == sectionId }
-            val newTombstones = buildList {
-                if (current.sections.any { it.id == sectionId }) {
-                    add(DeletedEntity(sectionId, EntityKind.SECTION, now))
-                }
-                removedPages.forEach { add(DeletedEntity(it.id, EntityKind.PAGE, now)) }
-            }
-            current.copy(
-                sections = current.sections.filterNot { it.id == sectionId },
-                pages = current.pages.filterNot { it.sectionId == sectionId },
-                tombstones = upsertTombstones(current.tombstones, newTombstones)
-            )
-        }
+        commitFullSnapshot { WorkspaceHierarchyMutator.deleteSection(it, sectionId, now) }
     }
 
     fun createPage(sectionId: String, title: String = "Untitled Page", parentPageId: String? = null, allowBlankTitle: Boolean = false): NotePage {
@@ -498,7 +328,7 @@ class NoteRepository(
                 .map { page ->
                     if (page.parentPageId == pageId) page.copy(parentPageId = null, updatedAtEpochMs = now) else page
                 }
-            val updatedTombstones = upsertTombstones(
+            val updatedTombstones = WorkspaceHierarchyMutator.upsertTombstones(
                 current.tombstones,
                 listOf(DeletedEntity(pageId, EntityKind.PAGE, now))
             )
@@ -639,7 +469,7 @@ class NoteRepository(
             var needsPush = false
             val committed = platformSynchronized(stateLock) {
                 val current = _snapshot.value
-                val wasUntouchedSeed = isUntouchedStarterSeed
+                val wasUntouchedSeed = isUntouchedStarterSeed || current == SampleWorkspaceFactory.createStarterSnapshot()
                 val remoteHasContent = remote.notebooks.isNotEmpty() || remote.tombstones.isNotEmpty()
                 when {
                     wasUntouchedSeed && remoteHasContent -> {

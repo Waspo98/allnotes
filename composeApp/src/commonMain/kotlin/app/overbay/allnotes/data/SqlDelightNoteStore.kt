@@ -225,6 +225,20 @@ class SqlDelightNoteStore(
             .getOrDefault(WorkspacePreferences())
     }
 
+    /**
+     * Loads preferences and performs the one-time migration enabling remote/auto-sync defaults
+     * for pre-existing local databases created before [WorkspacePreferences.syncDefaultsMigrated].
+     */
+    fun loadPreferencesWithSyncMigration(): WorkspacePreferences {
+        val loaded = loadPreferences()
+        if (loaded.syncDefaultsMigrated) return loaded
+        return loaded.copy(
+            useRemoteHttpSync = true,
+            autoSyncOnEdit = true,
+            syncDefaultsMigrated = true
+        ).also(::savePreferences)
+    }
+
     override fun savePreferences(preferences: WorkspacePreferences) {
         queries.upsertWorkspacePreferences(prefsJson = json.encodeToString(preferences))
     }
