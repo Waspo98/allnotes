@@ -59,8 +59,8 @@ android {
         resValue("string", "app_name", if (isBetaApp) "AllNotes Beta" else "AllNotes")
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = if (isBetaApp) "0.1.1-beta" else "0.1.1"
+        versionCode = 4
+        versionName = if (isBetaApp) "0.2.0-beta" else "0.2.0"
     }
 
     signingConfigs {
