@@ -1,6 +1,7 @@
 package app.overbay.allnotes.ui.editor
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,8 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.overbay.allnotes.model.NotePage
 import app.overbay.allnotes.ui.editor.toolbar.StudioTooltip
 import app.overbay.allnotes.ui.hierarchy.clickableWithContextAction
@@ -72,14 +74,13 @@ internal fun DesktopBottomPageBar(
         color = colorScheme.surfaceContainerHigh,
         contentColor = colorScheme.onSurface,
         shape = CircleShape,
-        shadowElevation = 4.dp,
+        shadowElevation = 5.dp,
         border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .padding(start = 14.dp, end = 6.dp),
+                .heightIn(min = 52.dp)
+                .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -95,7 +96,7 @@ internal fun DesktopBottomPageBar(
                 sectionAccent = sectionAccent,
                 compact = false,
                 onAction = onAction,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f, fill = false)
             )
         }
     }
@@ -121,8 +122,12 @@ internal fun PagePillStripContent(
         if (activePageId != null) {
             val idx = pages.indexOfFirst { it.id == activePageId }
             if (idx >= 0) {
-                val visible = listState.layoutInfo.visibleItemsInfo.any { it.index == idx }
-                if (!visible) {
+                val layoutInfo = listState.layoutInfo
+                val visibleItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == idx }
+                val fullyVisible = visibleItem != null &&
+                    visibleItem.offset >= 0 &&
+                    (visibleItem.offset + visibleItem.size) <= layoutInfo.viewportEndOffset
+                if (!fullyVisible) {
                     listState.animateScrollToItem(idx)
                 }
             }
@@ -135,20 +140,21 @@ internal fun PagePillStripContent(
     ) {
         if (pages.isEmpty()) {
             Text(
-                text = "No pages in section",
-                style = MaterialTheme.typography.labelMedium,
+                text = "No pages",
+                style = MaterialTheme.typography.titleSmall,
                 color = colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp)
+                modifier = Modifier.padding(horizontal = 12.dp)
             )
         } else {
             LazyRow(
                 state = listState,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .animateContentSize(animationSpec = AllNotesMotion.spatialFast())
+                    .clip(CircleShape),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                contentPadding = PaddingValues(horizontal = 4.dp)
+                contentPadding = PaddingValues(0.dp)
             ) {
                 items(items = pages, key = { it.id }, contentType = { "bottom-page-pill" }) { page ->
                     PagePillChip(
@@ -165,8 +171,8 @@ internal fun PagePillStripContent(
         VerticalDivider(
             modifier = Modifier
                 .height(22.dp)
-                .padding(horizontal = 4.dp),
-            color = colorScheme.outlineVariant.copy(alpha = 0.5f)
+                .padding(horizontal = 6.dp),
+            color = colorScheme.outlineVariant.copy(alpha = 0.45f)
         )
 
         StudioTooltip(
@@ -176,13 +182,13 @@ internal fun PagePillStripContent(
         ) {
             IconButton(
                 onClick = { onAction(WorkspaceAction.CreatePageInstant(false)) },
-                modifier = Modifier.size(if (compact) 34.dp else 36.dp)
+                modifier = Modifier.size(40.dp)
             ) {
                 Icon(
                     imageVector = AllNotesIcons.Add,
                     contentDescription = "New Page in section",
                     tint = colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -212,10 +218,11 @@ private fun PagePillChip(
     Box {
         Row(
             modifier = Modifier
+                .heightIn(min = 40.dp)
                 .clip(CircleShape)
                 .then(
                     if (isSelected) {
-                        Modifier.border(1.dp, sectionAccent.copy(alpha = 0.45f), CircleShape)
+                        Modifier.border(1.dp, sectionAccent.copy(alpha = 0.5f), CircleShape)
                     } else Modifier
                 )
                 .drawBehind {
@@ -227,8 +234,8 @@ private fun PagePillChip(
                     onContextMenu = { menuOpen = true }
                 )
                 .padding(
-                    horizontal = if (compact) 11.dp else 13.dp,
-                    vertical = if (compact) 6.dp else 7.dp
+                    horizontal = if (compact) 15.dp else 16.dp,
+                    vertical = 8.dp
                 ),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -237,26 +244,29 @@ private fun PagePillChip(
                     imageVector = AllNotesIcons.PinFilled,
                     contentDescription = "Pinned",
                     tint = if (isSelected) colorScheme.onPrimaryContainer else colorScheme.primary,
-                    modifier = Modifier.size(11.dp)
+                    modifier = Modifier.size(13.dp)
                 )
                 Spacer(modifier = Modifier.width(5.dp))
             }
             if (isSubpage) {
                 Text(
                     text = "↳",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = fg.copy(alpha = 0.72f)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
             }
             Text(
                 text = page.title.ifBlank { "Untitled Page" },
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontSize = if (compact) 15.sp else 14.5.sp,
+                    lineHeight = 20.sp
+                ),
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                 color = fg,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = if (compact) 144.dp else 172.dp)
+                modifier = Modifier.widthIn(max = if (compact) 172.dp else 200.dp)
             )
         }
 

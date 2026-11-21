@@ -1,24 +1,29 @@
 package app.overbay.allnotes.ui.editor.toolbar
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
@@ -27,44 +32,57 @@ import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.ui.editor.PagePillStripContent
 import app.overbay.allnotes.ui.theme.AllNotesIcons
+import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.theme.accentColor
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 
 /**
- * Calm, unified mobile reading bottom dock combining a scrollable page switcher strip
- * (or contextual non-IME block actions) with primary navigation and 1-tap capture in the thumb zone.
+ * Compact, centered floating capsule pill for mobile reading mode.
+ * Hosts larger page-switcher pills with a quick `+` new-page button, and morphs
+ * cleanly into contextual block actions when a non-IME block is selected.
  */
 @Composable
 fun MobileReadingPill(
     state: WorkspaceUiState,
     showBlockActions: Boolean,
-    onOpenDrawer: () -> Unit,
-    onNewPage: () -> Unit,
-    onOpenBlockSheet: () -> Unit,
     onAction: (WorkspaceAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val section = state.activeSection
     val activeBlock = if (showBlockActions) state.activeBlock else null
-    val hasTopStrip = activeBlock != null || section != null
+    if (activeBlock == null && section == null) return
+
+    var lastActiveBlock by remember { mutableStateOf(activeBlock) }
+    if (activeBlock != null) {
+        lastActiveBlock = activeBlock
+    }
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         color = colorScheme.surfaceContainerHigh,
         contentColor = colorScheme.onSurface,
-        shape = if (hasTopStrip) RoundedCornerShape(26.dp) else CircleShape,
+        shape = CircleShape,
         shadowElevation = 5.dp,
         border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            if (activeBlock != null) {
-                ReadingBlockActionsStrip(
-                    block = activeBlock,
-                    onAction = onAction
-                )
-                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.35f))
+        AnimatedContent(
+            targetState = activeBlock != null,
+            transitionSpec = {
+                (fadeIn(AllNotesMotion.effectsFast()) togetherWith fadeOut(AllNotesMotion.effectsFast()))
+                    .using(SizeTransform(clip = true) { _, _ -> AllNotesMotion.spatialFast() })
+            },
+            label = "MobileBottomPillMode"
+        ) { showingBlockActions ->
+            if (showingBlockActions) {
+                val block = activeBlock ?: lastActiveBlock
+                if (block != null) {
+                    ReadingBlockActionsStrip(
+                        block = block,
+                        onAction = onAction
+                    )
+                }
             } else if (section != null) {
                 PagePillStripContent(
                     pages = state.pagesForSection,
@@ -73,67 +91,9 @@ fun MobileReadingPill(
                     compact = true,
                     onAction = onAction,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(42.dp)
-                        .padding(horizontal = 8.dp)
+                        .heightIn(min = 52.dp)
+                        .padding(horizontal = 6.dp, vertical = 6.dp)
                 )
-                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.35f))
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onOpenDrawer,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = AllNotesIcons.Menu,
-                        contentDescription = "Browse notebooks & pages",
-                        tint = colorScheme.onSurface,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Surface(
-                    onClick = onNewPage,
-                    color = colorScheme.primaryContainer,
-                    contentColor = colorScheme.onPrimaryContainer,
-                    shape = CircleShape
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .height(40.dp)
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = AllNotesIcons.EditNote,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "New Page",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-                IconButton(
-                    onClick = onOpenBlockSheet,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = AllNotesIcons.Add,
-                        contentDescription = "Insert block",
-                        tint = colorScheme.onSurface,
-                        modifier = Modifier.size(21.dp)
-                    )
-                }
             }
         }
     }
@@ -155,19 +115,18 @@ private fun ReadingBlockActionsStrip(
 
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .padding(horizontal = 10.dp),
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         if (nonConvertibleLabel != null) {
             Text(
                 text = nonConvertibleLabel,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 6.dp)
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
         } else {
             BlockTypeConverterPill(
@@ -175,7 +134,12 @@ private fun ReadingBlockActionsStrip(
                 onAction = onAction
             )
         }
-        Spacer(modifier = Modifier.weight(1f))
+        VerticalDivider(
+            modifier = Modifier
+                .height(22.dp)
+                .padding(horizontal = 4.dp),
+            color = colorScheme.outlineVariant.copy(alpha = 0.45f)
+        )
         IconButton(
             onClick = { onAction(WorkspaceAction.MoveBlock(block.id, -1)) },
             modifier = Modifier.size(38.dp)

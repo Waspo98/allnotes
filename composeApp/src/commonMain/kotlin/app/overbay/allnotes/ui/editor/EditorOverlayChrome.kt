@@ -58,7 +58,7 @@ internal fun BoxScope.EditorStatusSnackbar(
             .imePadding()
             .padding(
                 horizontal = 16.dp,
-                vertical = if (isCompactMobile) (if (imeVisible) 58.dp else 132.dp) else 76.dp
+                vertical = if (isCompactMobile && imeVisible) 58.dp else 82.dp
             )
     ) {
         Surface(
@@ -124,15 +124,17 @@ internal fun BoxScope.MobileEditorChromeOverlay(
         }
     }
 
+    val hasContent = (showBlockActions && activeBlock != null) || state.activeSection != null
+
     AnimatedVisibility(
-        visible = !readingPillHidden || showBlockActions,
+        visible = hasContent && (!readingPillHidden || showBlockActions),
         enter = fadeIn(AllNotesMotion.effectsFast()) + slideInVertically(AllNotesMotion.spatialFast()) { it },
         exit = fadeOut(AllNotesMotion.effectsFast()) + slideOutVertically(AllNotesMotion.spatialFast()) { it },
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(bottom = 14.dp, start = 12.dp, end = 12.dp)
+            .padding(bottom = 14.dp, start = 16.dp, end = 16.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxWidth(),
@@ -141,11 +143,8 @@ internal fun BoxScope.MobileEditorChromeOverlay(
             MobileReadingPill(
                 state = state,
                 showBlockActions = showBlockActions,
-                onOpenDrawer = { onAction(WorkspaceAction.SetMobileHierarchySheetOpen(true)) },
-                onNewPage = { onAction(WorkspaceAction.CreatePageInstant(false)) },
-                onOpenBlockSheet = { onAction(WorkspaceAction.SetBlockInsertSheetOpen(true)) },
                 onAction = onAction,
-                modifier = Modifier.widthIn(max = 520.dp)
+                modifier = Modifier.widthIn(max = 460.dp)
             )
         }
     }

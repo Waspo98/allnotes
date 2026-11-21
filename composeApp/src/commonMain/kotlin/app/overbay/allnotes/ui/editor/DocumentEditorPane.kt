@@ -257,7 +257,7 @@ fun DocumentEditorPane(
                                         top = if (isCompactMobile) 4.dp else 36.dp,
                                         bottom = when {
                                             isCompactMobile && imeVisible -> 20.dp
-                                            isCompactMobile -> navBarBottomDp + 132.dp
+                                            isCompactMobile -> navBarBottomDp + 88.dp
                                             else -> 104.dp
                                         }
                                     ),
@@ -356,7 +356,7 @@ fun DocumentEditorPane(
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
                         .imePadding()
-                        .widthIn(max = 880.dp)
+                        .widthIn(max = 760.dp)
                         .padding(horizontal = 28.dp, vertical = 14.dp)
                 )
             }
