@@ -83,7 +83,11 @@ sealed interface WorkspaceAction {
         val cursorOffset: Int? = null
     ) : WorkspaceAction
     data class DismissSlashCommand(val blockId: String, val cursorOffset: Int) : WorkspaceAction
-    data class MoveFocusToAdjacentBlock(val fromBlockId: String, val direction: Int) : WorkspaceAction
+    data class MoveFocusToAdjacentBlock(
+        val fromBlockId: String,
+        val direction: Int,
+        val fromSubItemIndex: Int = -1
+    ) : WorkspaceAction
 
     // Block Insertion
     data class InsertHeading(val level: Int = 2, val afterBlockId: String? = null) : WorkspaceAction

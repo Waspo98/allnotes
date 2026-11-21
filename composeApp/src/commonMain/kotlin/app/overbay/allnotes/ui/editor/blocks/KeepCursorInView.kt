@@ -41,15 +41,46 @@ import kotlinx.coroutines.flow.collectLatest
 
 internal class LayoutResultRef(var value: TextLayoutResult? = null)
 
+private fun isPlainNavigationKeyDown(event: KeyEvent): Boolean =
+    event.type == KeyEventType.KeyDown &&
+        !event.isShiftPressed &&
+        !event.isCtrlPressed &&
+        !event.isMetaPressed &&
+        !event.isAltPressed
+
+internal fun handleTitleBoundaryKeyEvent(
+    event: KeyEvent,
+    blockId: String,
+    onAction: (WorkspaceAction) -> Unit,
+    onMoveDownToBody: (() -> Unit)?
+): Boolean {
+    if (!isPlainNavigationKeyDown(event)) return false
+    return when (event.key) {
+        Key.DirectionUp -> {
+            onAction(WorkspaceAction.MoveFocusToAdjacentBlock(blockId, -1))
+            true
+        }
+        Key.DirectionDown -> {
+            if (onMoveDownToBody != null) {
+                onMoveDownToBody()
+            } else {
+                onAction(WorkspaceAction.MoveFocusToAdjacentBlock(blockId, +1))
+            }
+            true
+        }
+        else -> false
+    }
+}
+
 internal fun handleVerticalBoundaryKeyEvent(
     event: KeyEvent,
     fieldValue: TextFieldValue,
     layout: TextLayoutResult?,
     blockId: String,
-    onAction: (WorkspaceAction) -> Unit
+    onAction: (WorkspaceAction) -> Unit,
+    subItemIndex: Int = -1
 ): Boolean {
-    if (event.type != KeyEventType.KeyDown) return false
-    if (event.isShiftPressed || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return false
+    if (!isPlainNavigationKeyDown(event)) return false
     if (!fieldValue.selection.collapsed) return false
 
     val caretOffset = fieldValue.selection.start
@@ -60,7 +91,7 @@ internal fun handleVerticalBoundaryKeyEvent(
                 it.getLineForOffset(clamped) == 0
             } == true
             if (atTop) {
-                onAction(WorkspaceAction.MoveFocusToAdjacentBlock(blockId, -1))
+                onAction(WorkspaceAction.MoveFocusToAdjacentBlock(blockId, -1, subItemIndex))
                 true
             } else {
                 false
@@ -72,7 +103,7 @@ internal fun handleVerticalBoundaryKeyEvent(
                 it.getLineForOffset(clamped) >= (it.lineCount - 1).coerceAtLeast(0)
             } == true
             if (atBottom) {
-                onAction(WorkspaceAction.MoveFocusToAdjacentBlock(blockId, +1))
+                onAction(WorkspaceAction.MoveFocusToAdjacentBlock(blockId, +1, subItemIndex))
                 true
             } else {
                 false

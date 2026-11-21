@@ -93,27 +93,43 @@ internal class WorkspaceEditorCoordinator(
         }
         uiState.update {
             val nextStructureRev = if (res.isStructuralConversion) it.structureRevision + 1L else it.structureRevision
-            val targetPara = res.focusRequest?.let { req ->
-                res.blocks.firstOrNull { b -> b.id == req.blockId } as? DocumentBlock.Paragraph
-            }
+            val nextActiveId = res.activeBlockId ?: it.activeBlockId
             val (selStart, selEnd) = when {
                 updatedSelection != null && !res.isStructuralConversion -> {
                     minOf(updatedSelection.first, updatedSelection.second) to
                         maxOf(updatedSelection.first, updatedSelection.second)
                 }
-                res.focusRequest != null && targetPara != null -> {
-                    val clamped = res.focusRequest.cursorOffset.coerceIn(0, targetPara.text.length)
-                    clamped to clamped
-                }
-                else -> it.selectionStart to it.selectionEnd
+                else -> resolveSelectionAfterFocus(
+                    blocks = res.blocks,
+                    focusRequest = res.focusRequest,
+                    fallbackStart = if (nextActiveId == it.activeBlockId) it.selectionStart else 0,
+                    fallbackEnd = if (nextActiveId == it.activeBlockId) it.selectionEnd else 0
+                )
             }
             it.copy(
-                activeBlockId = res.activeBlockId ?: it.activeBlockId,
+                activeBlockId = nextActiveId,
                 focusRequest = res.focusRequest ?: it.focusRequest,
                 structureRevision = nextStructureRev,
                 selectionStart = selStart,
                 selectionEnd = selEnd
             )
+        }
+    }
+
+    private fun resolveSelectionAfterFocus(
+        blocks: List<DocumentBlock>,
+        focusRequest: EditorFocusRequest?,
+        fallbackStart: Int,
+        fallbackEnd: Int
+    ): Pair<Int, Int> {
+        val targetPara = focusRequest?.let { req ->
+            blocks.firstOrNull { b -> b.id == req.blockId } as? DocumentBlock.Paragraph
+        }
+        return if (focusRequest != null && targetPara != null) {
+            val clamped = focusRequest.cursorOffset.coerceIn(0, targetPara.text.length)
+            clamped to clamped
+        } else {
+            fallbackStart to fallbackEnd
         }
     }
 
@@ -176,11 +192,15 @@ internal class WorkspaceEditorCoordinator(
                     repository.updatePageBlocks(page.id, res.blocks, debounced = false)
                     syncState()
                     uiState.update {
+                        val (selStart, selEnd) = resolveSelectionAfterFocus(res.blocks, res.focusRequest, 0, 0)
                         it.copy(
                             activeBlockId = res.activeBlockId ?: block.id,
                             focusRequest = res.focusRequest ?: it.focusRequest,
+                            selectionStart = selStart,
+                            selectionEnd = selEnd,
                             structureRevision = it.structureRevision + 1L,
-                            isBlockInsertSheetOpen = false
+                            isBlockInsertSheetOpen = false,
+                            mobileAccessoryMenu = MobileAccessoryMenu.NONE
                         )
                     }
                     scheduleAutoSync()
@@ -198,11 +218,40 @@ internal class WorkspaceEditorCoordinator(
             EditorFocusRequest(block.id, subItemIndex = subIdx, cursorOffset = Int.MAX_VALUE, requestToken = nextFocusToken())
         } else null
         uiState.update {
+            val latestBlocks = it.activePage?.blocks.orEmpty()
+            val (selStart, selEnd) = resolveSelectionAfterFocus(latestBlocks, req, 0, 0)
             it.copy(
                 activeBlockId = block.id,
                 focusRequest = req ?: it.focusRequest,
+                selectionStart = selStart,
+                selectionEnd = selEnd,
                 structureRevision = it.structureRevision + 1L,
-                isBlockInsertSheetOpen = false
+                isBlockInsertSheetOpen = false,
+                mobileAccessoryMenu = MobileAccessoryMenu.NONE
+            )
+        }
+        scheduleAutoSync()
+    }
+
+    fun deleteBlock(blockId: String) {
+        val page = uiState.value.activePage ?: return
+        val idx = page.blocks.indexOfFirst { it.id == blockId }
+        if (idx < 0) return
+        undoRedo.recordBeforeMutation(page.id, page.blocks)
+        val updated = ParagraphFlowEngine.coalesceAcrossRemovedIndex(page.blocks, idx)
+        repository.updatePageBlocks(page.id, updated)
+        syncState()
+        uiState.update {
+            val clearedActive = it.activeBlockId == blockId || updated.none { b -> b.id == it.activeBlockId }
+            it.copy(
+                activeBlockId = if (clearedActive) null else it.activeBlockId,
+                selectionStart = if (clearedActive) 0 else it.selectionStart,
+                selectionEnd = if (clearedActive) 0 else it.selectionEnd,
+                mobileAccessoryMenu = if (clearedActive) MobileAccessoryMenu.NONE else it.mobileAccessoryMenu,
+                structureRevision = it.structureRevision + 1L,
+                statusBannerMessage = "Block removed",
+                statusBannerActionLabel = "Undo",
+                statusBannerAction = WorkspaceAction.Undo
             )
         }
         scheduleAutoSync()

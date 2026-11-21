@@ -234,16 +234,6 @@ object RichSpanEngine {
         )
     }
 
-    fun splitParagraphAt(
-        paragraph: DocumentBlock.Paragraph,
-        offset: Int,
-        secondId: String
-    ): Pair<DocumentBlock.Paragraph, DocumentBlock.Paragraph> {
-        val splitIdx = offset.coerceIn(0, paragraph.text.length)
-        return sliceParagraph(paragraph, 0, splitIdx, paragraph.id) to
-            sliceParagraph(paragraph, splitIdx, paragraph.text.length, secondId)
-    }
-
     fun mergeParagraphs(
         first: DocumentBlock.Paragraph,
         second: DocumentBlock.Paragraph

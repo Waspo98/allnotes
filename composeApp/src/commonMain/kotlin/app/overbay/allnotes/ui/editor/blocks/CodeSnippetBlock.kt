@@ -35,6 +35,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
@@ -82,7 +83,8 @@ internal fun CodeSnippetBlockContent(
     val focusRequester = remember(block.id) { FocusRequester() }
     val codeHolder = rememberSyncedFieldHolder(block.id, block.code)
     var isFocused by remember(block.id) { mutableStateOf(false) }
-    val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, codeHolder.fieldValue.selection)
+    val layoutRef = remember(block.id) { LayoutResultRef() }
+    val (cursorIntoViewModifier, bringCursorTextLayout) = rememberCursorIntoViewHandler(isFocused, codeHolder.fieldValue.selection)
     var copiedRecently by remember(block.id) { mutableStateOf(false) }
     var languageMenuOpen by remember(block.id) { mutableStateOf(false) }
 
@@ -247,13 +249,25 @@ internal fun CodeSnippetBlockContent(
                         color = colorScheme.onSurface
                     ),
                     visualTransformation = syntaxVisual,
-                    onTextLayout = onTextLayout,
+                    onTextLayout = { result ->
+                        layoutRef.value = result
+                        bringCursorTextLayout(result)
+                    },
                     cursorBrush = SolidColor(colorScheme.primary),
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
                         .then(cursorIntoViewModifier)
                         .onFocusChanged { isFocused = it.isFocused }
+                        .onPreviewKeyEvent { event ->
+                            handleVerticalBoundaryKeyEvent(
+                                event = event,
+                                fieldValue = codeHolder.fieldValue,
+                                layout = layoutRef.value,
+                                blockId = block.id,
+                                onAction = onAction
+                            )
+                        }
                 )
             }
         }

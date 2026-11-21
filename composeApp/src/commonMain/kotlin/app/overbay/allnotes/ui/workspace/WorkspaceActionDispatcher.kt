@@ -132,7 +132,13 @@ internal object WorkspaceActionDispatcher {
                 EditorInputController.dismissSlashCommand(it, action.blockId, action.cursorOffset, vm::nextFocusToken)
             }
             is WorkspaceAction.MoveFocusToAdjacentBlock -> vm.applyEditorResult(false) {
-                ParagraphFlowEngine.focusAdjacentBlock(it, action.fromBlockId, action.direction, vm::nextFocusToken)
+                ParagraphFlowEngine.focusAdjacentBlock(
+                    it,
+                    action.fromBlockId,
+                    action.direction,
+                    vm::nextFocusToken,
+                    action.fromSubItemIndex
+                )
             }
 
             is WorkspaceAction.InsertHeading -> vm.insertHeadingBlock(action.level, action.afterBlockId)

@@ -338,7 +338,12 @@ class ParagraphFlowEngineTest {
         assertEquals("c1", downToChecklist.activeBlockId)
         assertEquals(0, downToChecklist.focusRequest?.subItemIndex)
 
-        val downToLast = ParagraphFlowEngine.focusAdjacentBlock(blocks, "c1", +1, nextTok)
+        val downToSecondItem = ParagraphFlowEngine.focusAdjacentBlock(blocks, "c1", +1, nextTok, fromSubItemIndex = 0)
+        assertEquals("c1", downToSecondItem.activeBlockId)
+        assertEquals(1, downToSecondItem.focusRequest?.subItemIndex)
+        assertEquals(0, downToSecondItem.focusRequest?.cursorOffset)
+
+        val downToLast = ParagraphFlowEngine.focusAdjacentBlock(blocks, "c1", +1, nextTok, fromSubItemIndex = 1)
         assertEquals("p2", downToLast.activeBlockId)
         assertEquals(0, downToLast.focusRequest?.cursorOffset)
 
@@ -347,7 +352,12 @@ class ParagraphFlowEngineTest {
         assertEquals(1, upToChecklist.focusRequest?.subItemIndex)
         assertEquals(Int.MAX_VALUE, upToChecklist.focusRequest?.cursorOffset)
 
-        val upToHeading = ParagraphFlowEngine.focusAdjacentBlock(blocks, "c1", -1, nextTok)
+        val upToFirstItem = ParagraphFlowEngine.focusAdjacentBlock(blocks, "c1", -1, nextTok, fromSubItemIndex = 1)
+        assertEquals("c1", upToFirstItem.activeBlockId)
+        assertEquals(0, upToFirstItem.focusRequest?.subItemIndex)
+        assertEquals(Int.MAX_VALUE, upToFirstItem.focusRequest?.cursorOffset)
+
+        val upToHeading = ParagraphFlowEngine.focusAdjacentBlock(blocks, "c1", -1, nextTok, fromSubItemIndex = 0)
         assertEquals("h1", upToHeading.activeBlockId)
         assertEquals(Int.MAX_VALUE, upToHeading.focusRequest?.cursorOffset)
     }

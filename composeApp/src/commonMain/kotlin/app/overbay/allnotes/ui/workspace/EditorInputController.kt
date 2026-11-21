@@ -125,7 +125,7 @@ object EditorInputController {
         val idx = blocks.indexOfFirst { it.id == blockId }
         if (idx < 0) return EditorMutationResult(blocks, blockId)
         val current = blocks[idx] as? DocumentBlock.Paragraph
-            ?: return EditorMarkdownTriggers.executeSlashCommandOnWholeBlock(blocks, idx, blockId, kind, nextId, nextToken)
+            ?: return EditorMutationResult(blocks, blockId)
 
         val line = ParagraphFlowEngine.lineBoundsAt(current.text, cursorOffset ?: current.text.length)
         if (kind == SlashCommandKind.PARAGRAPH || kind == SlashCommandKind.ATTACHMENT) {
@@ -215,18 +215,6 @@ object EditorInputController {
         val mutable = blocks.toMutableList()
 
         return when (val target = blocks[idx]) {
-            is DocumentBlock.Paragraph -> {
-                val newBlockId = nextId()
-                val (first, second) = RichSpanEngine.splitParagraphAt(target, cursorOffset, newBlockId)
-                mutable[idx] = first
-                mutable.add(idx + 1, second)
-                EditorMutationResult(
-                    blocks = mutable,
-                    activeBlockId = newBlockId,
-                    focusRequest = EditorFocusRequest(newBlockId, cursorOffset = 0, requestToken = nextToken()),
-                    isStructuralConversion = true
-                )
-            }
             is DocumentBlock.Heading -> {
                 val split = cursorOffset.coerceIn(0, target.text.length)
                 mutable[idx] = target.copy(text = target.text.substring(0, split))

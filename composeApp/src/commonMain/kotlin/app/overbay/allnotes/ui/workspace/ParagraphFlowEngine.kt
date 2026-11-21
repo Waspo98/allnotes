@@ -335,12 +335,35 @@ object ParagraphFlowEngine {
         blocks: List<DocumentBlock>,
         fromBlockId: String,
         direction: Int,
-        nextToken: () -> Long
+        nextToken: () -> Long,
+        fromSubItemIndex: Int = -1
     ): EditorMutationResult {
         if (direction == 0) return EditorMutationResult(blocks, fromBlockId)
         val step = if (direction < 0) -1 else 1
         val fromIdx = blocks.indexOfFirst { it.id == fromBlockId }
         if (fromIdx < 0) return EditorMutationResult(blocks, fromBlockId)
+
+        if (fromSubItemIndex >= 0) {
+            val itemCount = when (val current = blocks[fromIdx]) {
+                is DocumentBlock.Checklist -> current.items.size
+                is DocumentBlock.BulletList -> current.items.size
+                else -> 0
+            }
+            val nextSub = fromSubItemIndex + step
+            if (nextSub in 0 until itemCount) {
+                return EditorMutationResult(
+                    blocks = blocks,
+                    activeBlockId = fromBlockId,
+                    focusRequest = EditorFocusRequest(
+                        blockId = fromBlockId,
+                        subItemIndex = nextSub,
+                        cursorOffset = if (step > 0) 0 else Int.MAX_VALUE,
+                        requestToken = nextToken()
+                    ),
+                    isStructuralConversion = false
+                )
+            }
+        }
 
         var idx = fromIdx + step
         while (idx in blocks.indices) {

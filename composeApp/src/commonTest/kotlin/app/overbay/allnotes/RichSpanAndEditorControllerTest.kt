@@ -53,9 +53,10 @@ class RichSpanAndEditorControllerTest {
         assertEquals(11, shiftedSpans.single().start)
         assertEquals(21, shiftedSpans.single().end)
 
-        // Split paragraph right in the middle of "expressive" (at offset 16 in "Build very expressive notes today")
+        // Slice paragraph right in the middle of "expressive" (at offset 16 in "Build very expressive notes today")
         val updatedPara = bolded.copy(text = "Build very expressive notes today", spans = shiftedSpans)
-        val (left, right) = RichSpanEngine.splitParagraphAt(updatedPara, 16, "p2")
+        val left = RichSpanEngine.sliceParagraph(updatedPara, 0, 16, "p1")
+        val right = RichSpanEngine.sliceParagraph(updatedPara, 16, updatedPara.text.length, "p2")
         assertEquals("Build very expre", left.text)
         assertEquals("ssive notes today", right.text)
         assertEquals(RichTextSpan(11, 16, RichSpanKind.BOLD), left.spans.single())

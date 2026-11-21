@@ -75,6 +75,9 @@ internal fun BoxScope.MobileAccessoryMenuOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(bottom = 49.dp)
                 .pointerInput(Unit) {
                     detectTapGestures { dismissMenu() }
                 }

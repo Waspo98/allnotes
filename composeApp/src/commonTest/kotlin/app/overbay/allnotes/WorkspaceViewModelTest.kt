@@ -835,4 +835,39 @@ class WorkspaceViewModelTest {
         vm.dispatch(WorkspaceAction.SelectPage(secondPage.id))
         assertEquals(MobileAccessoryMenu.NONE, vm.uiState.value.mobileAccessoryMenu)
     }
+
+    @Test
+    fun clearActiveParagraphFormattingClearsLineOrSelectionAndDeleteResetsMenu() {
+        val (vm, repo) = createTestFixture()
+        val sec = vm.uiState.value.activeSection!!
+        val page = repo.createPage(sec.id, "Line Clear Test")
+        vm.selectPage(page.id)
+
+        val p = vm.uiState.value.activePage!!.blocks.single() as DocumentBlock.Paragraph
+        vm.updateBlockText(p.id, "First bold line\nSecond italic line")
+        vm.dispatch(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.BOLD, null, p.id, 0, 15))
+        vm.dispatch(WorkspaceAction.ToggleSelectionSpan(RichSpanKind.ITALIC, null, p.id, 16, 34))
+
+        // Collapsed cursor on line 1 clears only line 1 while preserving line 2's italic span
+        vm.dispatch(WorkspaceAction.UpdateActiveSelection(p.id, 4, 4))
+        vm.dispatch(WorkspaceAction.ClearActiveParagraphFormatting)
+        val afterLineClear = vm.uiState.value.activePage!!.blocks.single() as DocumentBlock.Paragraph
+        assertEquals(1, afterLineClear.spans.size)
+        assertEquals(RichSpanKind.ITALIC, afterLineClear.spans.single().kind)
+        assertEquals("Second italic line", afterLineClear.text.substring(afterLineClear.spans.single().start, afterLineClear.spans.single().end))
+
+        // Inserting a non-paragraph block resets stale selection offsets & closes accessory menu
+        vm.dispatch(WorkspaceAction.SetMobileAccessoryMenu(MobileAccessoryMenu.BLOCK_ACTIONS))
+        vm.dispatch(WorkspaceAction.InsertTable(afterBlockId = p.id))
+        assertEquals(0, vm.uiState.value.selectionStart)
+        assertEquals(0, vm.uiState.value.selectionEnd)
+        assertEquals(MobileAccessoryMenu.NONE, vm.uiState.value.mobileAccessoryMenu)
+
+        // Deleting the active block also clears mobileAccessoryMenu directly in state
+        val tableId = vm.uiState.value.activeBlockId!!
+        vm.dispatch(WorkspaceAction.SetMobileAccessoryMenu(MobileAccessoryMenu.BLOCK_ACTIONS))
+        vm.dispatch(WorkspaceAction.DeleteBlock(tableId))
+        assertEquals(null, vm.uiState.value.activeBlockId)
+        assertEquals(MobileAccessoryMenu.NONE, vm.uiState.value.mobileAccessoryMenu)
+    }
 }

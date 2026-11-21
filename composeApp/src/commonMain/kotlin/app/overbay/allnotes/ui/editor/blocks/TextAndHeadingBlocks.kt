@@ -178,8 +178,9 @@ internal fun CalloutBlockContent(
     val bodyHolder = rememberSyncedFieldHolder(block.id to "body", block.text)
     var titleFocused by remember(block.id) { mutableStateOf(false) }
     var bodyFocused by remember(block.id) { mutableStateOf(false) }
+    val bodyLayoutRef = remember(block.id) { LayoutResultRef() }
     val (titleIntoViewModifier, onTitleLayout) = rememberCursorIntoViewHandler(titleFocused, titleHolder.fieldValue.selection)
-    val (bodyIntoViewModifier, onBodyLayout) = rememberCursorIntoViewHandler(bodyFocused, bodyHolder.fieldValue.selection)
+    val (bodyIntoViewModifier, bringBodyTextLayout) = rememberCursorIntoViewHandler(bodyFocused, bodyHolder.fieldValue.selection)
 
     if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
         LaunchedEffect(focusRequest.requestToken) {
@@ -261,6 +262,14 @@ internal fun CalloutBlockContent(
                             .fillMaxWidth()
                             .then(titleIntoViewModifier)
                             .onFocusChanged { titleFocused = it.isFocused }
+                            .onPreviewKeyEvent { event ->
+                                handleTitleBoundaryKeyEvent(
+                                    event = event,
+                                    blockId = block.id,
+                                    onAction = onAction,
+                                    onMoveDownToBody = { runCatching { bodyFocusRequester.requestFocus() } }
+                                )
+                            }
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -283,7 +292,10 @@ internal fun CalloutBlockContent(
                         },
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = content),
                         visualTransformation = searchVisual,
-                        onTextLayout = onBodyLayout,
+                        onTextLayout = { result ->
+                            bodyLayoutRef.value = result
+                            bringBodyTextLayout(result)
+                        },
                         cursorBrush = SolidColor(badge),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -291,6 +303,16 @@ internal fun CalloutBlockContent(
                             .then(bodyIntoViewModifier)
                             .onFocusChanged { bodyFocused = it.isFocused }
                             .onPreviewKeyEvent { event ->
+                                if (handleVerticalBoundaryKeyEvent(
+                                        event = event,
+                                        fieldValue = bodyHolder.fieldValue,
+                                        layout = bodyLayoutRef.value,
+                                        blockId = block.id,
+                                        onAction = onAction
+                                    )
+                                ) {
+                                    return@onPreviewKeyEvent true
+                                }
                                 if (event.type == KeyEventType.KeyDown &&
                                     event.key == Key.Backspace &&
                                     bodyHolder.fieldValue.text.isEmpty() &&

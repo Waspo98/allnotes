@@ -211,44 +211,4 @@ internal object EditorMarkdownTriggers {
         )
         return DocumentBlock.Paragraph(id = paragraph.id, text = updatedText, spans = updatedSpans)
     }
-
-    fun executeSlashCommandOnWholeBlock(
-        blocks: List<DocumentBlock>,
-        idx: Int,
-        blockId: String,
-        kind: SlashCommandKind,
-        nextId: () -> String,
-        nextToken: () -> Long
-    ): EditorMutationResult {
-        val mutable = blocks.toMutableList()
-        return when (kind) {
-            SlashCommandKind.DIVIDER -> {
-                mutable[idx] = DocumentBlock.Divider(id = blockId)
-                val (targetId, focusReq) = ParagraphFlowEngine.focusOrPrependNextParagraph(mutable, idx, "", nextId, nextToken)
-                EditorMutationResult(mutable, targetId, focusReq, true)
-            }
-            SlashCommandKind.ATTACHMENT -> {
-                mutable[idx] = DocumentBlock.Paragraph(id = blockId, text = "")
-                EditorMutationResult(mutable, blockId, isStructuralConversion = true)
-            }
-            SlashCommandKind.TABLE -> {
-                mutable[idx] = buildEmptySlashBlock(blockId, kind, nextId)
-                EditorMutationResult(mutable, blockId, isStructuralConversion = true)
-            }
-            else -> {
-                mutable[idx] = buildEmptySlashBlock(blockId, kind, nextId)
-                val subIdx = if (
-                    kind == SlashCommandKind.CHECKLIST ||
-                    kind == SlashCommandKind.BULLET_LIST ||
-                    kind == SlashCommandKind.NUMBERED_LIST
-                ) 0 else -1
-                EditorMutationResult(
-                    mutable,
-                    blockId,
-                    EditorFocusRequest(blockId, subItemIndex = subIdx, cursorOffset = 0, requestToken = nextToken()),
-                    true
-                )
-            }
-        }
-    }
 }

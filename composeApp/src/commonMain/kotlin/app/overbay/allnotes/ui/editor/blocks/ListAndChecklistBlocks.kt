@@ -67,6 +67,7 @@ internal fun ChecklistBlockContent(
     val haptics = LocalHapticFeedback.current
     val searchVisual = rememberSearchHighlightTransformation(searchQuery)
     val titleHolder = rememberSyncedFieldHolder(block.id to "checklist-title", block.title)
+    val firstItemRequester = remember(block.id) { FocusRequester() }
     var titleFocused by remember(block.id) { mutableStateOf(false) }
     val (titleIntoViewModifier, onTitleLayout) = rememberCursorIntoViewHandler(titleFocused, titleHolder.fieldValue.selection)
 
@@ -116,6 +117,16 @@ internal fun ChecklistBlockContent(
                             .fillMaxWidth()
                             .then(titleIntoViewModifier)
                             .onFocusChanged { titleFocused = it.isFocused }
+                            .onPreviewKeyEvent { event ->
+                                handleTitleBoundaryKeyEvent(
+                                    event = event,
+                                    blockId = block.id,
+                                    onAction = onAction,
+                                    onMoveDownToBody = if (block.items.isNotEmpty()) {
+                                        { runCatching { firstItemRequester.requestFocus() } }
+                                    } else null
+                                )
+                            }
                     )
                 }
 
@@ -166,7 +177,8 @@ internal fun ChecklistBlockContent(
                 val requester = remember(item.id) { FocusRequester() }
                 val fieldHolder = rememberSyncedFieldHolder(item.id, item.text)
                 var isFocused by remember(item.id) { mutableStateOf(false) }
-                val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldHolder.fieldValue.selection)
+                val layoutRef = remember(item.id) { LayoutResultRef() }
+                val (cursorIntoViewModifier, bringCursorTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldHolder.fieldValue.selection)
                 val itemAlpha by animateFloatAsState(
                     targetValue = if (item.isChecked) 0.62f else 1f,
                     animationSpec = AllNotesMotion.effectsFast(),
@@ -229,7 +241,10 @@ internal fun ChecklistBlockContent(
                                 color = colorScheme.onSurface
                             ),
                             visualTransformation = searchVisual,
-                            onTextLayout = onTextLayout,
+                            onTextLayout = { result ->
+                                layoutRef.value = result
+                                bringCursorTextLayout(result)
+                            },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             keyboardActions = KeyboardActions(
                                 onNext = { onAction(WorkspaceAction.ListEnterAtItem(block.id, index)) }
@@ -238,10 +253,22 @@ internal fun ChecklistBlockContent(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(requester)
+                                .then(if (index == 0) Modifier.focusRequester(firstItemRequester) else Modifier)
                                 .then(cursorIntoViewModifier)
                                 .onFocusChanged { isFocused = it.isFocused }
                                 .onPreviewKeyEvent { event ->
                                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                    if (handleVerticalBoundaryKeyEvent(
+                                            event = event,
+                                            fieldValue = fieldHolder.fieldValue,
+                                            layout = layoutRef.value,
+                                            blockId = block.id,
+                                            onAction = onAction,
+                                            subItemIndex = index
+                                        )
+                                    ) {
+                                        return@onPreviewKeyEvent true
+                                    }
                                     when {
                                         event.key == Key.Enter -> {
                                             onAction(WorkspaceAction.ListEnterAtItem(block.id, index))
@@ -264,125 +291,6 @@ internal fun ChecklistBlockContent(
                             Icon(
                                 AllNotesIcons.Close,
                                 contentDescription = "Delete item",
-                                tint = colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun BulletListBlockContent(
-    block: DocumentBlock.BulletList,
-    isActive: Boolean,
-    searchQuery: String,
-    focusRequest: EditorFocusRequest?,
-    onAction: (WorkspaceAction) -> Unit
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val searchVisual = rememberSearchHighlightTransformation(searchQuery)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        block.items.forEachIndexed { index, item ->
-            key(block.id, index) {
-                val requester = remember(block.id, index) { FocusRequester() }
-                val fieldHolder = rememberSyncedFieldHolder(block.id to index, item)
-                var isFocused by remember(block.id, index) { mutableStateOf(false) }
-                val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldHolder.fieldValue.selection)
-
-                if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex == index) {
-                    LaunchedEffect(focusRequest.requestToken) {
-                        val pos = focusRequest.cursorOffset.coerceIn(0, item.length)
-                        fieldHolder.moveCursorTo(pos)
-                        runCatching { requester.requestFocus() }
-                        onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))
-                    }
-                }
-
-                val prefix = if (block.isNumbered) "${index + 1}." else "•"
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Text(
-                        text = prefix,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colorScheme.primary,
-                        modifier = Modifier.width(26.dp).padding(top = 1.dp)
-                    )
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (fieldHolder.fieldValue.text.isEmpty() && isActive) {
-                            Text(
-                                text = "List item…",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                            )
-                        }
-                        BasicTextField(
-                            value = fieldHolder.fieldValue,
-                            onValueChange = { updated ->
-                                if (updated.text.contains('\n')) {
-                                    val cleaned = updated.text.replace("\n", "")
-                                    fieldHolder.applyLocalChange(updated.copy(text = cleaned), cleaned)
-                                    onAction(WorkspaceAction.UpdateBulletListItem(block.id, index, cleaned))
-                                    onAction(WorkspaceAction.ListEnterAtItem(block.id, index))
-                                } else {
-                                    val changed = updated.text != fieldHolder.fieldValue.text
-                                    fieldHolder.applyLocalChange(updated)
-                                    if (changed) {
-                                        onAction(WorkspaceAction.UpdateBulletListItem(block.id, index, updated.text))
-                                    }
-                                }
-                            },
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                color = colorScheme.onSurface
-                            ),
-                            visualTransformation = searchVisual,
-                            onTextLayout = onTextLayout,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                            keyboardActions = KeyboardActions(
-                                onNext = { onAction(WorkspaceAction.ListEnterAtItem(block.id, index)) }
-                            ),
-                            cursorBrush = SolidColor(colorScheme.primary),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(requester)
-                                .then(cursorIntoViewModifier)
-                                .onFocusChanged { isFocused = it.isFocused }
-                                .onPreviewKeyEvent { event ->
-                                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                                    when {
-                                        event.key == Key.Enter -> {
-                                            onAction(WorkspaceAction.ListEnterAtItem(block.id, index))
-                                            true
-                                        }
-                                        event.key == Key.Backspace && fieldHolder.fieldValue.text.isEmpty() -> {
-                                            onAction(WorkspaceAction.ListBackspaceOnEmptyItem(block.id, index))
-                                            true
-                                        }
-                                        else -> false
-                                    }
-                                }
-                        )
-                    }
-                    if (isActive && block.items.size > 1) {
-                        IconButton(
-                            onClick = { onAction(WorkspaceAction.DeleteBulletListItem(block.id, index)) },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                AllNotesIcons.Close,
-                                contentDescription = "Remove list item",
                                 tint = colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                                 modifier = Modifier.size(16.dp)
                             )

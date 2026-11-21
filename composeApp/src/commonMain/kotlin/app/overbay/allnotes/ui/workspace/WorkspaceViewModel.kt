@@ -515,23 +515,7 @@ class WorkspaceViewModel(
         }
     }
 
-    fun deleteBlock(blockId: String) {
-        val page = _uiState.value.activePage ?: return
-        val idx = page.blocks.indexOfFirst { it.id == blockId }
-        if (idx < 0) return
-        editorCoordinator.recordBeforeMutation(page.id, page.blocks)
-        val updated = ParagraphFlowEngine.coalesceAcrossRemovedIndex(page.blocks, idx)
-        repository.updatePageBlocks(page.id, updated)
-        syncStateFromRepository()
-        _uiState.update {
-            it.copy(
-                activeBlockId = if (it.activeBlockId == blockId || updated.none { b -> b.id == it.activeBlockId }) null else it.activeBlockId,
-                structureRevision = it.structureRevision + 1L,
-                statusBannerMessage = "Block removed", statusBannerActionLabel = "Undo", statusBannerAction = WorkspaceAction.Undo
-            )
-        }
-        scheduleAutoSyncIfEnabled()
-    }
+    fun deleteBlock(blockId: String) = editorCoordinator.deleteBlock(blockId)
 
     fun toggleChecklistItem(blockId: String, itemId: String) {
         val page = _uiState.value.activePage ?: return
