@@ -248,11 +248,17 @@ internal fun BlockTypeConverterPill(
             }
         }
 
+        val targets = if (activeBlock is DocumentBlock.Paragraph) {
+            ConvertibleBlockTargets.filterNot { (kind, _) -> kind == SlashCommandKind.PARAGRAPH }
+        } else {
+            ConvertibleBlockTargets
+        }
+
         DropdownMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false }
         ) {
-            ConvertibleBlockTargets.forEach { (kind, icon) ->
+            targets.forEach { (kind, icon) ->
                 DropdownMenuItem(
                     text = { Text(kind.title) },
                     leadingIcon = {

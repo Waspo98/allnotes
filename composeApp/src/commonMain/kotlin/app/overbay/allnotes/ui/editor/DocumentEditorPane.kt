@@ -52,6 +52,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.ui.editor.blocks.DocumentBlockView
 import app.overbay.allnotes.ui.editor.blocks.LocalEditorStructureRevision
 import app.overbay.allnotes.ui.editor.blocks.rememberSyncedFieldHolder
@@ -350,6 +351,7 @@ fun DocumentEditorPane(
             if (state.isBlockInsertSheetOpen && page != null) {
                 BlockInsertBottomSheet(
                     afterBlockId = state.activeBlockId,
+                    showParagraphOption = state.activeBlock !is DocumentBlock.Paragraph,
                     onRequestMediaPicker = requestMediaPicker,
                     onAction = onAction,
                     onDismiss = { onAction(WorkspaceAction.SetBlockInsertSheetOpen(false)) }

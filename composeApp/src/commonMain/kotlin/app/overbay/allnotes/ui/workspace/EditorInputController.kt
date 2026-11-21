@@ -48,8 +48,9 @@ object EditorInputController {
             return emptyList()
         }
         val query = line.removePrefix("/").lowercase()
-        if (query.isEmpty()) return SlashCommandKind.entries
-        return SlashCommandKind.entries.filter {
+        val available = SlashCommandKind.entries.filter { it != SlashCommandKind.PARAGRAPH }
+        if (query.isEmpty()) return available
+        return available.filter {
             it.command.removePrefix("/").contains(query) ||
                 it.title.lowercase().contains(query)
         }

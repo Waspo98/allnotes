@@ -170,11 +170,13 @@ fun DesktopFormattingRibbon(
                     expanded = moreInsertOpen,
                     onDismissRequest = { moreInsertOpen = false }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Paragraph") },
-                        leadingIcon = { Icon(AllNotesIcons.Paragraph, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = { moreInsertOpen = false; onAction(WorkspaceAction.InsertParagraph(state.activeBlockId)) }
-                    )
+                    if (activeParagraph == null) {
+                        DropdownMenuItem(
+                            text = { Text("Body Text") },
+                            leadingIcon = { Icon(AllNotesIcons.Paragraph, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            onClick = { moreInsertOpen = false; onAction(WorkspaceAction.InsertParagraph(state.activeBlockId)) }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Numbered List") },
                         leadingIcon = { Icon(AllNotesIcons.NumberedList, contentDescription = null, modifier = Modifier.size(18.dp)) },

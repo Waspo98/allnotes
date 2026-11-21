@@ -104,6 +104,8 @@ class ParagraphFlowEngineTest {
     fun midParagraphSlashCommandsAndEscapeDismissalPreserveSurroundingLines() {
         val (nextId, nextTok) = newGenerators()
         val text = "Hello\n/to\nWorld"
+        assertFalse(EditorInputController.matchingSlashCommands("/", cursorOffset = 1).contains(SlashCommandKind.PARAGRAPH))
+        assertTrue(EditorInputController.matchingSlashCommands("/text", cursorOffset = 5).isEmpty())
         assertTrue(EditorInputController.matchingSlashCommands(text, cursorOffset = 9).contains(SlashCommandKind.CHECKLIST))
         assertTrue(EditorInputController.matchingSlashCommands(text, cursorOffset = 3).isEmpty())
 

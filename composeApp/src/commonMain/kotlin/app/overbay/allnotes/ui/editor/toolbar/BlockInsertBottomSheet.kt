@@ -40,6 +40,7 @@ private data class BlockSheetOption(
 @Composable
 internal fun BlockInsertBottomSheet(
     afterBlockId: String?,
+    showParagraphOption: Boolean = true,
     onRequestMediaPicker: () -> Unit,
     onAction: (WorkspaceAction) -> Unit,
     onDismiss: () -> Unit
@@ -73,20 +74,30 @@ internal fun BlockInsertBottomSheet(
 
             BlockCategoryGrid(
                 title = "Text & Structure",
-                options = listOf(
-                    BlockSheetOption("Heading", "Section title", AllNotesIcons.Heading) {
-                        onAction(WorkspaceAction.InsertHeading(2, afterBlockId))
-                    },
-                    BlockSheetOption("Paragraph", "Rich text body", AllNotesIcons.Paragraph) {
-                        onAction(WorkspaceAction.InsertParagraph(afterBlockId))
-                    },
-                    BlockSheetOption("Callout", "Highlighted note", AllNotesIcons.Lightbulb) {
-                        onAction(WorkspaceAction.InsertCallout(afterBlockId))
-                    },
-                    BlockSheetOption("Divider", "Visual break", AllNotesIcons.Divider) {
-                        onAction(WorkspaceAction.InsertDivider(afterBlockId))
+                options = buildList {
+                    add(
+                        BlockSheetOption("Heading", "Section title", AllNotesIcons.Heading) {
+                            onAction(WorkspaceAction.InsertHeading(2, afterBlockId))
+                        }
+                    )
+                    if (showParagraphOption) {
+                        add(
+                            BlockSheetOption("Body Text", "Rich text below block", AllNotesIcons.Paragraph) {
+                                onAction(WorkspaceAction.InsertParagraph(afterBlockId))
+                            }
+                        )
                     }
-                )
+                    add(
+                        BlockSheetOption("Callout", "Highlighted note", AllNotesIcons.Lightbulb) {
+                            onAction(WorkspaceAction.InsertCallout(afterBlockId))
+                        }
+                    )
+                    add(
+                        BlockSheetOption("Divider", "Visual break", AllNotesIcons.Divider) {
+                            onAction(WorkspaceAction.InsertDivider(afterBlockId))
+                        }
+                    )
+                }
             )
 
             BlockCategoryGrid(
