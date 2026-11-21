@@ -228,6 +228,23 @@ fun SectionAccentKey.accentColor(): Color = resolvePalette(LocalIsDarkTheme.curr
 @Composable
 fun SectionAccentKey.ambientWashColor(): Color = resolvePalette(LocalIsDarkTheme.current).ambientWash
 
+internal fun SectionAccentKey.accentColorForTheme(isDark: Boolean): Color = resolvePalette(isDark).accent
+
+internal fun highlightContainerColor(isDark: Boolean): Color =
+    if (isDark) Color(0xFF6B5300) else Color(0xFFFFE57F)
+
+internal fun onHighlightContainerColor(isDark: Boolean): Color =
+    if (isDark) Color(0xFFFFF6D6) else Color(0xFF1E1B18)
+
+@Composable
+fun isAllNotesDarkTheme(): Boolean = LocalIsDarkTheme.current
+
+@Composable
+fun highlightContainerColor(): Color = highlightContainerColor(LocalIsDarkTheme.current)
+
+@Composable
+fun onHighlightContainerColor(): Color = onHighlightContainerColor(LocalIsDarkTheme.current)
+
 @Composable
 internal expect fun resolvePlatformColorScheme(darkTheme: Boolean, useDynamicColor: Boolean): ColorScheme
 

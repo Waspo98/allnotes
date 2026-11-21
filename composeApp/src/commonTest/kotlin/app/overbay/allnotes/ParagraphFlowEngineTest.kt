@@ -392,4 +392,59 @@ class ParagraphFlowEngineTest {
         assertTrue(reimported.blocks[1] is DocumentBlock.Heading)
         assertEquals("After heading", (reimported.blocks[2] as DocumentBlock.Paragraph).text)
     }
+
+    @Test
+    fun insertingBulletsOrChecklistsCreatesSingleEmptyItemAndConvertsHighlightedLines() {
+        val repo = NoteRepository(storage = FlowTestStorage())
+        val vm = WorkspaceViewModel(repository = repo, coroutineDispatcher = Dispatchers.Unconfined)
+        val sec = vm.uiState.value.activeSection!!
+        val page = repo.createPage(sec.id, "Word List UX Test")
+        vm.selectPage(page.id)
+
+        // 1. Fresh bullet list inserts a single empty bullet item (no placeholder text)
+        val initialPara = vm.uiState.value.activePage!!.blocks.single() as DocumentBlock.Paragraph
+        vm.dispatch(WorkspaceAction.UpdateActiveSelection(initialPara.id, 0, 0))
+        vm.dispatch(WorkspaceAction.InsertBulletList(isNumbered = false, afterBlockId = initialPara.id))
+        val bullet = vm.uiState.value.activeBlock as DocumentBlock.BulletList
+        assertFalse(bullet.isNumbered)
+        assertEquals(listOf(""), bullet.items)
+
+        // 2. Fresh checklist inserts an untitled checklist with a single empty checkbox
+        vm.dispatch(WorkspaceAction.InsertChecklist(afterBlockId = bullet.id))
+        val checklist = vm.uiState.value.activeBlock as DocumentBlock.Checklist
+        assertEquals("", checklist.title)
+        assertEquals(1, checklist.items.size)
+        assertEquals("", checklist.items.single().text)
+
+        // 3. Highlighting lines in a paragraph and clicking Bullet List converts only those lines
+        val page2 = repo.createPage(sec.id, "Selection Conversion Test")
+        vm.selectPage(page2.id)
+        val p2 = vm.uiState.value.activePage!!.blocks.single() as DocumentBlock.Paragraph
+        vm.updateBlockText(p2.id, "Intro\nMilk\nBread\nOutro")
+        vm.dispatch(WorkspaceAction.UpdateActiveSelection(p2.id, 6, 16))
+        vm.dispatch(WorkspaceAction.InsertBulletList(isNumbered = false, afterBlockId = p2.id))
+
+        val afterBulletConvert = vm.uiState.value.activePage!!.blocks
+        assertEquals(3, afterBulletConvert.size)
+        assertEquals("Intro", (afterBulletConvert[0] as DocumentBlock.Paragraph).text)
+        val convertedBullet = afterBulletConvert[1] as DocumentBlock.BulletList
+        assertFalse(convertedBullet.isNumbered)
+        assertEquals(listOf("Milk", "Bread"), convertedBullet.items)
+        assertEquals("Outro", (afterBulletConvert[2] as DocumentBlock.Paragraph).text)
+
+        // 4. Highlighting lines and clicking Checklist converts those lines into checkboxes
+        val page3 = repo.createPage(sec.id, "Checklist Selection Conversion Test")
+        vm.selectPage(page3.id)
+        val p3 = vm.uiState.value.activePage!!.blocks.single() as DocumentBlock.Paragraph
+        vm.updateBlockText(p3.id, "Header\nTask A\nTask B")
+        vm.dispatch(WorkspaceAction.UpdateActiveSelection(p3.id, 7, 20))
+        vm.dispatch(WorkspaceAction.InsertChecklist(afterBlockId = p3.id))
+
+        val afterChecklistConvert = vm.uiState.value.activePage!!.blocks
+        assertEquals(2, afterChecklistConvert.size)
+        assertEquals("Header", (afterChecklistConvert[0] as DocumentBlock.Paragraph).text)
+        val convertedChecklist = afterChecklistConvert[1] as DocumentBlock.Checklist
+        assertEquals("", convertedChecklist.title)
+        assertEquals(listOf("Task A", "Task B"), convertedChecklist.items.map { it.text })
+    }
 }

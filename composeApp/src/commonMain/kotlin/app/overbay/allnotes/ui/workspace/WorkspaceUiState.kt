@@ -46,7 +46,8 @@ enum class ActiveDialog {
 enum class MobileAccessoryMenu {
     NONE,
     BLOCK_ACTIONS,
-    BLOCK_TYPE
+    BLOCK_TYPE,
+    FONT_COLOR
 }
 
 data class WorkspaceUiState(

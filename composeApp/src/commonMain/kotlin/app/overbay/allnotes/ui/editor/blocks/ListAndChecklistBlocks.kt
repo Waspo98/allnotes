@@ -84,50 +84,47 @@ internal fun ChecklistBlockContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        if (block.title.isNotEmpty() || isActive || totalCount >= 2) {
+        if (block.title.isNotEmpty() || totalCount >= 2) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 4.dp, bottom = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    if (titleHolder.fieldValue.text.isEmpty() && isActive) {
-                        Text(
-                            text = "Checklist title…",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                if (block.title.isNotEmpty()) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        BasicTextField(
+                            value = titleHolder.fieldValue,
+                            onValueChange = { updated ->
+                                val changed = updated.text != titleHolder.fieldValue.text
+                                titleHolder.applyLocalChange(updated)
+                                if (changed) onAction(WorkspaceAction.UpdateChecklistTitle(block.id, updated.text))
+                            },
+                            textStyle = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = colorScheme.onSurface
+                            ),
+                            singleLine = true,
+                            visualTransformation = searchVisual,
+                            onTextLayout = onTitleLayout,
+                            cursorBrush = SolidColor(colorScheme.primary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(titleIntoViewModifier)
+                                .onFocusChanged { titleFocused = it.isFocused }
+                                .onPreviewKeyEvent { event ->
+                                    handleTitleBoundaryKeyEvent(
+                                        event = event,
+                                        blockId = block.id,
+                                        onAction = onAction,
+                                        onMoveDownToBody = if (block.items.isNotEmpty()) {
+                                            { runCatching { firstItemRequester.requestFocus() } }
+                                        } else null
+                                    )
+                                }
                         )
                     }
-                    BasicTextField(
-                        value = titleHolder.fieldValue,
-                        onValueChange = { updated ->
-                            val changed = updated.text != titleHolder.fieldValue.text
-                            titleHolder.applyLocalChange(updated)
-                            if (changed) onAction(WorkspaceAction.UpdateChecklistTitle(block.id, updated.text))
-                        },
-                        textStyle = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            color = colorScheme.onSurface
-                        ),
-                        singleLine = true,
-                        visualTransformation = searchVisual,
-                        onTextLayout = onTitleLayout,
-                        cursorBrush = SolidColor(colorScheme.primary),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(titleIntoViewModifier)
-                            .onFocusChanged { titleFocused = it.isFocused }
-                            .onPreviewKeyEvent { event ->
-                                handleTitleBoundaryKeyEvent(
-                                    event = event,
-                                    blockId = block.id,
-                                    onAction = onAction,
-                                    onMoveDownToBody = if (block.items.isNotEmpty()) {
-                                        { runCatching { firstItemRequester.requestFocus() } }
-                                    } else null
-                                )
-                            }
-                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
 
                 if (totalCount >= 2) {

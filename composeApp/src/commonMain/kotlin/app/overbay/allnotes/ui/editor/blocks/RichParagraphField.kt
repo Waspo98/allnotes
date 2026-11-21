@@ -24,9 +24,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -35,6 +39,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
@@ -46,6 +51,8 @@ import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.theme.LocalAllNotesMonoFont
+import app.overbay.allnotes.ui.theme.highlightContainerColor
+import app.overbay.allnotes.ui.theme.isAllNotesDarkTheme
 import app.overbay.allnotes.ui.workspace.EditorFocusRequest
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 
@@ -59,6 +66,8 @@ internal fun RichParagraphField(
     onSlashKeyEvent: ((KeyEvent) -> Boolean)? = null
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val isDark = isAllNotesDarkTheme()
+    val highlightBg = highlightContainerColor()
     val monoFont = LocalAllNotesMonoFont.current
     val uriHandler = LocalUriHandler.current
     val focusRequester = remember(block.id) { FocusRequester() }
@@ -67,6 +76,7 @@ internal fun RichParagraphField(
     val fieldHolder = rememberSyncedFieldHolder(block.id, block.text)
     val fieldValue = fieldHolder.fieldValue
     val layoutRef = remember(block.id) { LayoutResultRef() }
+    var textLayoutResult by remember(block.id) { mutableStateOf<TextLayoutResult?>(null) }
     val (cursorIntoViewModifier, bringCursorTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldValue.selection)
 
     if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
@@ -79,7 +89,7 @@ internal fun RichParagraphField(
         }
     }
 
-    val visualTransformation = remember(block, searchQuery, colorScheme, monoFont) {
+    val visualTransformation = remember(block, searchQuery, colorScheme, monoFont, isDark) {
         VisualTransformation { raw ->
             val previewBlock = if (raw.text == block.text) {
                 block
@@ -93,10 +103,22 @@ internal fun RichParagraphField(
                 paragraph = previewBlock,
                 colorScheme = colorScheme,
                 searchQuery = searchQuery,
-                monoFontFamily = monoFont
+                monoFontFamily = monoFont,
+                isDarkTheme = isDark,
+                includeHighlightBackground = false
             )
             TransformedText(annotated, OffsetMapping.Identity)
         }
+    }
+
+    val highlightSpans = remember(block, fieldValue.text) {
+        val rawText = fieldValue.text
+        val spans = if (rawText == block.text) {
+            block.effectiveSpans()
+        } else {
+            RichSpanEngine.adjustSpansAfterEdit(block.text, rawText, block.effectiveSpans())
+        }
+        spans.filter { it.kind == RichSpanKind.HIGHLIGHT }
     }
 
     val activeLink = if (isActive) {
@@ -124,7 +146,8 @@ internal fun RichParagraphField(
             BasicTextField(
                 value = fieldValue,
                 onValueChange = { updated ->
-                    val prevText = fieldValue.text
+                    val prevValue = fieldHolder.fieldValue
+                    val prevText = prevValue.text
                     val rawText = updated.text
                     val normalizedValue = if (rawText.contains('\r')) {
                         val normalizedText = rawText.replace("\r\n", "\n").replace('\r', '\n')
@@ -138,7 +161,7 @@ internal fun RichParagraphField(
                     }
                     val newText = normalizedValue.text
 
-                    val selChanged = normalizedValue.selection != fieldValue.selection
+                    val selChanged = normalizedValue.selection != prevValue.selection
                     fieldHolder.applyLocalChange(normalizedValue)
 
                     if (newText != prevText) {
@@ -165,11 +188,55 @@ internal fun RichParagraphField(
                 visualTransformation = visualTransformation,
                 onTextLayout = { result ->
                     layoutRef.value = result
+                    textLayoutResult = result
                     bringCursorTextLayout(result)
                 },
                 cursorBrush = SolidColor(colorScheme.primary),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .drawBehind {
+                        val layout = textLayoutResult ?: return@drawBehind
+                        if (highlightSpans.isEmpty()) return@drawBehind
+                        val layoutText = layout.layoutInput.text.text
+                        val maxLen = layoutText.length
+                        if (maxLen == 0) return@drawBehind
+                        val padX = 2.dp.toPx()
+                        val insetY = 1.5.dp.toPx()
+                        val radius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                        for (span in highlightSpans) {
+                            val s = span.start.coerceIn(0, maxLen)
+                            val e = span.end.coerceIn(0, maxLen)
+                            if (s >= e) continue
+                            val startLine = layout.getLineForOffset(s)
+                            val endLine = layout.getLineForOffset((e - 1).coerceAtLeast(s))
+                            for (line in startLine..endLine) {
+                                val lineStart = if (line == startLine) s else layout.getLineStart(line)
+                                var segEnd = if (line == endLine) e else layout.getLineEnd(line, visibleEnd = true)
+                                while (segEnd > lineStart && layoutText[segEnd - 1] == '\n') {
+                                    segEnd--
+                                }
+                                if (segEnd <= lineStart) continue
+                                val startBox = layout.getBoundingBox(lineStart)
+                                val endBox = layout.getBoundingBox(segEnd - 1)
+                                val left = minOf(startBox.left, endBox.left)
+                                val right = maxOf(startBox.right, endBox.right)
+                                val top = layout.getLineTop(line) + insetY
+                                val bottom = layout.getLineBottom(line) - insetY
+                                if (right > left && bottom > top) {
+                                    val clampedLeft = (left - padX).coerceAtLeast(0f)
+                                    val width = (right - left + padX * 2f).coerceAtMost(size.width - clampedLeft)
+                                    if (width > 0f) {
+                                        drawRoundRect(
+                                            color = highlightBg,
+                                            topLeft = Offset(clampedLeft, top),
+                                            size = Size(width, bottom - top),
+                                            cornerRadius = radius
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                     .focusRequester(focusRequester)
                     .then(cursorIntoViewModifier)
                     .onFocusChanged { state ->

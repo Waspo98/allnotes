@@ -1,6 +1,7 @@
 package app.overbay.allnotes.ui.editor.spans
 
 import androidx.compose.material3.ColorScheme
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -11,6 +12,38 @@ import androidx.compose.ui.text.style.TextDecoration
 import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.RichTextSpan
+import app.overbay.allnotes.model.SectionAccentKey
+import app.overbay.allnotes.ui.theme.accentColorForTheme
+import app.overbay.allnotes.ui.theme.highlightContainerColor
+import app.overbay.allnotes.ui.theme.onHighlightContainerColor
+
+enum class FontColorOption(
+    val label: String,
+    val spanKind: RichSpanKind?,
+    val colorTag: String? = null
+) {
+    DEFAULT("Default", null, null),
+    INDIGO("Indigo", RichSpanKind.COLOR_ACCENT, null),
+    EMERALD("Emerald", RichSpanKind.COLOR_ACCENT, "color:EMERALD"),
+    TEAL("Teal", RichSpanKind.COLOR_TERTIARY, null),
+    AMBER("Amber", RichSpanKind.COLOR_ACCENT, "color:AMBER"),
+    RED("Red", RichSpanKind.COLOR_ERROR, null),
+    VIOLET("Violet", RichSpanKind.COLOR_ACCENT, "color:VIOLET");
+
+    companion object {
+        fun fromSpan(span: RichTextSpan): FontColorOption = when (span.kind) {
+            RichSpanKind.COLOR_TERTIARY -> TEAL
+            RichSpanKind.COLOR_ERROR -> RED
+            RichSpanKind.COLOR_ACCENT -> when (span.url) {
+                EMERALD.colorTag -> EMERALD
+                AMBER.colorTag -> AMBER
+                VIOLET.colorTag -> VIOLET
+                else -> INDIGO
+            }
+            else -> DEFAULT
+        }
+    }
+}
 
 /**
  * Pure character-range rich text span engine supporting selection toggling,
@@ -104,7 +137,8 @@ object RichSpanEngine {
         val otherSpans = spans.filterNot { it.kind == kind }
 
         val fullyCovered = isRangeFullyCovered(sameKindSpans, s, e) &&
-            (kind != RichSpanKind.LINK || url == null || sameKindSpans.any { it.start <= s && it.end >= e && it.url == url })
+            ((kind != RichSpanKind.LINK && kind !in colorKinds) ||
+                sameKindSpans.any { it.start <= s && it.end >= e && it.url == url })
 
         val mutatedSameKind = if (fullyCovered) {
             sameKindSpans.flatMap { subtractRange(it, s, e) }
@@ -114,6 +148,78 @@ object RichSpanEngine {
         }
 
         return normalizeAndCoalesce(textLength, otherSpans + mutatedSameKind)
+    }
+
+    fun applyFontColor(
+        paragraph: DocumentBlock.Paragraph,
+        rawStart: Int,
+        rawEnd: Int,
+        option: FontColorOption
+    ): DocumentBlock.Paragraph {
+        val text = paragraph.text
+        if (text.isEmpty()) return paragraph
+
+        val minSel = minOf(rawStart, rawEnd).coerceIn(0, text.length)
+        val maxSel = maxOf(rawStart, rawEnd).coerceIn(0, text.length)
+        val targetRange = if (minSel < maxSel) {
+            minSel to maxSel
+        } else {
+            resolveWordRangeAtCursor(text, minSel) ?: return paragraph
+        }
+
+        val clearedColors = normalizeAndCoalesce(text.length, paragraph.effectiveSpans()).flatMap { span ->
+            if (span.kind in colorKinds) {
+                subtractRange(span, targetRange.first, targetRange.second)
+            } else {
+                listOf(span)
+            }
+        }
+        val nextSpans = if (option.spanKind != null) {
+            clearedColors + RichTextSpan(
+                start = targetRange.first,
+                end = targetRange.second,
+                kind = option.spanKind,
+                url = option.colorTag
+            )
+        } else {
+            clearedColors
+        }
+        return paragraph.copy(spans = normalizeAndCoalesce(text.length, nextSpans))
+    }
+
+    fun activeFontColor(
+        paragraph: DocumentBlock.Paragraph,
+        rawStart: Int,
+        rawEnd: Int
+    ): FontColorOption {
+        if (paragraph.text.isEmpty()) return FontColorOption.DEFAULT
+        val colorSpans = paragraph.effectiveSpans().filter { it.kind in colorKinds }
+        if (colorSpans.isEmpty()) return FontColorOption.DEFAULT
+        val s = minOf(rawStart, rawEnd).coerceIn(0, paragraph.text.length)
+        val e = maxOf(rawStart, rawEnd).coerceIn(0, paragraph.text.length)
+        if (s < e) {
+            val grouped = colorSpans.groupBy { FontColorOption.fromSpan(it) }
+            return grouped.entries.firstOrNull { (_, spans) ->
+                isRangeFullyCovered(spans, s, e)
+            }?.key ?: FontColorOption.DEFAULT
+        }
+        val hit = colorSpans.firstOrNull { s > it.start && s <= it.end }
+            ?: if (s == 0) colorSpans.firstOrNull { it.start == 0 } else null
+        return hit?.let { FontColorOption.fromSpan(it) } ?: FontColorOption.DEFAULT
+    }
+
+    fun resolveFontColor(
+        option: FontColorOption,
+        colorScheme: ColorScheme,
+        isDarkTheme: Boolean
+    ): Color = when (option) {
+        FontColorOption.DEFAULT -> colorScheme.onSurface
+        FontColorOption.INDIGO -> colorScheme.primary
+        FontColorOption.EMERALD -> SectionAccentKey.EMERALD.accentColorForTheme(isDarkTheme)
+        FontColorOption.TEAL -> colorScheme.tertiary
+        FontColorOption.AMBER -> SectionAccentKey.AMBER.accentColorForTheme(isDarkTheme)
+        FontColorOption.RED -> colorScheme.error
+        FontColorOption.VIOLET -> SectionAccentKey.VIOLET.accentColorForTheme(isDarkTheme)
     }
 
     fun hasActiveStyle(
@@ -297,11 +403,16 @@ object RichSpanEngine {
         paragraph: DocumentBlock.Paragraph,
         colorScheme: ColorScheme,
         searchQuery: String = "",
-        monoFontFamily: FontFamily = FontFamily.Monospace
+        monoFontFamily: FontFamily = FontFamily.Monospace,
+        isDarkTheme: Boolean = false,
+        includeHighlightBackground: Boolean = true
     ): AnnotatedString = buildAnnotatedString {
         val text = paragraph.text
         append(text)
         if (text.isEmpty()) return@buildAnnotatedString
+
+        val highlightBg = highlightContainerColor(isDarkTheme)
+        val highlightFg = onHighlightContainerColor(isDarkTheme)
 
         for (span in paragraph.effectiveSpans()) {
             val s = span.start.coerceIn(0, text.length)
@@ -312,18 +423,22 @@ object RichSpanEngine {
                 RichSpanKind.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
                 RichSpanKind.UNDERLINE -> SpanStyle(textDecoration = TextDecoration.Underline)
                 RichSpanKind.STRIKETHROUGH -> SpanStyle(textDecoration = TextDecoration.LineThrough)
-                RichSpanKind.HIGHLIGHT -> SpanStyle(
-                    background = colorScheme.tertiaryContainer.copy(alpha = 0.72f),
-                    color = colorScheme.onTertiaryContainer
-                )
+                RichSpanKind.HIGHLIGHT -> if (includeHighlightBackground) {
+                    SpanStyle(background = highlightBg, color = highlightFg)
+                } else {
+                    SpanStyle(color = highlightFg)
+                }
                 RichSpanKind.INLINE_CODE -> SpanStyle(
                     fontFamily = monoFontFamily,
                     background = colorScheme.surfaceContainerHighest,
                     color = colorScheme.primary
                 )
-                RichSpanKind.COLOR_ACCENT -> SpanStyle(color = colorScheme.primary, fontWeight = FontWeight.Medium)
-                RichSpanKind.COLOR_TERTIARY -> SpanStyle(color = colorScheme.tertiary, fontWeight = FontWeight.Medium)
-                RichSpanKind.COLOR_ERROR -> SpanStyle(color = colorScheme.error, fontWeight = FontWeight.Medium)
+                RichSpanKind.COLOR_ACCENT,
+                RichSpanKind.COLOR_TERTIARY,
+                RichSpanKind.COLOR_ERROR -> SpanStyle(
+                    color = resolveFontColor(FontColorOption.fromSpan(span), colorScheme, isDarkTheme),
+                    fontWeight = FontWeight.Medium
+                )
                 RichSpanKind.LINK -> SpanStyle(
                     color = colorScheme.primary,
                     textDecoration = TextDecoration.Underline,

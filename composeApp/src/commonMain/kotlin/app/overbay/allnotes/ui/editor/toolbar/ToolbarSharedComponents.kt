@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -58,8 +59,7 @@ private val InlineSpanSpecs = listOf(
     SpanButtonSpec(AllNotesIcons.FormatUnderlined, "Underline", "Ctrl+U", RichSpanKind.UNDERLINE),
     SpanButtonSpec(AllNotesIcons.FormatStrikethrough, "Strikethrough", "Ctrl+Shift+S", RichSpanKind.STRIKETHROUGH),
     SpanButtonSpec(AllNotesIcons.Highlight, "Highlight", null, RichSpanKind.HIGHLIGHT),
-    SpanButtonSpec(AllNotesIcons.Code, "Inline Code", null, RichSpanKind.INLINE_CODE),
-    SpanButtonSpec(AllNotesIcons.Palette, "Accent Text", null, RichSpanKind.COLOR_ACCENT)
+    SpanButtonSpec(AllNotesIcons.Code, "Inline Code", null, RichSpanKind.INLINE_CODE)
 )
 
 internal val ConvertibleBlockTargets = listOf(
@@ -67,9 +67,9 @@ internal val ConvertibleBlockTargets = listOf(
     SlashCommandKind.HEADING_1 to AllNotesIcons.Heading,
     SlashCommandKind.HEADING_2 to AllNotesIcons.Heading,
     SlashCommandKind.HEADING_3 to AllNotesIcons.Heading,
-    SlashCommandKind.CHECKLIST to AllNotesIcons.Checklist,
     SlashCommandKind.BULLET_LIST to AllNotesIcons.BulletList,
     SlashCommandKind.NUMBERED_LIST to AllNotesIcons.NumberedList,
+    SlashCommandKind.CHECKLIST to AllNotesIcons.Checklist,
     SlashCommandKind.CALLOUT to AllNotesIcons.Callout,
     SlashCommandKind.CODE to AllNotesIcons.Code
 )
@@ -123,6 +123,7 @@ internal fun ToolbarToggleIcon(
             onClick = onClick,
             modifier = Modifier
                 .size(buttonSize)
+                .focusProperties { canFocus = false }
                 .clip(MaterialTheme.shapes.extraSmall)
                 .drawBehind {
                     val r = 8.dp.toPx()
@@ -149,6 +150,7 @@ internal fun ParagraphInlineFormatButtons(
     selectionEnd: Int,
     showShortcuts: Boolean,
     buttonSize: Dp = 40.dp,
+    onOpenFontColorMenu: (() -> Unit)? = null,
     onAction: (WorkspaceAction) -> Unit
 ) {
     InlineSpanSpecs.forEach { spec ->
@@ -171,6 +173,15 @@ internal fun ParagraphInlineFormatButtons(
             onClick = { onAction(WorkspaceAction.ToggleSelectionSpan(spec.kind)) }
         )
     }
+    FontColorPickerButton(
+        activeParagraph = activeParagraph,
+        selectionStart = selectionStart,
+        selectionEnd = selectionEnd,
+        showTooltip = showShortcuts,
+        buttonSize = buttonSize,
+        onOpenCustomMenu = onOpenFontColorMenu,
+        onAction = onAction
+    )
     ToolbarToggleIcon(
         icon = AllNotesIcons.Link,
         contentDescription = if (showShortcuts) "Insert Link  ·  Ctrl+K" else "Insert Link",
@@ -190,7 +201,9 @@ internal fun ParagraphInlineFormatButtons(
         StudioTooltip(label = "Clear formatting", enabled = showShortcuts) {
             IconButton(
                 onClick = { onAction(WorkspaceAction.ClearActiveParagraphFormatting) },
-                modifier = Modifier.size(buttonSize)
+                modifier = Modifier
+                    .size(buttonSize)
+                    .focusProperties { canFocus = false }
             ) {
                 Icon(
                     imageVector = AllNotesIcons.ClearFormatting,
@@ -229,7 +242,8 @@ internal fun BlockTypeConverterPill(
                 },
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = MaterialTheme.shapes.extraSmall
+                shape = MaterialTheme.shapes.extraSmall,
+                modifier = Modifier.focusProperties { canFocus = false }
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

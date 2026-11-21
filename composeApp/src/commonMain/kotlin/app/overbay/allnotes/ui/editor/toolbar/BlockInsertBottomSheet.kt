@@ -103,14 +103,14 @@ internal fun BlockInsertBottomSheet(
             BlockCategoryGrid(
                 title = "Lists & Data",
                 options = listOf(
-                    BlockSheetOption("Checklist", "Interactive to-dos", AllNotesIcons.Checklist) {
-                        onAction(WorkspaceAction.InsertChecklist(afterBlockId))
-                    },
                     BlockSheetOption("Bullet List", "Unordered items", AllNotesIcons.BulletList) {
                         onAction(WorkspaceAction.InsertBulletList(false, afterBlockId))
                     },
                     BlockSheetOption("Numbered List", "Ordered steps", AllNotesIcons.NumberedList) {
                         onAction(WorkspaceAction.InsertBulletList(true, afterBlockId))
+                    },
+                    BlockSheetOption("Checklist", "Interactive to-dos", AllNotesIcons.Checklist) {
+                        onAction(WorkspaceAction.InsertChecklist(afterBlockId))
                     },
                     BlockSheetOption("Table", "Structured grid", AllNotesIcons.Table) {
                         onAction(WorkspaceAction.InsertTable(afterBlockId))

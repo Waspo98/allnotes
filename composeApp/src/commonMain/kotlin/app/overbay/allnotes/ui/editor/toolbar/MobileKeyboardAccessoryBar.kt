@@ -117,6 +117,14 @@ fun MobileKeyboardAccessoryBar(
                                 selectionEnd = state.selectionEnd,
                                 showShortcuts = false,
                                 buttonSize = 38.dp,
+                                onOpenFontColorMenu = {
+                                    val next = if (state.mobileAccessoryMenu == MobileAccessoryMenu.FONT_COLOR) {
+                                        MobileAccessoryMenu.NONE
+                                    } else {
+                                        MobileAccessoryMenu.FONT_COLOR
+                                    }
+                                    onAction(WorkspaceAction.SetMobileAccessoryMenu(next))
+                                },
                                 onAction = onAction
                             )
                         }
@@ -195,10 +203,22 @@ fun MobileKeyboardAccessoryBar(
                                 Icon(AllNotesIcons.Heading, contentDescription = "Insert Heading", modifier = Modifier.size(18.dp))
                             }
                             IconButton(
+                                onClick = { onAction(WorkspaceAction.InsertBulletList(false, state.activeBlockId)) },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(AllNotesIcons.BulletList, contentDescription = "Bullet List", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(
+                                onClick = { onAction(WorkspaceAction.InsertBulletList(true, state.activeBlockId)) },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(AllNotesIcons.NumberedList, contentDescription = "Numbered List", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(
                                 onClick = { onAction(WorkspaceAction.InsertChecklist(state.activeBlockId)) },
                                 modifier = Modifier.size(38.dp)
                             ) {
-                                Icon(AllNotesIcons.Checklist, contentDescription = "Insert Checklist", modifier = Modifier.size(18.dp))
+                                Icon(AllNotesIcons.Checklist, contentDescription = "Checkboxes", modifier = Modifier.size(18.dp))
                             }
                             IconButton(
                                 onClick = { onAction(WorkspaceAction.InsertTable(state.activeBlockId)) },

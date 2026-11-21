@@ -158,6 +158,9 @@ internal object WorkspaceActionDispatcher {
             is WorkspaceAction.ToggleSelectionSpan -> vm.toggleSelectionSpan(
                 action.kind, action.url, action.blockId, action.selStart, action.selEnd
             )
+            is WorkspaceAction.ApplyFontColor -> vm.applyFontColor(
+                action.option, action.blockId, action.selStart, action.selEnd
+            )
             is WorkspaceAction.ToggleParagraphStyle -> vm.toggleParagraphStyle(action.blockId, action.style)
             WorkspaceAction.ClearActiveParagraphFormatting -> vm.clearActiveParagraphFormatting()
             is WorkspaceAction.ConvertActiveBlock -> vm.convertActiveBlock(action.command)

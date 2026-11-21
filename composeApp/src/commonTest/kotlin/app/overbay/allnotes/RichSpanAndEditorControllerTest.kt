@@ -11,7 +11,12 @@ import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.RichTextSpan
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.WorkspaceSnapshot
+import app.overbay.allnotes.ui.editor.spans.FontColorOption
 import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
+import app.overbay.allnotes.ui.theme.AllNotesDarkColorScheme
+import app.overbay.allnotes.ui.theme.AllNotesLightColorScheme
+import app.overbay.allnotes.ui.theme.highlightContainerColor
+import app.overbay.allnotes.ui.theme.onHighlightContainerColor
 import app.overbay.allnotes.ui.workspace.EditorInputController
 import app.overbay.allnotes.ui.workspace.SlashCommandKind
 import app.overbay.allnotes.ui.workspace.UndoRedoController
@@ -347,5 +352,58 @@ class RichSpanAndEditorControllerTest {
         val untouched = RichSpanEngine.toggleSelectionSpan(nonEmpty, 6, 6, RichSpanKind.BOLD)
         assertFalse(untouched.isBold)
         assertTrue(untouched.spans.isEmpty())
+    }
+
+    @Test
+    fun highlightAndFontColorPickerApplySwitchAndClearCleanly() {
+        val base = DocumentBlock.Paragraph(id = "p-color", text = "Highlight and color test")
+
+        // Highlight toggles on and builds themed highlight styles for both inline and canvas modes
+        val highlighted = RichSpanEngine.toggleSelectionSpan(base, 0, 9, RichSpanKind.HIGHLIGHT)
+        assertTrue(RichSpanEngine.hasActiveStyle(highlighted, 0, 9, RichSpanKind.HIGHLIGHT))
+
+        val annotatedWithBg = RichSpanEngine.buildParagraphAnnotatedString(
+            paragraph = highlighted,
+            colorScheme = AllNotesLightColorScheme,
+            isDarkTheme = false,
+            includeHighlightBackground = true
+        )
+        val lightStyle = annotatedWithBg.spanStyles.single().item
+        assertEquals(highlightContainerColor(isDark = false), lightStyle.background)
+        assertEquals(onHighlightContainerColor(isDark = false), lightStyle.color)
+
+        val annotatedNoBg = RichSpanEngine.buildParagraphAnnotatedString(
+            paragraph = highlighted,
+            colorScheme = AllNotesDarkColorScheme,
+            isDarkTheme = true,
+            includeHighlightBackground = false
+        )
+        val darkStyle = annotatedNoBg.spanStyles.single().item
+        assertEquals(androidx.compose.ui.graphics.Color.Unspecified, darkStyle.background)
+        assertEquals(onHighlightContainerColor(isDark = true), darkStyle.color)
+
+        // Font Color picker applies Emerald, replaces with Red, and resets back to Default cleanly
+        val emerald = RichSpanEngine.applyFontColor(highlighted, 14, 19, FontColorOption.EMERALD)
+        assertEquals(FontColorOption.EMERALD, RichSpanEngine.activeFontColor(emerald, 14, 19))
+        assertEquals(FontColorOption.EMERALD, RichSpanEngine.activeFontColor(emerald, 16, 16))
+        assertTrue(RichSpanEngine.hasActiveStyle(emerald, 0, 9, RichSpanKind.HIGHLIGHT))
+
+        val red = RichSpanEngine.applyFontColor(emerald, 14, 19, FontColorOption.RED)
+        assertEquals(FontColorOption.RED, RichSpanEngine.activeFontColor(red, 14, 19))
+        assertEquals(1, red.spans.count { it.kind == RichSpanKind.COLOR_ERROR })
+        assertEquals(0, red.spans.count { it.kind == RichSpanKind.COLOR_ACCENT })
+
+        val clearedColor = RichSpanEngine.applyFontColor(red, 14, 19, FontColorOption.DEFAULT)
+        assertEquals(FontColorOption.DEFAULT, RichSpanEngine.activeFontColor(clearedColor, 14, 19))
+        assertTrue(RichSpanEngine.hasActiveStyle(clearedColor, 0, 9, RichSpanKind.HIGHLIGHT))
+
+        // ViewModel dispatch for ApplyFontColor works end-to-end
+        val repo = NoteRepository(storage = MemoryNoteStorage())
+        val vm = WorkspaceViewModel(repository = repo, coroutineDispatcher = Dispatchers.Unconfined)
+        val para = vm.uiState.value.activePage!!.blocks.filterIsInstance<DocumentBlock.Paragraph>().first()
+        vm.updateBlockText(para.id, "Colored word")
+        vm.dispatch(WorkspaceAction.ApplyFontColor(FontColorOption.VIOLET, para.id, 0, 7))
+        val updatedPara = vm.uiState.value.activePage!!.blocks.first { it.id == para.id } as DocumentBlock.Paragraph
+        assertEquals(FontColorOption.VIOLET, RichSpanEngine.activeFontColor(updatedPara, 0, 7))
     }
 }

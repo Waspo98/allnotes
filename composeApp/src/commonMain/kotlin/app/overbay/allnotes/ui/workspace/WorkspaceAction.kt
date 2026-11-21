@@ -5,6 +5,7 @@ import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.ThemeMode
+import app.overbay.allnotes.ui.editor.spans.FontColorOption
 
 sealed interface WorkspaceAction {
     // Navigation & UI Chrome
@@ -112,6 +113,12 @@ sealed interface WorkspaceAction {
     data class ToggleSelectionSpan(
         val kind: RichSpanKind,
         val url: String? = null,
+        val blockId: String? = null,
+        val selStart: Int? = null,
+        val selEnd: Int? = null
+    ) : WorkspaceAction
+    data class ApplyFontColor(
+        val option: FontColorOption,
         val blockId: String? = null,
         val selStart: Int? = null,
         val selEnd: Int? = null

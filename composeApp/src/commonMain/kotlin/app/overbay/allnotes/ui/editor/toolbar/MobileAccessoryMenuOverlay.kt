@@ -43,6 +43,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.DocumentBlock
+import app.overbay.allnotes.ui.editor.spans.FontColorOption
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import app.overbay.allnotes.ui.theme.AllNotesIcons
 import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.workspace.MobileAccessoryMenu
@@ -86,6 +88,7 @@ internal fun BoxScope.MobileAccessoryMenuOverlay(
 
     val menuAlignment = when (lastMenuKind) {
         MobileAccessoryMenu.BLOCK_TYPE -> Alignment.BottomStart
+        MobileAccessoryMenu.FONT_COLOR -> Alignment.BottomCenter
         else -> Alignment.BottomEnd
     }
 
@@ -101,13 +104,18 @@ internal fun BoxScope.MobileAccessoryMenuOverlay(
     ) {
         if (activeBlock != null) {
             val colorScheme = MaterialTheme.colorScheme
+            val surfaceWidthModifier = if (lastMenuKind == MobileAccessoryMenu.FONT_COLOR) {
+                Modifier
+            } else {
+                Modifier.widthIn(min = 196.dp, max = 248.dp)
+            }
             Surface(
                 shape = MaterialTheme.shapes.medium,
                 color = colorScheme.surfaceContainerHigh,
                 contentColor = colorScheme.onSurface,
                 shadowElevation = 6.dp,
                 border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                modifier = Modifier.widthIn(min = 196.dp, max = 248.dp)
+                modifier = surfaceWidthModifier
             ) {
                 when (lastMenuKind) {
                     MobileAccessoryMenu.BLOCK_ACTIONS -> {
@@ -173,6 +181,30 @@ internal fun BoxScope.MobileAccessoryMenuOverlay(
                                 )
                             }
                         }
+                    }
+                    MobileAccessoryMenu.FONT_COLOR -> {
+                        val activePara = activeBlock as? DocumentBlock.Paragraph
+                        val selectedColor = if (activePara != null) {
+                            RichSpanEngine.activeFontColor(activePara, state.selectionStart, state.selectionEnd)
+                        } else {
+                            FontColorOption.DEFAULT
+                        }
+                        FontColorSwatchStrip(
+                            selectedOption = selectedColor,
+                            showTooltips = false,
+                            onSelect = { chosen ->
+                                dismissMenu()
+                                onAction(
+                                    WorkspaceAction.ApplyFontColor(
+                                        option = chosen,
+                                        blockId = activePara?.id,
+                                        selStart = state.selectionStart,
+                                        selEnd = state.selectionEnd
+                                    )
+                                )
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                        )
                     }
                     MobileAccessoryMenu.NONE -> Unit
                 }

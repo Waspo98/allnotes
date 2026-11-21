@@ -4,6 +4,7 @@ import app.overbay.allnotes.data.NoteRepository
 import app.overbay.allnotes.data.currentEpochMillis
 import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.model.RichSpanKind
+import app.overbay.allnotes.ui.editor.spans.FontColorOption
 import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -167,6 +168,27 @@ internal class WorkspaceEditorCoordinator(
             blocks.map { if (it.id == paragraph.id && it is DocumentBlock.Paragraph) RichSpanEngine.toggleSelectionSpan(it, s, e, kind, url) else it }
         }
         uiState.update { it.copy(activeDialog = ActiveDialog.NONE) }
+    }
+
+    fun applyFontColor(option: FontColorOption, explicitBlockId: String?, explicitStart: Int?, explicitEnd: Int?) {
+        val state = uiState.value
+        val page = state.activePage ?: return
+        val targetId = explicitBlockId ?: state.activeBlockId
+        val paragraph = (if (targetId != null) page.blocks.firstOrNull { it.id == targetId } as? DocumentBlock.Paragraph else null)
+            ?: page.blocks.filterIsInstance<DocumentBlock.Paragraph>().lastOrNull() ?: return
+        val s = explicitStart ?: if (state.activeBlockId == paragraph.id) state.selectionStart else 0
+        val e = explicitEnd ?: if (state.activeBlockId == paragraph.id) state.selectionEnd else paragraph.text.length
+        mutateActivePageBlocks(paragraph.id) { blocks ->
+            blocks.map { if (it.id == paragraph.id && it is DocumentBlock.Paragraph) RichSpanEngine.applyFontColor(it, s, e, option) else it }
+        }
+        uiState.update { it.copy(mobileAccessoryMenu = MobileAccessoryMenu.NONE) }
+    }
+
+    fun shouldConvertSelectedParagraphLines(afterBlockId: String?): Boolean {
+        val state = uiState.value
+        val activePara = state.activeBlock as? DocumentBlock.Paragraph ?: return false
+        if (afterBlockId != null && afterBlockId != activePara.id) return false
+        return state.selectionStart != state.selectionEnd
     }
 
     fun insertBlock(block: DocumentBlock, afterBlockId: String? = null, focusInserted: Boolean = true) {

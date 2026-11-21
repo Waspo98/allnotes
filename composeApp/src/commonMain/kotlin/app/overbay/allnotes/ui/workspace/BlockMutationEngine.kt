@@ -352,8 +352,8 @@ object BlockMutationEngine {
 
     fun defaultChecklist(id: String, itemId: String) = DocumentBlock.Checklist(
         id = id,
-        title = "Action Items",
-        items = listOf(ChecklistItem(id = itemId, text = "First task", isChecked = false))
+        title = "",
+        items = listOf(ChecklistItem(id = itemId, text = "", isChecked = false))
     )
 
     fun defaultTable(id: String) = DocumentBlock.Table(
@@ -373,7 +373,7 @@ object BlockMutationEngine {
         DocumentBlock.CodeSnippet(id = id, language = "kotlin", code = "// Add snippet or command here")
 
     fun defaultBulletList(id: String, isNumbered: Boolean) =
-        DocumentBlock.BulletList(id = id, isNumbered = isNumbered, items = listOf("First item", "Second item"))
+        DocumentBlock.BulletList(id = id, isNumbered = isNumbered, items = listOf(""))
 
     fun clearParagraphFormatting(blocks: List<DocumentBlock>, blockId: String): List<DocumentBlock> =
         blocks.map { block ->

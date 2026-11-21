@@ -12,6 +12,7 @@ import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.ThemeMode
 import app.overbay.allnotes.model.WorkspaceSnapshot
+import app.overbay.allnotes.ui.editor.spans.FontColorOption
 import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -438,6 +439,8 @@ class WorkspaceViewModel(
     ) = editorCoordinator.mutateActivePageBlocks(keepBlockActive, debounced, transform)
     internal fun toggleSelectionSpan(kind: RichSpanKind, url: String?, explicitBlockId: String?, explicitStart: Int?, explicitEnd: Int?) =
         editorCoordinator.toggleSelectionSpan(kind, url, explicitBlockId, explicitStart, explicitEnd)
+    internal fun applyFontColor(option: FontColorOption, explicitBlockId: String?, explicitStart: Int?, explicitEnd: Int?) =
+        editorCoordinator.applyFontColor(option, explicitBlockId, explicitStart, explicitEnd)
 
     fun moveBlock(blockId: String, delta: Int) = mutateActivePageBlocks(blockId) { BlockMutationEngine.moveBlock(it, blockId, delta) }
     fun updateBlockText(blockId: String, newText: String) = mutateActivePageBlocks(blockId, true) { BlockMutationEngine.updateBlockText(it, blockId, newText) }
@@ -543,13 +546,30 @@ class WorkspaceViewModel(
     private fun insertBlock(block: DocumentBlock, afterBlockId: String? = null, focusInserted: Boolean = true) =
         editorCoordinator.insertBlock(block, afterBlockId, focusInserted)
 
+    private fun convertSelectedLinesAndCloseMenus(command: SlashCommandKind) {
+        convertActiveBlock(command)
+        _uiState.update { it.copy(isBlockInsertSheetOpen = false, mobileAccessoryMenu = MobileAccessoryMenu.NONE) }
+    }
+
     fun insertHeadingBlock(level: Int = 2, afterBlockId: String? = null) = insertBlock(BlockMutationEngine.defaultHeading(nextBlockId(), level), afterBlockId)
     fun insertParagraphBlock(afterBlockId: String? = null) = insertBlock(DocumentBlock.Paragraph(nextBlockId(), ""), afterBlockId)
-    fun insertChecklistBlock(afterBlockId: String? = null) = insertBlock(BlockMutationEngine.defaultChecklist(nextBlockId(), nextBlockId()), afterBlockId)
+    fun insertChecklistBlock(afterBlockId: String? = null) {
+        if (editorCoordinator.shouldConvertSelectedParagraphLines(afterBlockId)) {
+            convertSelectedLinesAndCloseMenus(SlashCommandKind.CHECKLIST)
+            return
+        }
+        insertBlock(BlockMutationEngine.defaultChecklist(nextBlockId(), nextBlockId()), afterBlockId)
+    }
     fun insertTableBlock(afterBlockId: String? = null) = insertBlock(BlockMutationEngine.defaultTable(nextBlockId()), afterBlockId, focusInserted = false)
     fun insertCalloutBlock(afterBlockId: String? = null) = insertBlock(BlockMutationEngine.defaultCallout(nextBlockId()), afterBlockId)
     fun insertCodeBlock(afterBlockId: String? = null) = insertBlock(BlockMutationEngine.defaultCode(nextBlockId()), afterBlockId)
-    fun insertBulletListBlock(isNumbered: Boolean = false, afterBlockId: String? = null) = insertBlock(BlockMutationEngine.defaultBulletList(nextBlockId(), isNumbered), afterBlockId)
+    fun insertBulletListBlock(isNumbered: Boolean = false, afterBlockId: String? = null) {
+        if (editorCoordinator.shouldConvertSelectedParagraphLines(afterBlockId)) {
+            convertSelectedLinesAndCloseMenus(if (isNumbered) SlashCommandKind.NUMBERED_LIST else SlashCommandKind.BULLET_LIST)
+            return
+        }
+        insertBlock(BlockMutationEngine.defaultBulletList(nextBlockId(), isNumbered), afterBlockId)
+    }
     fun insertDividerBlock(afterBlockId: String? = null) = insertBlock(DocumentBlock.Divider(nextBlockId()), afterBlockId, focusInserted = false)
     fun insertAttachmentBlock(
         fileName: String,
