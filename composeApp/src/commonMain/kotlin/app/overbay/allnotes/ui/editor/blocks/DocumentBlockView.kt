@@ -31,6 +31,7 @@ fun DocumentBlockView(
     focusRequest: EditorFocusRequest?,
     onRequestMediaPicker: () -> Unit,
     onAction: (WorkspaceAction) -> Unit,
+    showUnfocusedPlaceholder: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val slashMatches = if (isActive && block is DocumentBlock.Paragraph) {
@@ -101,7 +102,8 @@ fun DocumentBlockView(
                 searchQuery = searchQuery,
                 focusRequest = focusRequest,
                 onAction = onAction,
-                onSlashKeyEvent = if (slashMatches.isNotEmpty()) handleSlashKey else null
+                onSlashKeyEvent = if (slashMatches.isNotEmpty()) handleSlashKey else null,
+                showUnfocusedPlaceholder = showUnfocusedPlaceholder
             )
             is DocumentBlock.Checklist -> ChecklistBlockContent(block, isActive, searchQuery, focusRequest, onAction)
             is DocumentBlock.BulletList -> BulletListBlockContent(block, isActive, searchQuery, focusRequest, onAction)

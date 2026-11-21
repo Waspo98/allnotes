@@ -5,8 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -229,6 +227,7 @@ fun DocumentEditorPane(
                                 }
                             }
 
+                            val isBlankPage = isBlankPageBody(renderedPage.blocks)
                             CompositionLocalProvider(LocalEditorStructureRevision provides state.structureRevision) {
                                 LazyColumn(
                                     state = listState,
@@ -250,6 +249,14 @@ fun DocumentEditorPane(
                                         }
                                         .then(
                                             if (isCompactMobile) Modifier else Modifier.navigationBarsPadding().imePadding()
+                                        )
+                                        .tapBlankCanvasToFocus(
+                                            listState = listState,
+                                            pageId = renderedPage.id,
+                                            blocks = renderedPage.blocks,
+                                            onFocusTrailingBody = {
+                                                onAction(WorkspaceAction.FocusOrAppendTrailingParagraph)
+                                            }
                                         ),
                                     contentPadding = PaddingValues(
                                         start = if (isCompactMobile) 22.dp else 52.dp,
@@ -263,7 +270,7 @@ fun DocumentEditorPane(
                                     ),
                                     verticalArrangement = Arrangement.spacedBy(if (isCompactMobile) 10.dp else 12.dp)
                                 ) {
-                                    item(key = "page-header-${renderedPage.id}", contentType = "page-header") {
+                                    item(key = pageHeaderItemKey(renderedPage.id), contentType = "page-header") {
                                         DocumentPageHeader(
                                             titleHolder = titleHolder,
                                             updatedAtEpochMs = renderedPage.updatedAtEpochMs,
@@ -294,6 +301,7 @@ fun DocumentEditorPane(
                                             focusRequest = blockFocusRequest,
                                             onRequestMediaPicker = requestMediaPicker,
                                             onAction = onAction,
+                                            showUnfocusedPlaceholder = isBlankPage,
                                             modifier = Modifier.animateItem(
                                                 fadeInSpec = AllNotesMotion.effectsFast(),
                                                 fadeOutSpec = AllNotesMotion.effectsFast(),
@@ -302,17 +310,11 @@ fun DocumentEditorPane(
                                         )
                                     }
 
-                                    item(key = "trailing-canvas-${renderedPage.id}", contentType = "trailing-canvas") {
-                                        Box(
+                                    item(key = trailingCanvasItemKey(renderedPage.id), contentType = "trailing-canvas") {
+                                        Spacer(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(if (isCompactMobile) 72.dp else 140.dp)
-                                                .clickable(
-                                                    interactionSource = remember { MutableInteractionSource() },
-                                                    indication = null
-                                                ) {
-                                                    onAction(WorkspaceAction.FocusOrAppendTrailingParagraph)
-                                                }
                                         )
                                     }
                                 }

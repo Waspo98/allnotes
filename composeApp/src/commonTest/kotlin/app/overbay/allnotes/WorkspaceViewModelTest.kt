@@ -870,4 +870,36 @@ class WorkspaceViewModelTest {
         assertEquals(null, vm.uiState.value.activeBlockId)
         assertEquals(MobileAccessoryMenu.NONE, vm.uiState.value.mobileAccessoryMenu)
     }
+
+    @Test
+    fun focusOrAppendTrailingParagraphEntersBodyOnBlankPageAndAppendsAfterNonParagraph() {
+        val (vm, _) = createTestFixture()
+        vm.dispatch(WorkspaceAction.CreatePageInstant(asSubpageOfActive = false))
+
+        val blankPage = vm.uiState.value.activePage!!
+        assertEquals(1, blankPage.blocks.size)
+        val initialPara = blankPage.blocks.single() as DocumentBlock.Paragraph
+        assertEquals("", initialPara.text)
+        assertNull(vm.uiState.value.activeBlockId)
+
+        // Tapping blank space focuses the single empty paragraph without duplicating blocks
+        vm.dispatch(WorkspaceAction.FocusOrAppendTrailingParagraph)
+        val focusedState = vm.uiState.value
+        assertEquals(1, focusedState.activePage!!.blocks.size)
+        assertEquals(initialPara.id, focusedState.activeBlockId)
+        assertEquals(initialPara.id, focusedState.focusRequest?.blockId)
+        assertEquals(0, focusedState.focusRequest?.cursorOffset)
+
+        // When a page ends with a non-paragraph block, tapping blank space appends and focuses a new paragraph
+        vm.dispatch(WorkspaceAction.InsertHeading(level = 2, afterBlockId = initialPara.id))
+        assertEquals(1, vm.uiState.value.activePage!!.blocks.size)
+        assertTrue(vm.uiState.value.activePage!!.blocks.single() is DocumentBlock.Heading)
+        vm.dispatch(WorkspaceAction.FocusOrAppendTrailingParagraph)
+        val appendedPage = vm.uiState.value.activePage!!
+        assertEquals(2, appendedPage.blocks.size)
+        val appendedPara = appendedPage.blocks.last() as DocumentBlock.Paragraph
+        assertEquals(appendedPara.id, vm.uiState.value.activeBlockId)
+        assertEquals(appendedPara.id, vm.uiState.value.focusRequest?.blockId)
+        assertEquals(0, vm.uiState.value.focusRequest?.cursorOffset)
+    }
 }

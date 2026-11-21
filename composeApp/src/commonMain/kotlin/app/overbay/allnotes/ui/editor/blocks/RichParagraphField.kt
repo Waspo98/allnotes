@@ -1,5 +1,6 @@
 package app.overbay.allnotes.ui.editor.blocks
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
@@ -63,13 +66,15 @@ internal fun RichParagraphField(
     searchQuery: String,
     focusRequest: EditorFocusRequest?,
     onAction: (WorkspaceAction) -> Unit,
-    onSlashKeyEvent: ((KeyEvent) -> Boolean)? = null
+    onSlashKeyEvent: ((KeyEvent) -> Boolean)? = null,
+    showUnfocusedPlaceholder: Boolean = false
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val isDark = isAllNotesDarkTheme()
     val highlightBg = highlightContainerColor()
     val monoFont = LocalAllNotesMonoFont.current
     val uriHandler = LocalUriHandler.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember(block.id) { FocusRequester() }
     var isFocused by remember(block.id) { mutableStateOf(false) }
 
@@ -84,6 +89,7 @@ internal fun RichParagraphField(
             val targetCursor = focusRequest.cursorOffset.coerceIn(0, block.text.length)
             fieldHolder.moveCursorTo(targetCursor)
             runCatching { focusRequester.requestFocus() }
+            keyboardController?.show()
             onAction(WorkspaceAction.UpdateActiveSelection(block.id, targetCursor, targetCursor))
             onAction(WorkspaceAction.ConsumeFocusRequest(focusRequest.requestToken))
         }
@@ -133,9 +139,15 @@ internal fun RichParagraphField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .pointerInput(block.id) {
+                    detectTapGestures {
+                        runCatching { focusRequester.requestFocus() }
+                        keyboardController?.show()
+                    }
+                }
                 .padding(horizontal = 2.dp, vertical = 4.dp)
         ) {
-            if (fieldValue.text.isEmpty() && (isActive || isFocused)) {
+            if (fieldValue.text.isEmpty() && (isActive || isFocused || showUnfocusedPlaceholder)) {
                 Text(
                     text = "Write, or type '/' to insert…",
                     style = MaterialTheme.typography.bodyLarge,

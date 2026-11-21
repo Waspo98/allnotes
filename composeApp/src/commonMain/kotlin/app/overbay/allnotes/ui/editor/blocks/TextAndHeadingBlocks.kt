@@ -153,7 +153,8 @@ internal fun ParagraphBlockContent(
     searchQuery: String,
     focusRequest: EditorFocusRequest?,
     onAction: (WorkspaceAction) -> Unit,
-    onSlashKeyEvent: ((KeyEvent) -> Boolean)? = null
+    onSlashKeyEvent: ((KeyEvent) -> Boolean)? = null,
+    showUnfocusedPlaceholder: Boolean = false
 ) {
     RichParagraphField(
         block = block,
@@ -161,7 +162,8 @@ internal fun ParagraphBlockContent(
         searchQuery = searchQuery,
         focusRequest = focusRequest,
         onAction = onAction,
-        onSlashKeyEvent = onSlashKeyEvent
+        onSlashKeyEvent = onSlashKeyEvent,
+        showUnfocusedPlaceholder = showUnfocusedPlaceholder
     )
 }
 
