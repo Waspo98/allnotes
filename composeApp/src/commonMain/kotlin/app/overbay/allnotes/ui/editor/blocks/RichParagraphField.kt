@@ -224,7 +224,8 @@ internal fun RichParagraphField(
                                 val bottom = layout.getLineBottom(line) - insetY
                                 if (right > left && bottom > top) {
                                     val clampedLeft = (left - padX).coerceAtLeast(0f)
-                                    val width = (right - left + padX * 2f).coerceAtMost(size.width - clampedLeft)
+                                    val clampedRight = (right + padX).coerceAtMost(size.width)
+                                    val width = clampedRight - clampedLeft
                                     if (width > 0f) {
                                         drawRoundRect(
                                             color = highlightBg,

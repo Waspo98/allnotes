@@ -405,5 +405,28 @@ class RichSpanAndEditorControllerTest {
         vm.dispatch(WorkspaceAction.ApplyFontColor(FontColorOption.VIOLET, para.id, 0, 7))
         val updatedPara = vm.uiState.value.activePage!!.blocks.first { it.id == para.id } as DocumentBlock.Paragraph
         assertEquals(FontColorOption.VIOLET, RichSpanEngine.activeFontColor(updatedPara, 0, 7))
+
+        // Overlapping wider highlight does not clobber prefix font color, and bold stays above color weight
+        val fullHighlighted = RichSpanEngine.toggleSelectionSpan(base, 0, base.text.length, RichSpanKind.HIGHLIGHT)
+        val prefixRed = RichSpanEngine.applyFontColor(fullHighlighted, 0, 9, FontColorOption.RED)
+        val prefixRedBold = RichSpanEngine.toggleSelectionSpan(prefixRed, 0, 9, RichSpanKind.BOLD)
+        val layeredAnnotated = RichSpanEngine.buildParagraphAnnotatedString(
+            paragraph = prefixRedBold,
+            colorScheme = AllNotesLightColorScheme,
+            isDarkTheme = false,
+            includeHighlightBackground = false
+        )
+        val highlightIdx = layeredAnnotated.spanStyles.indexOfFirst { it.item.color == onHighlightContainerColor(isDark = false) }
+        val redIdx = layeredAnnotated.spanStyles.indexOfFirst { it.item.color == AllNotesLightColorScheme.error }
+        val boldIdx = layeredAnnotated.spanStyles.indexOfFirst { it.item.fontWeight == androidx.compose.ui.text.font.FontWeight.Bold }
+        assertTrue(highlightIdx >= 0 && redIdx > highlightIdx && boldIdx > redIdx)
+
+        // Dispatching ApplyFontColor while a non-paragraph block is active must not mutate unrelated paragraphs
+        vm.insertHeadingBlock(2)
+        val heading = vm.uiState.value.activeBlock as DocumentBlock.Heading
+        val beforeBlocks = vm.uiState.value.activePage!!.blocks
+        vm.dispatch(WorkspaceAction.ApplyFontColor(FontColorOption.RED, null, 0, 0))
+        assertEquals(heading.id, vm.uiState.value.activeBlockId)
+        assertEquals(beforeBlocks, vm.uiState.value.activePage!!.blocks)
     }
 }

@@ -414,7 +414,8 @@ object RichSpanEngine {
         val highlightBg = highlightContainerColor(isDarkTheme)
         val highlightFg = onHighlightContainerColor(isDarkTheme)
 
-        for (span in paragraph.effectiveSpans()) {
+        val orderedSpans = paragraph.effectiveSpans().sortedBy { spanRenderLayer(it.kind) }
+        for (span in orderedSpans) {
             val s = span.start.coerceIn(0, text.length)
             val e = span.end.coerceIn(0, text.length)
             if (s >= e) continue
@@ -546,6 +547,19 @@ object RichSpanEngine {
             result.add(active)
         }
         return result.sortedWith(compareBy<RichTextSpan> { it.start }.thenBy { it.end }.thenBy { it.kind.ordinal })
+    }
+
+    private fun spanRenderLayer(kind: RichSpanKind): Int = when (kind) {
+        RichSpanKind.HIGHLIGHT -> 0
+        RichSpanKind.INLINE_CODE,
+        RichSpanKind.COLOR_ACCENT,
+        RichSpanKind.COLOR_TERTIARY,
+        RichSpanKind.COLOR_ERROR,
+        RichSpanKind.LINK -> 1
+        RichSpanKind.BOLD,
+        RichSpanKind.ITALIC,
+        RichSpanKind.UNDERLINE,
+        RichSpanKind.STRIKETHROUGH -> 2
     }
 
     private fun toggleWholeBlockBoolean(

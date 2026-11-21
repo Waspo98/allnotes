@@ -173,9 +173,8 @@ internal class WorkspaceEditorCoordinator(
     fun applyFontColor(option: FontColorOption, explicitBlockId: String?, explicitStart: Int?, explicitEnd: Int?) {
         val state = uiState.value
         val page = state.activePage ?: return
-        val targetId = explicitBlockId ?: state.activeBlockId
-        val paragraph = (if (targetId != null) page.blocks.firstOrNull { it.id == targetId } as? DocumentBlock.Paragraph else null)
-            ?: page.blocks.filterIsInstance<DocumentBlock.Paragraph>().lastOrNull() ?: return
+        val targetId = explicitBlockId ?: state.activeBlockId ?: return
+        val paragraph = page.blocks.firstOrNull { it.id == targetId } as? DocumentBlock.Paragraph ?: return
         val s = explicitStart ?: if (state.activeBlockId == paragraph.id) state.selectionStart else 0
         val e = explicitEnd ?: if (state.activeBlockId == paragraph.id) state.selectionEnd else paragraph.text.length
         mutateActivePageBlocks(paragraph.id) { blocks ->

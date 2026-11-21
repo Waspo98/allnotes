@@ -33,6 +33,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -56,16 +60,17 @@ internal fun FontColorPickerButton(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val isDark = isAllNotesDarkTheme()
+    val isEnabled = activeParagraph != null
     val activeOption = if (activeParagraph != null) {
         RichSpanEngine.activeFontColor(activeParagraph, selectionStart, selectionEnd)
     } else {
         FontColorOption.DEFAULT
     }
     val hasActiveColor = activeOption != FontColorOption.DEFAULT
-    val indicatorColor = if (hasActiveColor) {
-        RichSpanEngine.resolveFontColor(activeOption, colorScheme, isDark)
-    } else {
-        colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    val indicatorColor = when {
+        !isEnabled -> colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
+        hasActiveColor -> RichSpanEngine.resolveFontColor(activeOption, colorScheme, isDark)
+        else -> colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
     }
 
     val bgState = animateColorAsState(
@@ -73,7 +78,11 @@ internal fun FontColorPickerButton(
         animationSpec = AllNotesMotion.effectsFast(),
         label = "FontColorToggleBg"
     )
-    val iconTint = if (hasActiveColor) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant
+    val iconTint = when {
+        !isEnabled -> colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        hasActiveColor -> colorScheme.onSecondaryContainer
+        else -> colorScheme.onSurfaceVariant
+    }
 
     var menuExpanded by remember { mutableStateOf(false) }
     var capturedBlockId by remember { mutableStateOf<String?>(null) }
@@ -81,13 +90,15 @@ internal fun FontColorPickerButton(
     var capturedEnd by remember { mutableIntStateOf(0) }
 
     Box {
-        StudioTooltip(label = "Font Color", enabled = showTooltip) {
+        StudioTooltip(label = "Font Color", enabled = showTooltip && isEnabled) {
             IconButton(
+                enabled = isEnabled,
                 onClick = {
+                    val paragraph = activeParagraph ?: return@IconButton
                     if (onOpenCustomMenu != null) {
                         onOpenCustomMenu()
                     } else {
-                        capturedBlockId = activeParagraph?.id
+                        capturedBlockId = paragraph.id
                         capturedStart = selectionStart
                         capturedEnd = selectionEnd
                         menuExpanded = true
@@ -174,7 +185,7 @@ internal fun FontColorSwatchStrip(
             color = colorScheme.onSurfaceVariant
         )
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             FontColorOption.entries.forEach { option ->
@@ -185,32 +196,43 @@ internal fun FontColorSwatchStrip(
                 StudioTooltip(label = option.label, enabled = showTooltips) {
                     Box(
                         modifier = Modifier
-                            .size(30.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
-                            .border(
-                                width = if (isSelected) 2.dp else 1.dp,
-                                color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
-                                shape = CircleShape
-                            )
-                            .padding(3.dp)
-                            .clip(CircleShape)
-                            .background(if (isDefault) colorScheme.surfaceContainerLowest else swatchColor)
-                            .clickable { onSelect(option) },
+                            .semantics {
+                                contentDescription = option.label
+                                selected = isSelected
+                            }
+                            .clickable(role = Role.Button) { onSelect(option) },
                         contentAlignment = Alignment.Center
                     ) {
-                        when {
-                            isDefault -> Text(
-                                text = "A",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = colorScheme.onSurface
-                            )
-                            isSelected -> Icon(
-                                imageVector = AllNotesIcons.Check,
-                                contentDescription = option.label,
-                                tint = if (isDark) colorScheme.surface else Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                    shape = CircleShape
+                                )
+                                .padding(3.dp)
+                                .clip(CircleShape)
+                                .background(if (isDefault) colorScheme.surfaceContainerLowest else swatchColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            when {
+                                isDefault -> Text(
+                                    text = "A",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorScheme.onSurface
+                                )
+                                isSelected -> Icon(
+                                    imageVector = AllNotesIcons.Check,
+                                    contentDescription = null,
+                                    tint = if (isDark) colorScheme.surface else colorScheme.onPrimary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
                     }
                 }

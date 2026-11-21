@@ -243,9 +243,6 @@ fun isAllNotesDarkTheme(): Boolean = LocalIsDarkTheme.current
 fun highlightContainerColor(): Color = highlightContainerColor(LocalIsDarkTheme.current)
 
 @Composable
-fun onHighlightContainerColor(): Color = onHighlightContainerColor(LocalIsDarkTheme.current)
-
-@Composable
 internal expect fun resolvePlatformColorScheme(darkTheme: Boolean, useDynamicColor: Boolean): ColorScheme
 
 internal expect fun resolvePlatformTextStyle(): PlatformTextStyle?

@@ -84,14 +84,21 @@ internal fun ChecklistBlockContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        if (block.title.isNotEmpty() || totalCount >= 2) {
+        if (block.title.isNotEmpty() || titleFocused || totalCount >= 2) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 4.dp, bottom = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (block.title.isNotEmpty()) {
+                if (block.title.isNotEmpty() || titleFocused) {
                     Box(modifier = Modifier.weight(1f)) {
+                        if (titleHolder.fieldValue.text.isEmpty() && titleFocused) {
+                            Text(
+                                text = "Checklist title…",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            )
+                        }
                         BasicTextField(
                             value = titleHolder.fieldValue,
                             onValueChange = { updated ->
