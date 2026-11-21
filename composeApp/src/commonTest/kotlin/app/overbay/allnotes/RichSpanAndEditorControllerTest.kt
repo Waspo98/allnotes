@@ -259,9 +259,12 @@ class RichSpanAndEditorControllerTest {
             nextId = { prefix -> "$prefix-${seq.next()}" }
         )
 
-        val p2 = reimported.blocks.filterIsInstance<DocumentBlock.Paragraph>()[1]
-        assertTrue(p2.spans.any { it.kind == RichSpanKind.UNDERLINE && p2.text.substring(it.start, it.end) == "underlined" })
-        assertTrue(p2.spans.any { it.kind == RichSpanKind.LINK && it.url == "https://overbay.app" })
+        val mergedPara = reimported.blocks.filterIsInstance<DocumentBlock.Paragraph>().single()
+        assertEquals("bold italic\n\nunderlined and bold link", mergedPara.text)
+        assertTrue(mergedPara.spans.any { it.kind == RichSpanKind.BOLD && mergedPara.text.substring(it.start, it.end) == "bold italic" })
+        assertTrue(mergedPara.spans.any { it.kind == RichSpanKind.ITALIC && mergedPara.text.substring(it.start, it.end) == "italic" })
+        assertTrue(mergedPara.spans.any { it.kind == RichSpanKind.UNDERLINE && mergedPara.text.substring(it.start, it.end) == "underlined" })
+        assertTrue(mergedPara.spans.any { it.kind == RichSpanKind.LINK && it.url == "https://overbay.app" })
 
         val nestedMd = """
             # Nested
@@ -284,7 +287,7 @@ class RichSpanAndEditorControllerTest {
     }
 
     @Test
-    fun editorInputControllerSplitsMultilinePasteAndShiftsCursorOnHeadingPrefix() {
+    fun editorInputControllerPreservesMultilinePasteAndShiftsCursorOnHeadingPrefix() {
         var idSeq = 1
         var tokSeq = 1L
         val nextId = { "paste-${idSeq++}" }
@@ -293,15 +296,15 @@ class RichSpanAndEditorControllerTest {
         val pasted = EditorInputController.editParagraphWithTriggers(
             blocks = listOf(DocumentBlock.Paragraph(id = "p1", text = "")),
             blockId = "p1",
-            newText = "line one\nline two\nline three",
-            cursorOffset = 28,
+            newText = "## line one\r\nline two\nline three",
+            cursorOffset = 32,
             nextId = nextId,
             nextToken = nextTok
         )
-        assertEquals(3, pasted.blocks.size)
-        assertEquals(listOf("line one", "line two", "line three"), pasted.blocks.map { (it as DocumentBlock.Paragraph).text })
-        assertEquals(pasted.blocks.last().id, pasted.activeBlockId)
-        assertEquals("line three".length, pasted.focusRequest?.cursorOffset)
+        val singlePara = pasted.blocks.single() as DocumentBlock.Paragraph
+        assertEquals("## line one\nline two\nline three", singlePara.text)
+        assertEquals("p1", pasted.activeBlockId)
+        assertFalse(pasted.isStructuralConversion)
 
         val prefixed = EditorInputController.editParagraphWithTriggers(
             blocks = listOf(DocumentBlock.Paragraph(id = "p2", text = "Existing text")),

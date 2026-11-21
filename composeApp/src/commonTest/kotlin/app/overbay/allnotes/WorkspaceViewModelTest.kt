@@ -255,7 +255,8 @@ class WorkspaceViewModelTest {
         vm.deleteBlock(blockToDelete)
 
         val blocksAfter = vm.uiState.value.activePage!!.blocks
-        assertEquals(2, blocksAfter.size)
+        assertEquals(1, blocksAfter.size)
+        assertTrue(blocksAfter.single() is DocumentBlock.Paragraph)
         assertFalse(blocksAfter.any { it.id == blockToDelete })
     }
 

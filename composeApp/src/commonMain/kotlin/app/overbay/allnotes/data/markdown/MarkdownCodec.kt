@@ -13,6 +13,8 @@ import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
  */
 object MarkdownCodec {
 
+    private val NumberedListLineRegex = Regex("^\\d+\\.\\s+.*")
+
     fun exportPageToMarkdown(page: NotePage): String = buildString {
         val cleanTitle = page.title.ifBlank { "Untitled Page" }
         append("# ").append(cleanTitle).append("\n\n")
@@ -92,6 +94,32 @@ object MarkdownCodec {
     private fun renderParagraphMarkdown(paragraph: DocumentBlock.Paragraph): String {
         val text = paragraph.text
         val spans = paragraph.effectiveSpans()
+        if (text.isEmpty() || spans.isEmpty()) return text
+
+        val result = StringBuilder(text.length + 16)
+        var lineStart = 0
+        while (lineStart <= text.length) {
+            val nlIdx = text.indexOf('\n', lineStart)
+            val lineEnd = if (nlIdx < 0) text.length else nlIdx
+            val lineText = text.substring(lineStart, lineEnd)
+            val lineSpans = if (lineText.isEmpty()) {
+                emptyList()
+            } else {
+                spans.mapNotNull { span ->
+                    val s = maxOf(lineStart, span.start) - lineStart
+                    val e = minOf(lineEnd, span.end) - lineStart
+                    if (s < e) span.copy(start = s, end = e) else null
+                }
+            }
+            result.append(renderLineMarkdown(lineText, lineSpans))
+            if (nlIdx < 0) break
+            result.append('\n')
+            lineStart = nlIdx + 1
+        }
+        return result.toString()
+    }
+
+    private fun renderLineMarkdown(text: String, spans: List<RichTextSpan>): String {
         if (text.isEmpty() || spans.isEmpty()) return text
 
         val openMarkers = Array(text.length + 1) { mutableListOf<String>() }
@@ -263,11 +291,11 @@ object MarkdownCodec {
                     }
                     blocks.add(DocumentBlock.BulletList(id = nextId("blk"), isNumbered = false, items = items))
                 }
-                trimmed.matches(Regex("^\\d+\\.\\s+.*")) -> {
+                trimmed.matches(NumberedListLineRegex) -> {
                     val items = mutableListOf<String>()
                     while (index < rawLines.size) {
                         val t = rawLines[index].trim()
-                        if (t.matches(Regex("^\\d+\\.\\s+.*"))) {
+                        if (t.matches(NumberedListLineRegex)) {
                             items.add(t.substringAfter(". ").trimStart())
                             index++
                         } else break
@@ -291,8 +319,24 @@ object MarkdownCodec {
                     blocks.add(DocumentBlock.Table(id = nextId("blk"), headers = headers, rows = rows))
                 }
                 else -> {
-                    blocks.add(parseInlineParagraph(nextId("blk"), line))
-                    index++
+                    val proseLines = mutableListOf<String>()
+                    var pendingBlanks = 0
+                    while (index < rawLines.size) {
+                        val candidate = rawLines[index]
+                        val candidateTrimmed = candidate.trim()
+                        if (candidateTrimmed.isEmpty()) {
+                            pendingBlanks++
+                            index++
+                        } else if (isStructuralMarkdownLine(candidateTrimmed)) {
+                            break
+                        } else {
+                            repeat(pendingBlanks) { proseLines.add("") }
+                            pendingBlanks = 0
+                            proseLines.add(candidate)
+                            index++
+                        }
+                    }
+                    blocks.add(parseMultilineProseParagraph(nextId("blk"), proseLines))
                 }
             }
         }
@@ -336,6 +380,43 @@ object MarkdownCodec {
         }
         cells.add(current.toString().trim())
         return cells
+    }
+
+    private fun isStructuralMarkdownLine(trimmed: String): Boolean =
+        trimmed == "---" ||
+            trimmed == "***" ||
+            trimmed.startsWith("```") ||
+            trimmed.startsWith("### ") ||
+            trimmed.startsWith("## ") ||
+            trimmed.startsWith("# ") ||
+            trimmed.startsWith(">") ||
+            trimmed.startsWith("- [ ] ") ||
+            trimmed.startsWith("- [x] ") ||
+            trimmed.startsWith("- [X] ") ||
+            trimmed.startsWith("- ") ||
+            trimmed.startsWith("* ") ||
+            trimmed.matches(NumberedListLineRegex) ||
+            (trimmed.startsWith("|") && trimmed.endsWith("|"))
+
+    private fun parseMultilineProseParagraph(id: String, lines: List<String>): DocumentBlock.Paragraph {
+        if (lines.size == 1) return parseInlineParagraph(id, lines.single())
+        val combined = StringBuilder()
+        val spans = mutableListOf<RichTextSpan>()
+        lines.forEachIndexed { lineIdx, rawLine ->
+            if (lineIdx > 0) combined.append('\n')
+            val lineOffset = combined.length
+            val parsedLine = parseInlineParagraph("", rawLine)
+            combined.append(parsedLine.text)
+            parsedLine.spans.forEach { span ->
+                spans.add(span.copy(start = span.start + lineOffset, end = span.end + lineOffset))
+            }
+        }
+        val text = combined.toString()
+        return DocumentBlock.Paragraph(
+            id = id,
+            text = text,
+            spans = RichSpanEngine.normalizeAndCoalesce(text.length, spans)
+        )
     }
 
     private fun parseInlineParagraph(id: String, raw: String): DocumentBlock.Paragraph {
