@@ -54,7 +54,8 @@ internal fun HeadingBlockContent(
     val fieldHolder = rememberSyncedFieldHolder(block.id, block.text)
     val fieldValue = fieldHolder.fieldValue
     var isFocused by remember(block.id) { mutableStateOf(false) }
-    val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldValue.selection)
+    val layoutRef = remember(block.id) { LayoutResultRef() }
+    val (cursorIntoViewModifier, bringCursorTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldValue.selection)
 
     if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
         LaunchedEffect(focusRequest.requestToken) {
@@ -112,7 +113,10 @@ internal fun HeadingBlockContent(
             },
             textStyle = headingStyle,
             visualTransformation = searchVisual,
-            onTextLayout = onTextLayout,
+            onTextLayout = { result ->
+                layoutRef.value = result
+                bringCursorTextLayout(result)
+            },
             cursorBrush = SolidColor(colorScheme.primary),
             modifier = Modifier
                 .fillMaxWidth()
@@ -121,6 +125,9 @@ internal fun HeadingBlockContent(
                 .onFocusChanged { isFocused = it.isFocused }
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    if (handleVerticalBoundaryKeyEvent(event, fieldHolder.fieldValue, layoutRef.value, block.id, onAction)) {
+                        return@onPreviewKeyEvent true
+                    }
                     when {
                         event.key == Key.Enter && !event.isShiftPressed -> {
                             onAction(WorkspaceAction.SplitBlockAtCursor(block.id, fieldHolder.fieldValue.selection.min))

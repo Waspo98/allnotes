@@ -80,7 +80,7 @@ object SampleWorkspaceFactory {
                     DocumentBlock.Callout(
                         id = "blk-2",
                         title = "Type '/' anywhere to insert blocks",
-                        text = "Start a blank line with '/', '# ' for headings, or tap + to add checklists, tables, callouts, images, and code snippets without breaking your flow.",
+                        text = "Press Enter for line breaks or blank lines anywhere in your note. Start any line with '/', '# ', or '- '—or tap +—to insert headings, checklists, tables, callouts, images, and code.",
                         tone = CalloutTone.TIP
                     ),
                     DocumentBlock.Heading(

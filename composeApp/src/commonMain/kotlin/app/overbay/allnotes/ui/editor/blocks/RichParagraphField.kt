@@ -31,11 +31,11 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
@@ -66,7 +66,8 @@ internal fun RichParagraphField(
 
     val fieldHolder = rememberSyncedFieldHolder(block.id, block.text)
     val fieldValue = fieldHolder.fieldValue
-    val (cursorIntoViewModifier, onTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldValue.selection)
+    val layoutRef = remember(block.id) { LayoutResultRef() }
+    val (cursorIntoViewModifier, bringCursorTextLayout) = rememberCursorIntoViewHandler(isFocused, fieldValue.selection)
 
     if (focusRequest != null && focusRequest.blockId == block.id && focusRequest.subItemIndex < 0) {
         LaunchedEffect(focusRequest.requestToken) {
@@ -114,7 +115,7 @@ internal fun RichParagraphField(
         ) {
             if (fieldValue.text.isEmpty() && (isActive || isFocused)) {
                 Text(
-                    text = "Write, or type '/' for blocks…",
+                    text = "Write, or type '/' to insert…",
                     style = MaterialTheme.typography.bodyLarge,
                     color = colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                 )
@@ -124,34 +125,36 @@ internal fun RichParagraphField(
                 value = fieldValue,
                 onValueChange = { updated ->
                     val prevText = fieldValue.text
-                    val newText = updated.text
-
-                    // Detect single soft-keyboard Enter key press (inserting exactly one '\n')
-                    if (newText.length == prevText.length + 1 && updated.composition == null) {
-                        val insertedIdx = updated.selection.start - 1
-                        if (insertedIdx in newText.indices && newText[insertedIdx] == '\n') {
-                            onAction(WorkspaceAction.SplitBlockAtCursor(block.id, insertedIdx))
-                            return@BasicTextField
-                        }
+                    val rawText = updated.text
+                    val normalizedValue = if (rawText.contains('\r')) {
+                        val normalizedText = rawText.replace("\r\n", "\n").replace('\r', '\n')
+                        val selStart = rawText.substring(0, updated.selection.start.coerceIn(0, rawText.length))
+                            .replace("\r\n", "\n").replace('\r', '\n').length
+                        val selEnd = rawText.substring(0, updated.selection.end.coerceIn(0, rawText.length))
+                            .replace("\r\n", "\n").replace('\r', '\n').length
+                        updated.copy(text = normalizedText, selection = TextRange(selStart, selEnd))
+                    } else {
+                        updated
                     }
+                    val newText = normalizedValue.text
 
-                    val selChanged = updated.selection != fieldValue.selection
-                    fieldHolder.applyLocalChange(updated)
+                    val selChanged = normalizedValue.selection != fieldValue.selection
+                    fieldHolder.applyLocalChange(normalizedValue)
 
                     if (newText != prevText) {
                         onAction(
                             WorkspaceAction.EditParagraphText(
                                 blockId = block.id,
                                 newText = newText,
-                                cursorOffset = updated.selection.start
+                                cursorOffset = normalizedValue.selection.start
                             )
                         )
                     } else if (selChanged && isFocused) {
                         onAction(
                             WorkspaceAction.UpdateActiveSelection(
                                 blockId = block.id,
-                                selectionStart = updated.selection.min,
-                                selectionEnd = updated.selection.max
+                                selectionStart = normalizedValue.selection.min,
+                                selectionEnd = normalizedValue.selection.max
                             )
                         )
                     }
@@ -160,7 +163,10 @@ internal fun RichParagraphField(
                     color = colorScheme.onSurface
                 ),
                 visualTransformation = visualTransformation,
-                onTextLayout = onTextLayout,
+                onTextLayout = { result ->
+                    layoutRef.value = result
+                    bringCursorTextLayout(result)
+                },
                 cursorBrush = SolidColor(colorScheme.primary),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -181,16 +187,17 @@ internal fun RichParagraphField(
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         if (onSlashKeyEvent?.invoke(event) == true) return@onPreviewKeyEvent true
-                        when {
-                            event.key == Key.Enter && !event.isShiftPressed -> {
-                                onAction(WorkspaceAction.SplitBlockAtCursor(block.id, fieldHolder.fieldValue.selection.min))
-                                true
-                            }
-                            event.key == Key.Backspace && fieldHolder.fieldValue.selection.collapsed && fieldHolder.fieldValue.selection.start == 0 -> {
-                                onAction(WorkspaceAction.BackspaceAtBlockStart(block.id))
-                                true
-                            }
-                            else -> false
+                        if (handleVerticalBoundaryKeyEvent(event, fieldHolder.fieldValue, layoutRef.value, block.id, onAction)) {
+                            return@onPreviewKeyEvent true
+                        }
+                        if (event.key == Key.Backspace &&
+                            fieldHolder.fieldValue.selection.collapsed &&
+                            fieldHolder.fieldValue.selection.start == 0
+                        ) {
+                            onAction(WorkspaceAction.BackspaceAtBlockStart(block.id))
+                            true
+                        } else {
+                            false
                         }
                     }
             )

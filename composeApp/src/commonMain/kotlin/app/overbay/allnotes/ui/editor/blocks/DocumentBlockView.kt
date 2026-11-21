@@ -1,29 +1,21 @@
 package app.overbay.allnotes.ui.editor.blocks
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.ui.editor.SlashCommandPopup
-import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.workspace.EditorFocusRequest
 import app.overbay.allnotes.ui.workspace.EditorInputController
 import app.overbay.allnotes.ui.workspace.SlashCommandKind
@@ -34,6 +26,7 @@ fun DocumentBlockView(
     block: DocumentBlock,
     isActive: Boolean,
     isCompactMobile: Boolean,
+    activeCursorOffset: Int,
     searchQuery: String,
     focusRequest: EditorFocusRequest?,
     onRequestMediaPicker: () -> Unit,
@@ -41,7 +34,7 @@ fun DocumentBlockView(
     modifier: Modifier = Modifier
 ) {
     val slashMatches = if (isActive && block is DocumentBlock.Paragraph) {
-        EditorInputController.matchingSlashCommands(block.text)
+        EditorInputController.matchingSlashCommands(block.text, activeCursorOffset)
     } else {
         emptyList()
     }
@@ -49,10 +42,10 @@ fun DocumentBlockView(
 
     val executeCommand: (SlashCommandKind) -> Unit = { cmd ->
         if (cmd == SlashCommandKind.ATTACHMENT) {
-            onAction(WorkspaceAction.UpdateBlockText(block.id, ""))
+            onAction(WorkspaceAction.ExecuteSlashCommand(block.id, SlashCommandKind.ATTACHMENT, activeCursorOffset))
             onRequestMediaPicker()
         } else {
-            onAction(WorkspaceAction.ExecuteSlashCommand(block.id, cmd))
+            onAction(WorkspaceAction.ExecuteSlashCommand(block.id, cmd, activeCursorOffset))
         }
     }
 
@@ -75,7 +68,7 @@ fun DocumentBlockView(
                     true
                 }
                 Key.Escape -> {
-                    onAction(WorkspaceAction.UpdateBlockText(block.id, ""))
+                    onAction(WorkspaceAction.DismissSlashCommand(block.id, activeCursorOffset))
                     true
                 }
                 else -> false
@@ -83,31 +76,9 @@ fun DocumentBlockView(
         }
     }
 
-    val isPlainTextBlock = block is DocumentBlock.Paragraph ||
-        block is DocumentBlock.Heading ||
-        block is DocumentBlock.Checklist ||
-        block is DocumentBlock.BulletList
-    val focusCushionColor = animateColorAsState(
-        targetValue = if (!isCompactMobile && isActive && isPlainTextBlock) {
-            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.42f)
-        } else {
-            Color.Transparent
-        },
-        animationSpec = AllNotesMotion.effectsFast(),
-        label = "ActiveBlockFocusCushion"
-    )
-
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .drawBehind {
-                val c = focusCushionColor.value
-                if (c.alpha > 0.005f) {
-                    val r = 10.dp.toPx()
-                    drawRoundRect(color = c, cornerRadius = CornerRadius(r, r))
-                }
-            }
-            .then(if (!isCompactMobile && isPlainTextBlock) Modifier.padding(horizontal = 6.dp, vertical = 2.dp) else Modifier)
             .onFocusChanged { focusState ->
                 if (focusState.hasFocus && !isActive) {
                     onAction(WorkspaceAction.SetActiveBlock(block.id))

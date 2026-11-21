@@ -20,15 +20,67 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import kotlinx.coroutines.flow.collectLatest
 
-private class LayoutResultRef(var value: TextLayoutResult? = null)
+internal class LayoutResultRef(var value: TextLayoutResult? = null)
+
+internal fun handleVerticalBoundaryKeyEvent(
+    event: KeyEvent,
+    fieldValue: TextFieldValue,
+    layout: TextLayoutResult?,
+    blockId: String,
+    onAction: (WorkspaceAction) -> Unit
+): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    if (event.isShiftPressed || event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return false
+    if (!fieldValue.selection.collapsed) return false
+
+    val caretOffset = fieldValue.selection.start
+    return when (event.key) {
+        Key.DirectionUp -> {
+            val atTop = fieldValue.text.isEmpty() || layout?.let {
+                val clamped = caretOffset.coerceIn(0, it.layoutInput.text.length)
+                it.getLineForOffset(clamped) == 0
+            } == true
+            if (atTop) {
+                onAction(WorkspaceAction.MoveFocusToAdjacentBlock(blockId, -1))
+                true
+            } else {
+                false
+            }
+        }
+        Key.DirectionDown -> {
+            val atBottom = fieldValue.text.isEmpty() || layout?.let {
+                val clamped = caretOffset.coerceIn(0, it.layoutInput.text.length)
+                it.getLineForOffset(clamped) >= (it.lineCount - 1).coerceAtLeast(0)
+            } == true
+            if (atBottom) {
+                onAction(WorkspaceAction.MoveFocusToAdjacentBlock(blockId, +1))
+                true
+            } else {
+                false
+            }
+        }
+        else -> false
+    }
+}
 
 /**
  * Keeps the active text caret and a small breathing margin visible inside scrollable

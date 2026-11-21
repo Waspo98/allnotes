@@ -221,7 +221,7 @@ internal fun BlockTypeConverterPill(
     var menuExpanded by remember { mutableStateOf(false) }
 
     Box {
-        StudioTooltip(label = "Turn into another block type", enabled = showTooltip) {
+        StudioTooltip(label = "Format current line or block", enabled = showTooltip) {
             Surface(
                 onClick = { menuExpanded = true },
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,

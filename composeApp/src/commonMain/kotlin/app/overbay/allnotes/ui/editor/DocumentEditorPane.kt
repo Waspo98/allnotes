@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -52,6 +53,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import app.overbay.allnotes.ui.editor.blocks.DocumentBlockView
+import app.overbay.allnotes.ui.editor.blocks.LocalEditorStructureRevision
 import app.overbay.allnotes.ui.editor.blocks.rememberSyncedFieldHolder
 import app.overbay.allnotes.ui.editor.toolbar.BlockInsertBottomSheet
 import app.overbay.allnotes.ui.editor.toolbar.DesktopFormattingRibbon
@@ -212,88 +214,92 @@ fun DocumentEditorPane(
                                 }
                             }
 
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .nestedScroll(readingScrollConnection)
-                                    .drawBehind {
-                                        if (sectionAmbientWash.alpha > 0f) {
-                                            val washHeight = 112.dp.toPx().coerceAtMost(size.height)
-                                            drawRect(
-                                                brush = Brush.verticalGradient(
-                                                    colors = listOf(sectionAmbientWash, Color.Transparent),
-                                                    startY = 0f,
-                                                    endY = washHeight
-                                                ),
-                                                size = Size(size.width, washHeight)
-                                            )
-                                        }
-                                    }
-                                    .then(
-                                        if (isCompactMobile) Modifier else Modifier.navigationBarsPadding().imePadding()
-                                    ),
-                                contentPadding = PaddingValues(
-                                    start = if (isCompactMobile) 22.dp else 52.dp,
-                                    end = if (isCompactMobile) 22.dp else 52.dp,
-                                    top = if (isCompactMobile) 4.dp else 36.dp,
-                                    bottom = when {
-                                        isCompactMobile && imeVisible -> 20.dp
-                                        isCompactMobile -> navBarBottomDp + 132.dp
-                                        else -> 104.dp
-                                    }
-                                ),
-                                verticalArrangement = Arrangement.spacedBy(if (isCompactMobile) 10.dp else 12.dp)
-                            ) {
-                                item(key = "page-header-${renderedPage.id}", contentType = "page-header") {
-                                    DocumentPageHeader(
-                                        titleHolder = titleHolder,
-                                        updatedAtEpochMs = renderedPage.updatedAtEpochMs,
-                                        wordCount = state.wordCount,
-                                        readingTimeMinutes = state.readingTimeMinutes,
-                                        accentColor = sectionAccent,
-                                        isCompactMobile = isCompactMobile,
-                                        titleFocusToken = state.titleFocusRequestToken,
-                                        onTitleFocusConsumed = { tok -> onAction(WorkspaceAction.ConsumeTitleFocusRequest(tok)) },
-                                        onTitleChange = { onAction(WorkspaceAction.UpdateActivePageTitle(it)) },
-                                        onTitleEnter = { onAction(WorkspaceAction.FocusOrAppendTrailingParagraph) }
-                                    )
-                                }
-
-                                items(
-                                    items = renderedPage.blocks,
-                                    key = { it.id },
-                                    contentType = { it::class.simpleName }
-                                ) { block ->
-                                    val blockFocusRequest = state.focusRequest?.takeIf { it.blockId == block.id }
-                                    DocumentBlockView(
-                                        block = block,
-                                        isActive = block.id == state.activeBlockId,
-                                        isCompactMobile = isCompactMobile,
-                                        searchQuery = state.searchQuery,
-                                        focusRequest = blockFocusRequest,
-                                        onRequestMediaPicker = requestMediaPicker,
-                                        onAction = onAction,
-                                        modifier = Modifier.animateItem(
-                                            fadeInSpec = AllNotesMotion.effectsFast(),
-                                            fadeOutSpec = AllNotesMotion.effectsFast(),
-                                            placementSpec = AllNotesMotion.spatialFast()
-                                        )
-                                    )
-                                }
-
-                                item(key = "trailing-canvas-${renderedPage.id}", contentType = "trailing-canvas") {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(if (isCompactMobile) 72.dp else 140.dp)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) {
-                                                onAction(WorkspaceAction.FocusOrAppendTrailingParagraph)
+                            CompositionLocalProvider(LocalEditorStructureRevision provides state.structureRevision) {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .nestedScroll(readingScrollConnection)
+                                        .drawBehind {
+                                            if (sectionAmbientWash.alpha > 0f) {
+                                                val washHeight = 112.dp.toPx().coerceAtMost(size.height)
+                                                drawRect(
+                                                    brush = Brush.verticalGradient(
+                                                        colors = listOf(sectionAmbientWash, Color.Transparent),
+                                                        startY = 0f,
+                                                        endY = washHeight
+                                                    ),
+                                                    size = Size(size.width, washHeight)
+                                                )
                                             }
-                                    )
+                                        }
+                                        .then(
+                                            if (isCompactMobile) Modifier else Modifier.navigationBarsPadding().imePadding()
+                                        ),
+                                    contentPadding = PaddingValues(
+                                        start = if (isCompactMobile) 22.dp else 52.dp,
+                                        end = if (isCompactMobile) 22.dp else 52.dp,
+                                        top = if (isCompactMobile) 4.dp else 36.dp,
+                                        bottom = when {
+                                            isCompactMobile && imeVisible -> 20.dp
+                                            isCompactMobile -> navBarBottomDp + 132.dp
+                                            else -> 104.dp
+                                        }
+                                    ),
+                                    verticalArrangement = Arrangement.spacedBy(if (isCompactMobile) 10.dp else 12.dp)
+                                ) {
+                                    item(key = "page-header-${renderedPage.id}", contentType = "page-header") {
+                                        DocumentPageHeader(
+                                            titleHolder = titleHolder,
+                                            updatedAtEpochMs = renderedPage.updatedAtEpochMs,
+                                            wordCount = state.wordCount,
+                                            readingTimeMinutes = state.readingTimeMinutes,
+                                            accentColor = sectionAccent,
+                                            isCompactMobile = isCompactMobile,
+                                            titleFocusToken = state.titleFocusRequestToken,
+                                            onTitleFocusConsumed = { tok -> onAction(WorkspaceAction.ConsumeTitleFocusRequest(tok)) },
+                                            onTitleChange = { onAction(WorkspaceAction.UpdateActivePageTitle(it)) },
+                                            onTitleEnter = { onAction(WorkspaceAction.FocusOrAppendTrailingParagraph) }
+                                        )
+                                    }
+
+                                    items(
+                                        items = renderedPage.blocks,
+                                        key = { it.id },
+                                        contentType = { it::class.simpleName }
+                                    ) { block ->
+                                        val isBlockActive = block.id == state.activeBlockId
+                                        val blockFocusRequest = state.focusRequest?.takeIf { it.blockId == block.id }
+                                        DocumentBlockView(
+                                            block = block,
+                                            isActive = isBlockActive,
+                                            isCompactMobile = isCompactMobile,
+                                            activeCursorOffset = if (isBlockActive) state.selectionEnd else 0,
+                                            searchQuery = state.searchQuery,
+                                            focusRequest = blockFocusRequest,
+                                            onRequestMediaPicker = requestMediaPicker,
+                                            onAction = onAction,
+                                            modifier = Modifier.animateItem(
+                                                fadeInSpec = AllNotesMotion.effectsFast(),
+                                                fadeOutSpec = AllNotesMotion.effectsFast(),
+                                                placementSpec = AllNotesMotion.spatialFast()
+                                            )
+                                        )
+                                    }
+
+                                    item(key = "trailing-canvas-${renderedPage.id}", contentType = "trailing-canvas") {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(if (isCompactMobile) 72.dp else 140.dp)
+                                                .clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null
+                                                ) {
+                                                    onAction(WorkspaceAction.FocusOrAppendTrailingParagraph)
+                                                }
+                                        )
+                                    }
                                 }
                             }
                         }
