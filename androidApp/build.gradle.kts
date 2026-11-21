@@ -22,8 +22,8 @@ val resolvedKeystoreFile = releaseKeystorePath?.let { path ->
 }
 
 fun isBetaBranch(): Boolean {
-    if (project.findProperty("isBeta")?.toString()?.toBoolean() == true) return true
-    if (System.getenv("ALLNOTES_IS_BETA")?.toBoolean() == true) return true
+    project.findProperty("isBeta")?.toString()?.trim()?.lowercase()?.toBooleanStrictOrNull()?.let { return it }
+    System.getenv("ALLNOTES_IS_BETA")?.trim()?.lowercase()?.toBooleanStrictOrNull()?.let { return it }
     return try {
         val headFile = rootProject.file(".git/HEAD")
         if (headFile.exists()) {
@@ -91,6 +91,12 @@ android {
     buildFeatures {
         compose = true
         resValues = true
+    }
+
+    sourceSets {
+        getByName("main") {
+            res.directories.add(if (isBetaApp) "src/beta/res" else "src/prod/res")
+        }
     }
 }
 
