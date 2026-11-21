@@ -206,60 +206,100 @@ object RichSpanEngine {
         return normalizeAndCoalesce(newText.length, shifted)
     }
 
+    fun sliceParagraph(
+        paragraph: DocumentBlock.Paragraph,
+        start: Int,
+        end: Int,
+        newId: String
+    ): DocumentBlock.Paragraph {
+        val s = start.coerceIn(0, paragraph.text.length)
+        val e = end.coerceIn(s, paragraph.text.length)
+        val slicedText = paragraph.text.substring(s, e)
+        val slicedSpans = if (slicedText.isEmpty()) {
+            emptyList()
+        } else {
+            normalizeAndCoalesce(
+                slicedText.length,
+                paragraph.effectiveSpans().mapNotNull { span ->
+                    val cs = maxOf(s, span.start)
+                    val ce = minOf(e, span.end)
+                    if (cs < ce) span.copy(start = cs - s, end = ce - s) else null
+                }
+            )
+        }
+        return DocumentBlock.Paragraph(
+            id = newId,
+            text = slicedText,
+            spans = slicedSpans
+        )
+    }
+
     fun splitParagraphAt(
         paragraph: DocumentBlock.Paragraph,
         offset: Int,
         secondId: String
     ): Pair<DocumentBlock.Paragraph, DocumentBlock.Paragraph> {
         val splitIdx = offset.coerceIn(0, paragraph.text.length)
-        val firstText = paragraph.text.substring(0, splitIdx)
-        val secondText = paragraph.text.substring(splitIdx)
-        val allSpans = paragraph.effectiveSpans()
-
-        val firstSpans = normalizeAndCoalesce(
-            firstText.length,
-            allSpans.mapNotNull { s ->
-                if (s.start < splitIdx) {
-                    s.copy(start = s.start, end = minOf(s.end, splitIdx))
-                } else null
-            }
-        )
-        val secondSpans = normalizeAndCoalesce(
-            secondText.length,
-            allSpans.mapNotNull { s ->
-                if (s.end > splitIdx) {
-                    s.copy(start = maxOf(0, s.start - splitIdx), end = s.end - splitIdx)
-                } else null
-            }
-        )
-
-        val first = DocumentBlock.Paragraph(
-            id = paragraph.id,
-            text = firstText,
-            spans = firstSpans
-        )
-        val second = DocumentBlock.Paragraph(
-            id = secondId,
-            text = secondText,
-            spans = secondSpans
-        )
-        return first to second
+        return sliceParagraph(paragraph, 0, splitIdx, paragraph.id) to
+            sliceParagraph(paragraph, splitIdx, paragraph.text.length, secondId)
     }
 
     fun mergeParagraphs(
         first: DocumentBlock.Paragraph,
         second: DocumentBlock.Paragraph
-    ): DocumentBlock.Paragraph {
-        val joinOffset = first.text.length
-        val mergedText = first.text + second.text
+    ): DocumentBlock.Paragraph = mergeParagraphsWithSeparator(first, second, "").first
+
+    fun mergeParagraphsWithSeparator(
+        first: DocumentBlock.Paragraph,
+        second: DocumentBlock.Paragraph,
+        separator: String
+    ): Pair<DocumentBlock.Paragraph, Int> {
+        if (first.text.isEmpty()) {
+            return second.copy(id = first.id) to 0
+        }
+        if (second.text.isEmpty()) {
+            return first to first.text.length
+        }
+        val joinOffset = first.text.length + separator.length
+        val mergedText = first.text + separator + second.text
         val firstSpans = first.effectiveSpans()
         val secondSpans = second.effectiveSpans().map {
             it.copy(start = it.start + joinOffset, end = it.end + joinOffset)
         }
-        return DocumentBlock.Paragraph(
+        val merged = DocumentBlock.Paragraph(
             id = first.id,
             text = mergedText,
             spans = normalizeAndCoalesce(mergedText.length, firstSpans + secondSpans)
+        )
+        return merged to joinOffset
+    }
+
+    fun clearSpansInRange(
+        paragraph: DocumentBlock.Paragraph,
+        rawStart: Int,
+        rawEnd: Int
+    ): DocumentBlock.Paragraph {
+        if (paragraph.text.isEmpty()) {
+            return paragraph.copy(
+                isBold = false,
+                isItalic = false,
+                isUnderlined = false,
+                isStrikethrough = false,
+                isHighlighted = false,
+                spans = emptyList()
+            )
+        }
+        val s = minOf(rawStart, rawEnd).coerceIn(0, paragraph.text.length)
+        val e = maxOf(rawStart, rawEnd).coerceIn(0, paragraph.text.length)
+        if (s >= e) return paragraph
+        val remaining = paragraph.effectiveSpans().flatMap { subtractRange(it, s, e) }
+        return paragraph.copy(
+            isBold = false,
+            isItalic = false,
+            isUnderlined = false,
+            isStrikethrough = false,
+            isHighlighted = false,
+            spans = normalizeAndCoalesce(paragraph.text.length, remaining)
         )
     }
 
