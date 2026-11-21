@@ -78,6 +78,10 @@ fun WorkspaceScreen(
             viewModel.dispatch(WorkspaceAction.SetPageMenuOpen(false))
             true
         }
+        state.mobileAccessoryMenu != MobileAccessoryMenu.NONE -> {
+            viewModel.dispatch(WorkspaceAction.SetMobileAccessoryMenu(MobileAccessoryMenu.NONE))
+            true
+        }
         state.searchQuery.isNotEmpty() -> {
             viewModel.dispatch(WorkspaceAction.SetSearchQuery(""))
             true
@@ -91,6 +95,7 @@ fun WorkspaceScreen(
             state.isBlockInsertSheetOpen ||
             state.isMobileHierarchySheetOpen ||
             state.isPageMenuOpen ||
+            state.mobileAccessoryMenu != MobileAccessoryMenu.NONE ||
             state.searchQuery.isNotEmpty()
     ) {
         dismissActiveOverlayOrSearch()

@@ -45,6 +45,7 @@ enum class ThemeMode(val label: String) {
 data class WorkspacePreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val useDynamicColor: Boolean = false,
+    val showSectionGradient: Boolean = true,
     val syncEndpointUrl: String = "https://notes.overbay.app/api/v1/sync",
     val useRemoteHttpSync: Boolean = true,
     val syncAuthToken: String = "",

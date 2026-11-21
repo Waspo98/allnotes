@@ -13,10 +13,19 @@ internal object WorkspaceActionDispatcher {
             }
             WorkspaceAction.ToggleSidebar -> vm.toggleSidebar()
             is WorkspaceAction.SetMobileHierarchySheetOpen -> vm.setMobileHierarchySheetOpen(action.open)
-            is WorkspaceAction.SetPageMenuOpen -> vm.updateUiState { it.copy(isPageMenuOpen = action.open) }
-            is WorkspaceAction.SetBlockInsertSheetOpen -> vm.updateUiState {
-                it.copy(isBlockInsertSheetOpen = action.open)
+            is WorkspaceAction.SetPageMenuOpen -> vm.updateUiState {
+                it.copy(
+                    isPageMenuOpen = action.open,
+                    mobileAccessoryMenu = if (action.open) MobileAccessoryMenu.NONE else it.mobileAccessoryMenu
+                )
             }
+            is WorkspaceAction.SetBlockInsertSheetOpen -> vm.updateUiState {
+                it.copy(
+                    isBlockInsertSheetOpen = action.open,
+                    mobileAccessoryMenu = if (action.open) MobileAccessoryMenu.NONE else it.mobileAccessoryMenu
+                )
+            }
+            is WorkspaceAction.SetMobileAccessoryMenu -> vm.setMobileAccessoryMenu(action.menu)
             is WorkspaceAction.ConsumeTitleFocusRequest -> vm.updateUiState {
                 if (it.titleFocusRequestToken == action.requestToken) it.copy(titleFocusRequestToken = 0L) else it
             }
@@ -24,7 +33,12 @@ internal object WorkspaceActionDispatcher {
             is WorkspaceAction.OpenEditSectionDialog -> vm.openEditSectionDialog(action.sectionId)
             WorkspaceAction.DismissDialog -> vm.dismissDialog()
             is WorkspaceAction.OpenAttachmentPreview -> vm.updateUiState {
-                it.copy(previewAttachment = action.attachment, isPageMenuOpen = false, isBlockInsertSheetOpen = false)
+                it.copy(
+                    previewAttachment = action.attachment,
+                    isPageMenuOpen = false,
+                    isBlockInsertSheetOpen = false,
+                    mobileAccessoryMenu = MobileAccessoryMenu.NONE
+                )
             }
             WorkspaceAction.DismissAttachmentPreview -> vm.updateUiState { it.copy(previewAttachment = null) }
             is WorkspaceAction.ShowStatusBanner -> vm.updateUiState {
@@ -38,6 +52,7 @@ internal object WorkspaceActionDispatcher {
                 action.endpointUrl, action.useRemoteHttp, action.authToken, action.autoSync
             )
             is WorkspaceAction.UpdateThemeSettings -> vm.updateThemeSettings(action.themeMode, action.useDynamicColor)
+            is WorkspaceAction.SetShowSectionGradient -> vm.setShowSectionGradient(action.enabled)
 
             is WorkspaceAction.CreateNotebook -> vm.createNotebook(action.title, action.subtitle, action.accent)
             is WorkspaceAction.UpdateActiveNotebook -> vm.updateActiveNotebook(action.title, action.subtitle, action.accent)
@@ -68,7 +83,8 @@ internal object WorkspaceActionDispatcher {
                 it.copy(
                     activeBlockId = action.blockId,
                     selectionStart = action.selectionStart,
-                    selectionEnd = action.selectionEnd
+                    selectionEnd = action.selectionEnd,
+                    mobileAccessoryMenu = if (action.blockId != it.activeBlockId) MobileAccessoryMenu.NONE else it.mobileAccessoryMenu
                 )
             }
             is WorkspaceAction.ConsumeFocusRequest -> vm.updateUiState {

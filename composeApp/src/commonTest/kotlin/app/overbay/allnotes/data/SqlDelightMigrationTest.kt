@@ -187,10 +187,32 @@ class SqlDelightMigrationTest {
         assertTrue(migrated.syncDefaultsMigrated)
 
         // Subsequent explicit opt-out after migration is preserved
-        store.savePreferences(migrated.copy(useRemoteHttpSync = false, autoSyncOnEdit = false))
+        store.savePreferences(
+            migrated.copy(
+                useRemoteHttpSync = false,
+                autoSyncOnEdit = false,
+                showSectionGradient = false
+            )
+        )
         val optedOut = store.loadPreferencesWithSyncMigration()
         assertFalse(optedOut.useRemoteHttpSync)
         assertFalse(optedOut.autoSyncOnEdit)
+        assertFalse(optedOut.showSectionGradient)
         assertTrue(optedOut.syncDefaultsMigrated)
+    }
+
+    @Test
+    fun legacyPreferencesJsonWithoutSectionGradientDefaultsToEnabled() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        AllNotesDatabase.Schema.create(driver)
+        driver.execute(
+            null,
+            """INSERT INTO workspace_preferences(id, prefs_json) VALUES (1, '{"themeMode":"DARK","useDynamicColor":true,"syncDefaultsMigrated":true}');""",
+            0
+        )
+        val store = SqlDelightNoteStore(AllNotesDatabase(driver))
+        val loaded = store.loadPreferencesWithSyncMigration()
+        assertTrue(loaded.showSectionGradient)
+        assertTrue(loaded.useDynamicColor)
     }
 }

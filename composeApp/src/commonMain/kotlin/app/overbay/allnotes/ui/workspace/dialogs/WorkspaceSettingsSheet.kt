@@ -202,6 +202,14 @@ private fun WorkspaceSettingsContent(
                         onAction(WorkspaceAction.UpdateThemeSettings(prefs.themeMode, it))
                     }
                 )
+                SettingsToggleRow(
+                    title = "Section Header Gradient",
+                    subtitle = "Show a soft section-colored wash at the top of each page",
+                    checked = prefs.showSectionGradient,
+                    onCheckedChange = {
+                        onAction(WorkspaceAction.SetShowSectionGradient(it))
+                    }
+                )
             }
         }
 

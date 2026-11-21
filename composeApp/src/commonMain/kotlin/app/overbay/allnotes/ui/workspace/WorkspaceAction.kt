@@ -18,6 +18,7 @@ sealed interface WorkspaceAction {
     data class SetMobileHierarchySheetOpen(val open: Boolean) : WorkspaceAction
     data class SetPageMenuOpen(val open: Boolean) : WorkspaceAction
     data class SetBlockInsertSheetOpen(val open: Boolean) : WorkspaceAction
+    data class SetMobileAccessoryMenu(val menu: MobileAccessoryMenu) : WorkspaceAction
     data class ConsumeTitleFocusRequest(val requestToken: Long) : WorkspaceAction
     data class OpenDialog(val dialog: ActiveDialog) : WorkspaceAction
     data class OpenEditSectionDialog(val sectionId: String) : WorkspaceAction
@@ -34,6 +35,7 @@ sealed interface WorkspaceAction {
         val autoSync: Boolean
     ) : WorkspaceAction
     data class UpdateThemeSettings(val themeMode: ThemeMode, val useDynamicColor: Boolean) : WorkspaceAction
+    data class SetShowSectionGradient(val enabled: Boolean) : WorkspaceAction
 
     // Hierarchy CRUD, Reordering & Organization
     data class CreateNotebook(val title: String, val subtitle: String, val accent: SectionAccentKey) : WorkspaceAction

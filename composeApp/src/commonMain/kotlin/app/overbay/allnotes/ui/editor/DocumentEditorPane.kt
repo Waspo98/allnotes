@@ -58,11 +58,13 @@ import app.overbay.allnotes.ui.editor.blocks.LocalEditorStructureRevision
 import app.overbay.allnotes.ui.editor.blocks.rememberSyncedFieldHolder
 import app.overbay.allnotes.ui.editor.toolbar.BlockInsertBottomSheet
 import app.overbay.allnotes.ui.editor.toolbar.DesktopFormattingRibbon
+import app.overbay.allnotes.ui.editor.toolbar.MobileAccessoryMenuOverlay
 import app.overbay.allnotes.ui.editor.toolbar.MobileKeyboardAccessoryBar
 import app.overbay.allnotes.ui.media.rememberPlatformAttachmentPicker
 import app.overbay.allnotes.ui.theme.AllNotesMotion
 import app.overbay.allnotes.ui.theme.accentColor
 import app.overbay.allnotes.ui.theme.ambientWashColor
+import app.overbay.allnotes.ui.workspace.MobileAccessoryMenu
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
 import kotlinx.coroutines.delay
@@ -118,6 +120,14 @@ fun DocumentEditorPane(
     }
     val navBarBottomDp = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
 
+    LaunchedEffect(isCompactMobile, imeVisible, state.activeBlockId) {
+        if ((!isCompactMobile || !imeVisible || state.activeBlockId == null) &&
+            state.mobileAccessoryMenu != MobileAccessoryMenu.NONE
+        ) {
+            onAction(WorkspaceAction.SetMobileAccessoryMenu(MobileAccessoryMenu.NONE))
+        }
+    }
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -161,7 +171,11 @@ fun DocumentEditorPane(
                     EmptyPageStudioState(onAction = onAction)
                 } else {
                     val sectionAccent = state.activeSection?.accent?.accentColor() ?: MaterialTheme.colorScheme.primary
-                    val sectionAmbientWash = state.activeSection?.accent?.ambientWashColor() ?: Color.Transparent
+                    val sectionAmbientWash = if (state.preferences.showSectionGradient) {
+                        state.activeSection?.accent?.ambientWashColor() ?: Color.Transparent
+                    } else {
+                        Color.Transparent
+                    }
 
                     Surface(
                         modifier = Modifier
@@ -318,6 +332,13 @@ fun DocumentEditorPane(
                             .imePadding()
                     )
                 }
+            }
+
+            if (isCompactMobile && page != null && imeVisible && state.activeBlock != null) {
+                MobileAccessoryMenuOverlay(
+                    state = state,
+                    onAction = onAction
+                )
             }
 
             EditorStatusSnackbar(

@@ -122,6 +122,12 @@ class WorkspaceViewModel(
         }
     }
 
+    internal fun setShowSectionGradient(enabled: Boolean) {
+        repository.updatePreferences {
+            it.copy(showSectionGradient = enabled)
+        }
+    }
+
     fun syncStateFromRepository(
         targetNotebookId: String? = null,
         targetSectionId: String? = null,
@@ -171,6 +177,7 @@ class WorkspaceViewModel(
             it.copy(
                 isMobileHierarchySheetOpen = false,
                 isPageMenuOpen = false,
+                mobileAccessoryMenu = MobileAccessoryMenu.NONE,
                 collapsedParentPageIds = if (parentToUncollapse != null) it.collapsedParentPageIds - parentToUncollapse else it.collapsedParentPageIds
             )
         }
@@ -198,6 +205,7 @@ class WorkspaceViewModel(
             activeDialog = dialog,
             editingSectionId = if (dialog == ActiveDialog.CONFIRM_DELETE_SECTION) it.editingSectionId else null,
             isPageMenuOpen = false,
+            mobileAccessoryMenu = MobileAccessoryMenu.NONE,
             isMobileHierarchySheetOpen = false
         )
     }
@@ -207,6 +215,7 @@ class WorkspaceViewModel(
             activeDialog = ActiveDialog.EDIT_SECTION,
             editingSectionId = sectionId,
             isPageMenuOpen = false,
+            mobileAccessoryMenu = MobileAccessoryMenu.NONE,
             isMobileHierarchySheetOpen = false
         )
     }
@@ -215,7 +224,22 @@ class WorkspaceViewModel(
         it.copy(activeDialog = ActiveDialog.NONE, pendingDeletePageId = null, editingSectionId = null)
     }
 
-    fun setActiveBlockId(blockId: String?) = _uiState.update { it.copy(activeBlockId = blockId) }
+    internal fun setMobileAccessoryMenu(menu: MobileAccessoryMenu) = _uiState.update {
+        it.copy(
+            mobileAccessoryMenu = if (it.activeBlockId == null) MobileAccessoryMenu.NONE else menu
+        )
+    }
+
+    fun setActiveBlockId(blockId: String?) = _uiState.update {
+        it.copy(
+            activeBlockId = blockId,
+            mobileAccessoryMenu = if (blockId == null || blockId != it.activeBlockId) {
+                MobileAccessoryMenu.NONE
+            } else {
+                it.mobileAccessoryMenu
+            }
+        )
+    }
 
     internal fun focusOrAppendTrailingParagraph() = editorCoordinator.focusOrAppendTrailingParagraph()
 
@@ -357,6 +381,7 @@ class WorkspaceViewModel(
                 activeDialog = ActiveDialog.CONFIRM_DELETE_PAGE,
                 pendingDeletePageId = pageId,
                 isPageMenuOpen = false,
+                mobileAccessoryMenu = MobileAccessoryMenu.NONE,
                 isMobileHierarchySheetOpen = false
             )
         }

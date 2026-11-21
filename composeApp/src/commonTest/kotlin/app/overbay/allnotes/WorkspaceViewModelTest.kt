@@ -10,8 +10,10 @@ import app.overbay.allnotes.model.NoteSection
 import app.overbay.allnotes.model.Notebook
 import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
+import app.overbay.allnotes.model.WorkspacePreferences
 import app.overbay.allnotes.model.WorkspaceSnapshot
 import app.overbay.allnotes.ui.workspace.ActiveDialog
+import app.overbay.allnotes.ui.workspace.MobileAccessoryMenu
 import app.overbay.allnotes.ui.workspace.SlashCommandKind
 import app.overbay.allnotes.ui.workspace.WorkspaceAction
 import app.overbay.allnotes.ui.workspace.WorkspaceUiState
@@ -26,9 +28,14 @@ import kotlin.test.assertTrue
 
 private class InMemoryNoteStorage : NoteStorageBackend {
     var saved: WorkspaceSnapshot? = null
+    var savedPreferences: WorkspacePreferences = WorkspacePreferences()
     override fun loadSnapshot(): WorkspaceSnapshot? = saved
     override fun saveSnapshot(snapshot: WorkspaceSnapshot) {
         saved = snapshot
+    }
+    override fun loadPreferences(): WorkspacePreferences = savedPreferences
+    override fun savePreferences(preferences: WorkspacePreferences) {
+        savedPreferences = preferences
     }
 }
 
@@ -772,5 +779,60 @@ class WorkspaceViewModelTest {
         assertFalse(vm.uiState.value.isMobileHierarchySheetOpen)
         assertFalse(vm.uiState.value.isPageMenuOpen)
         assertEquals(null, vm.uiState.value.activeBlockId)
+    }
+
+    @Test
+    fun sectionGradientPreferenceTogglesAndPersists() {
+        val storage = InMemoryNoteStorage()
+        val repo = NoteRepository(storage = storage)
+        val vm = WorkspaceViewModel(
+            repository = repo,
+            coroutineDispatcher = Dispatchers.Unconfined
+        )
+
+        assertTrue(vm.uiState.value.preferences.showSectionGradient, "Gradient should default to enabled")
+
+        vm.dispatch(WorkspaceAction.SetShowSectionGradient(false))
+        assertFalse(vm.uiState.value.preferences.showSectionGradient)
+        assertFalse(storage.savedPreferences.showSectionGradient)
+
+        vm.dispatch(WorkspaceAction.SetShowSectionGradient(true))
+        assertTrue(vm.uiState.value.preferences.showSectionGradient)
+        assertTrue(storage.savedPreferences.showSectionGradient)
+    }
+
+    @Test
+    fun mobileAccessoryMenuTracksActiveBlockAndResetsOnOverlayOrNavigation() {
+        val (vm, repo) = createTestFixture()
+        val page = vm.uiState.value.activePage!!
+        val firstBlock = page.blocks.first()
+
+        // Cannot open accessory menu without an active block
+        vm.dispatch(WorkspaceAction.SetMobileAccessoryMenu(MobileAccessoryMenu.BLOCK_ACTIONS))
+        assertEquals(MobileAccessoryMenu.NONE, vm.uiState.value.mobileAccessoryMenu)
+
+        // Opens when a block is active and switches cleanly between menus
+        vm.dispatch(WorkspaceAction.SetActiveBlock(firstBlock.id))
+        vm.dispatch(WorkspaceAction.SetMobileAccessoryMenu(MobileAccessoryMenu.BLOCK_ACTIONS))
+        assertEquals(MobileAccessoryMenu.BLOCK_ACTIONS, vm.uiState.value.mobileAccessoryMenu)
+
+        vm.dispatch(WorkspaceAction.SetMobileAccessoryMenu(MobileAccessoryMenu.BLOCK_TYPE))
+        assertEquals(MobileAccessoryMenu.BLOCK_TYPE, vm.uiState.value.mobileAccessoryMenu)
+
+        // Opening insert sheet or clearing active block closes the accessory menu
+        vm.dispatch(WorkspaceAction.SetBlockInsertSheetOpen(true))
+        assertEquals(MobileAccessoryMenu.NONE, vm.uiState.value.mobileAccessoryMenu)
+        vm.dispatch(WorkspaceAction.SetBlockInsertSheetOpen(false))
+
+        vm.dispatch(WorkspaceAction.SetMobileAccessoryMenu(MobileAccessoryMenu.BLOCK_ACTIONS))
+        vm.dispatch(WorkspaceAction.SetActiveBlock(null))
+        assertEquals(MobileAccessoryMenu.NONE, vm.uiState.value.mobileAccessoryMenu)
+
+        // Switching pages also closes any open accessory menu
+        vm.dispatch(WorkspaceAction.SetActiveBlock(firstBlock.id))
+        vm.dispatch(WorkspaceAction.SetMobileAccessoryMenu(MobileAccessoryMenu.BLOCK_ACTIONS))
+        val secondPage = repo.createPage(vm.uiState.value.activeSection!!.id, "Another Page")
+        vm.dispatch(WorkspaceAction.SelectPage(secondPage.id))
+        assertEquals(MobileAccessoryMenu.NONE, vm.uiState.value.mobileAccessoryMenu)
     }
 }

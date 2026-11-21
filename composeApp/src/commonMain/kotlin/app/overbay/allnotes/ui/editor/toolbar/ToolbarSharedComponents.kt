@@ -62,7 +62,7 @@ private val InlineSpanSpecs = listOf(
     SpanButtonSpec(AllNotesIcons.Palette, "Accent Text", null, RichSpanKind.COLOR_ACCENT)
 )
 
-private val ConvertibleBlockTargets = listOf(
+internal val ConvertibleBlockTargets = listOf(
     SlashCommandKind.PARAGRAPH to AllNotesIcons.Paragraph,
     SlashCommandKind.HEADING_1 to AllNotesIcons.Heading,
     SlashCommandKind.HEADING_2 to AllNotesIcons.Heading,
@@ -207,6 +207,7 @@ internal fun ParagraphInlineFormatButtons(
 internal fun BlockTypeConverterPill(
     activeBlock: DocumentBlock?,
     showTooltip: Boolean = false,
+    onOpenCustomMenu: (() -> Unit)? = null,
     onAction: (WorkspaceAction) -> Unit
 ) {
     val currentLabel = when (activeBlock) {
@@ -223,7 +224,9 @@ internal fun BlockTypeConverterPill(
     Box {
         StudioTooltip(label = "Format current line or block", enabled = showTooltip) {
             Surface(
-                onClick = { menuExpanded = true },
+                onClick = {
+                    if (onOpenCustomMenu != null) onOpenCustomMenu() else menuExpanded = true
+                },
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 shape = MaterialTheme.shapes.extraSmall
@@ -248,31 +251,33 @@ internal fun BlockTypeConverterPill(
             }
         }
 
-        val targets = if (activeBlock is DocumentBlock.Paragraph) {
-            ConvertibleBlockTargets.filterNot { (kind, _) -> kind == SlashCommandKind.PARAGRAPH }
-        } else {
-            ConvertibleBlockTargets
-        }
+        if (onOpenCustomMenu == null) {
+            val targets = if (activeBlock is DocumentBlock.Paragraph) {
+                ConvertibleBlockTargets.filterNot { (kind, _) -> kind == SlashCommandKind.PARAGRAPH }
+            } else {
+                ConvertibleBlockTargets
+            }
 
-        DropdownMenu(
-            expanded = menuExpanded,
-            onDismissRequest = { menuExpanded = false }
-        ) {
-            targets.forEach { (kind, icon) ->
-                DropdownMenuItem(
-                    text = { Text(kind.title) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    onClick = {
-                        menuExpanded = false
-                        onAction(WorkspaceAction.ConvertActiveBlock(kind))
-                    }
-                )
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                targets.forEach { (kind, icon) ->
+                    DropdownMenuItem(
+                        text = { Text(kind.title) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onAction(WorkspaceAction.ConvertActiveBlock(kind))
+                        }
+                    )
+                }
             }
         }
     }

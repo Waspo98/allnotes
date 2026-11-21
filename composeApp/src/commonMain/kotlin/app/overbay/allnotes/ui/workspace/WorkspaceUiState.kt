@@ -43,6 +43,12 @@ enum class ActiveDialog {
     QUICK_JUMP
 }
 
+enum class MobileAccessoryMenu {
+    NONE,
+    BLOCK_ACTIONS,
+    BLOCK_TYPE
+}
+
 data class WorkspaceUiState(
     val notebooks: List<Notebook> = emptyList(),
     val sections: List<NoteSection> = emptyList(),
@@ -62,6 +68,7 @@ data class WorkspaceUiState(
     val isMobileHierarchySheetOpen: Boolean = false,
     val isPageMenuOpen: Boolean = false,
     val isBlockInsertSheetOpen: Boolean = false,
+    val mobileAccessoryMenu: MobileAccessoryMenu = MobileAccessoryMenu.NONE,
     val activeDialog: ActiveDialog = ActiveDialog.NONE,
     val editingSectionId: String? = null,
     val syncStatus: SyncStatus = SyncStatus.LOCAL_READY,
@@ -370,6 +377,7 @@ internal object HierarchySelectionResolver {
             selectedSectionId = secId,
             selectedPageId = pageId,
             activeBlockId = retainedActiveBlockId,
+            mobileAccessoryMenu = if (retainedActiveBlockId == null) MobileAccessoryMenu.NONE else current.mobileAccessoryMenu,
             revision = maxOf(effectiveSnap.revision, current.revision)
         )
     }
