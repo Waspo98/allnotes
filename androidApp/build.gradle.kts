@@ -20,6 +20,17 @@ val resolvedKeystoreFile = releaseKeystorePath?.let { path ->
     val f = File(path)
     if (f.isAbsolute) f else rootProject.file(path)
 }
+val hasReleaseSigning = resolvedKeystoreFile != null &&
+    resolvedKeystoreFile.exists() &&
+    !releaseKeystorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank()
+
+if (gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) } && !hasReleaseSigning) {
+    throw GradleException(
+        "Release signing keystore is missing or incomplete. Set KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD (or release.keystore.* in local.properties)."
+    )
+}
 
 fun isBetaBranch(): Boolean {
     project.findProperty("isBeta")?.toString()?.trim()?.lowercase()?.toBooleanStrictOrNull()?.let { return it }
@@ -48,19 +59,17 @@ android {
         resValue("string", "app_name", if (isBetaApp) "AllNotes Beta" else "AllNotes")
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = if (isBetaApp) "0.10-beta" else "0.10"
+        versionCode = 2
+        versionName = if (isBetaApp) "0.1.0-beta" else "0.1.0"
     }
 
     signingConfigs {
         create("release") {
-            if (resolvedKeystoreFile != null && resolvedKeystoreFile.exists()) {
+            if (hasReleaseSigning) {
                 storeFile = resolvedKeystoreFile
                 storePassword = releaseKeystorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
-            } else {
-                initWith(getByName("debug"))
             }
         }
     }
