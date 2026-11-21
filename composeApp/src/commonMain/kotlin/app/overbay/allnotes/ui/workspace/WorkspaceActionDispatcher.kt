@@ -78,7 +78,10 @@ internal object WorkspaceActionDispatcher {
             is WorkspaceAction.MoveBlock -> vm.moveBlock(action.blockId, action.delta)
             is WorkspaceAction.DeleteBlock -> vm.deleteBlock(action.blockId)
 
-            is WorkspaceAction.EditParagraphText -> vm.applyEditorResult(true) {
+            is WorkspaceAction.EditParagraphText -> vm.applyEditorResult(
+                debounced = true,
+                updatedSelection = action.cursorOffset to action.cursorOffset
+            ) {
                 EditorInputController.editParagraphWithTriggers(
                     it, action.blockId, action.newText, action.cursorOffset, vm::nextBlockId, vm::nextFocusToken
                 )
@@ -101,8 +104,19 @@ internal object WorkspaceActionDispatcher {
             }
             is WorkspaceAction.ExecuteSlashCommand -> vm.applyEditorResult(false) {
                 EditorInputController.executeSlashCommand(
-                    it, action.blockId, action.command, vm::nextBlockId, vm::nextFocusToken
+                    it,
+                    action.blockId,
+                    action.command,
+                    vm::nextBlockId,
+                    vm::nextFocusToken,
+                    action.cursorOffset ?: vm.uiState.value.selectionEnd
                 )
+            }
+            is WorkspaceAction.DismissSlashCommand -> vm.applyEditorResult(false) {
+                EditorInputController.dismissSlashCommand(it, action.blockId, action.cursorOffset, vm::nextFocusToken)
+            }
+            is WorkspaceAction.MoveFocusToAdjacentBlock -> vm.applyEditorResult(false) {
+                ParagraphFlowEngine.focusAdjacentBlock(it, action.fromBlockId, action.direction, vm::nextFocusToken)
             }
 
             is WorkspaceAction.InsertHeading -> vm.insertHeadingBlock(action.level, action.afterBlockId)

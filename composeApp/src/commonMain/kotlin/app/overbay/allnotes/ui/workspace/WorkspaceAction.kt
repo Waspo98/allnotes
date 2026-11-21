@@ -75,7 +75,13 @@ sealed interface WorkspaceAction {
     data class BackspaceAtBlockStart(val blockId: String) : WorkspaceAction
     data class ListEnterAtItem(val blockId: String, val itemIndex: Int) : WorkspaceAction
     data class ListBackspaceOnEmptyItem(val blockId: String, val itemIndex: Int) : WorkspaceAction
-    data class ExecuteSlashCommand(val blockId: String, val command: SlashCommandKind) : WorkspaceAction
+    data class ExecuteSlashCommand(
+        val blockId: String,
+        val command: SlashCommandKind,
+        val cursorOffset: Int? = null
+    ) : WorkspaceAction
+    data class DismissSlashCommand(val blockId: String, val cursorOffset: Int) : WorkspaceAction
+    data class MoveFocusToAdjacentBlock(val fromBlockId: String, val direction: Int) : WorkspaceAction
 
     // Block Insertion
     data class InsertHeading(val level: Int = 2, val afterBlockId: String? = null) : WorkspaceAction

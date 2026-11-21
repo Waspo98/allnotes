@@ -3,6 +3,7 @@ package app.overbay.allnotes.ui.editor.blocks
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -13,6 +14,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
+
+internal val LocalEditorStructureRevision = compositionLocalOf { 0L }
 
 /**
  * Holds synchronized [TextFieldValue] state for a block field while guarding IME composition
@@ -25,18 +28,26 @@ internal class SyncedFieldHolder(initialText: String) {
     var lastExternalText: String = initialText
     private var currentLocalText: String = initialText
     private var currentSelection: TextRange = TextRange(initialText.length)
+    private var lastStructureRevision: Long = 0L
     private val pendingLocalTexts = ArrayDeque<String>(8)
 
-    fun syncExternal(externalText: String) {
-        if (externalText == lastExternalText) return
+    fun syncExternal(externalText: String, structureRevision: Long = lastStructureRevision) {
+        val forceSync = structureRevision != lastStructureRevision
+        lastStructureRevision = structureRevision
+        if (!forceSync && externalText == lastExternalText) return
         lastExternalText = externalText
 
-        if (externalText == currentLocalText) {
-            consumeMatchingEcho(externalText)
-            return
-        }
+        if (!forceSync) {
+            if (externalText == currentLocalText) {
+                consumeMatchingEcho(externalText)
+                return
+            }
 
-        if (consumeMatchingEcho(externalText)) {
+            if (consumeMatchingEcho(externalText)) {
+                return
+            }
+        } else if (externalText == currentLocalText) {
+            pendingLocalTexts.clear()
             return
         }
 
@@ -87,9 +98,10 @@ internal fun rememberSyncedFieldHolder(
     key: Any,
     externalText: String
 ): SyncedFieldHolder {
+    val structureRevision = LocalEditorStructureRevision.current
     val holder = remember(key) { SyncedFieldHolder(externalText) }
     SideEffect {
-        holder.syncExternal(externalText)
+        holder.syncExternal(externalText, structureRevision)
     }
     return holder
 }

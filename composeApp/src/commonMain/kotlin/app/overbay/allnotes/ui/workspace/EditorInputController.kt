@@ -1,6 +1,5 @@
 package app.overbay.allnotes.ui.workspace
 
-import app.overbay.allnotes.model.CalloutTone
 import app.overbay.allnotes.model.ChecklistItem
 import app.overbay.allnotes.model.DocumentBlock
 import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
@@ -89,148 +88,21 @@ object EditorInputController {
         )
         val updatedParagraph = current.copy(text = normalizedText, spans = adjustedSpans)
 
-        var prefix = 0
-        val maxPrefix = minOf(current.text.length, normalizedText.length)
-        while (prefix < maxPrefix && current.text[prefix] == normalizedText[prefix]) {
-            prefix++
-        }
-        var oldSuffix = current.text.length
-        var newSuffix = normalizedText.length
-        while (oldSuffix > prefix && newSuffix > prefix && current.text[oldSuffix - 1] == normalizedText[newSuffix - 1]) {
-            oldSuffix--
-            newSuffix--
-        }
-        val insertedSegment = normalizedText.substring(prefix, newSuffix)
-        val isMultilinePaste = insertedSegment.contains('\n') && insertedSegment.length > 1
-
+        val diff = EditorMarkdownTriggers.computeEditDiff(current.text, normalizedText)
         val line = ParagraphFlowEngine.lineBoundsAt(normalizedText, normalizedCursor)
-        val editTouchesLine = normalizedText != current.text && newSuffix >= line.start && prefix <= line.end
+        val editTouchesLine = normalizedText != current.text && diff.newSuffix >= line.start && diff.prefix <= line.end
 
-        if (!isMultilinePaste && editTouchesLine) {
-            val lineText = line.text
-            if (lineText == "--- " || lineText == "---") {
-                val splice = ParagraphFlowEngine.replaceLineRangeWithBlocks(
-                    blocks = blocks,
-                    blockIndex = idx,
-                    paragraph = updatedParagraph,
-                    rangeStart = line.start,
-                    rangeEnd = line.end,
-                    nextId = nextId
-                ) { preferredId -> listOf(DocumentBlock.Divider(id = preferredId)) }
-                val mutable = splice.blocks.toMutableList()
-                val (targetId, focusReq) = if (splice.afterBlock != null) {
-                    splice.afterBlock.id to EditorFocusRequest(splice.afterBlock.id, cursorOffset = 0, requestToken = nextToken())
-                } else {
-                    ParagraphFlowEngine.focusOrPrependNextParagraph(mutable, splice.insertedBlockIndex, "", nextId, nextToken)
-                }
-                return EditorMutationResult(
-                    blocks = mutable,
-                    activeBlockId = targetId,
-                    focusRequest = focusReq,
-                    isStructuralConversion = true
-                )
-            }
-
-            val cursorInLine = (normalizedCursor - line.start).coerceIn(0, lineText.length)
-            fun shiftedCursor(prefixLen: Int, rest: String): Int =
-                (cursorInLine - prefixLen).coerceIn(0, rest.length)
-
-            val triggerConversion: Pair<(String) -> DocumentBlock, (String) -> EditorFocusRequest>? = when {
-                lineText.startsWith("### ") -> {
-                    val rest = lineText.removePrefix("### ")
-                    val offset = shiftedCursor(4, rest)
-                    ({ id: String -> DocumentBlock.Heading(id = id, text = rest, level = 3) }) to
-                        ({ id: String -> EditorFocusRequest(id, cursorOffset = offset, requestToken = nextToken()) })
-                }
-                lineText.startsWith("## ") -> {
-                    val rest = lineText.removePrefix("## ")
-                    val offset = shiftedCursor(3, rest)
-                    ({ id: String -> DocumentBlock.Heading(id = id, text = rest, level = 2) }) to
-                        ({ id: String -> EditorFocusRequest(id, cursorOffset = offset, requestToken = nextToken()) })
-                }
-                lineText.startsWith("# ") -> {
-                    val rest = lineText.removePrefix("# ")
-                    val offset = shiftedCursor(2, rest)
-                    ({ id: String -> DocumentBlock.Heading(id = id, text = rest, level = 1) }) to
-                        ({ id: String -> EditorFocusRequest(id, cursorOffset = offset, requestToken = nextToken()) })
-                }
-                lineText.startsWith("- [x] ") || lineText.startsWith("- [X] ") ||
-                    lineText.startsWith("[x] ") || lineText.startsWith("[X] ") -> {
-                    val rest = lineText.substringAfter("] ")
-                    val prefixLen = lineText.length - rest.length
-                    val offset = shiftedCursor(prefixLen, rest)
-                    ({ id: String ->
-                        DocumentBlock.Checklist(
-                            id = id,
-                            title = "",
-                            items = listOf(ChecklistItem(id = nextId(), text = rest, isChecked = true))
-                        )
-                    }) to ({ id: String ->
-                        EditorFocusRequest(id, subItemIndex = 0, cursorOffset = offset, requestToken = nextToken())
-                    })
-                }
-                lineText.startsWith("- [ ] ") || lineText.startsWith("[] ") || lineText.startsWith("[ ] ") -> {
-                    val rest = lineText.substringAfter("] ")
-                    val prefixLen = lineText.length - rest.length
-                    val offset = shiftedCursor(prefixLen, rest)
-                    ({ id: String ->
-                        DocumentBlock.Checklist(
-                            id = id,
-                            title = "",
-                            items = listOf(ChecklistItem(id = nextId(), text = rest, isChecked = false))
-                        )
-                    }) to ({ id: String ->
-                        EditorFocusRequest(id, subItemIndex = 0, cursorOffset = offset, requestToken = nextToken())
-                    })
-                }
-                lineText.startsWith("- ") || lineText.startsWith("* ") -> {
-                    val rest = lineText.substring(2)
-                    val offset = shiftedCursor(2, rest)
-                    ({ id: String -> DocumentBlock.BulletList(id = id, isNumbered = false, items = listOf(rest)) }) to
-                        ({ id: String ->
-                            EditorFocusRequest(id, subItemIndex = 0, cursorOffset = offset, requestToken = nextToken())
-                        })
-                }
-                lineText.startsWith("1. ") -> {
-                    val rest = lineText.removePrefix("1. ")
-                    val offset = shiftedCursor(3, rest)
-                    ({ id: String -> DocumentBlock.BulletList(id = id, isNumbered = true, items = listOf(rest)) }) to
-                        ({ id: String ->
-                            EditorFocusRequest(id, subItemIndex = 0, cursorOffset = offset, requestToken = nextToken())
-                        })
-                }
-                lineText.startsWith("> ") -> {
-                    val rest = lineText.removePrefix("> ")
-                    val offset = shiftedCursor(2, rest)
-                    ({ id: String -> DocumentBlock.Callout(id = id, title = "Note", text = rest, tone = CalloutTone.INFO) }) to
-                        ({ id: String -> EditorFocusRequest(id, cursorOffset = offset, requestToken = nextToken()) })
-                }
-                lineText.startsWith("```") && lineText.endsWith(" ") && !lineText.removePrefix("```").dropLast(1).contains(' ') -> {
-                    val lang = lineText.removePrefix("```").trim().ifEmpty { "kotlin" }
-                    ({ id: String -> DocumentBlock.CodeSnippet(id = id, language = lang, code = "") }) to
-                        ({ id: String -> EditorFocusRequest(id, cursorOffset = 0, requestToken = nextToken()) })
-                }
-                else -> null
-            }
-
-            if (triggerConversion != null) {
-                val (buildBlock, buildFocus) = triggerConversion
-                val splice = ParagraphFlowEngine.replaceLineRangeWithBlocks(
-                    blocks = blocks,
-                    blockIndex = idx,
-                    paragraph = updatedParagraph,
-                    rangeStart = line.start,
-                    rangeEnd = line.end,
-                    nextId = nextId
-                ) { preferredId -> listOf(buildBlock(preferredId)) }
-                val targetId = splice.primaryBlockId
-                return EditorMutationResult(
-                    blocks = splice.blocks,
-                    activeBlockId = targetId,
-                    focusRequest = buildFocus(targetId),
-                    isStructuralConversion = true
-                )
-            }
+        if (!diff.isMultilinePaste && editTouchesLine) {
+            val triggered = EditorMarkdownTriggers.tryApplyLineTrigger(
+                blocks = blocks,
+                blockIndex = idx,
+                updatedParagraph = updatedParagraph,
+                line = line,
+                normalizedCursor = normalizedCursor,
+                nextId = nextId,
+                nextToken = nextToken
+            )
+            if (triggered != null) return triggered
         }
 
         val mutable = blocks.toMutableList()
@@ -252,14 +124,12 @@ object EditorInputController {
         val idx = blocks.indexOfFirst { it.id == blockId }
         if (idx < 0) return EditorMutationResult(blocks, blockId)
         val current = blocks[idx] as? DocumentBlock.Paragraph
-        if (current == null) {
-            return executeSlashCommandOnWholeBlock(blocks, idx, blockId, kind, nextId, nextToken)
-        }
+            ?: return EditorMarkdownTriggers.executeSlashCommandOnWholeBlock(blocks, idx, blockId, kind, nextId, nextToken)
 
         val line = ParagraphFlowEngine.lineBoundsAt(current.text, cursorOffset ?: current.text.length)
         if (kind == SlashCommandKind.PARAGRAPH || kind == SlashCommandKind.ATTACHMENT) {
             val mutable = blocks.toMutableList()
-            mutable[idx] = removeRangePreservingSpans(current, line.start, line.end)
+            mutable[idx] = EditorMarkdownTriggers.removeRangePreservingSpans(current, line.start, line.end)
             return EditorMutationResult(
                 blocks = mutable,
                 activeBlockId = blockId,
@@ -283,12 +153,7 @@ object EditorInputController {
             } else {
                 ParagraphFlowEngine.focusOrPrependNextParagraph(mutable, splice.insertedBlockIndex, "", nextId, nextToken)
             }
-            return EditorMutationResult(
-                blocks = mutable,
-                activeBlockId = targetId,
-                focusRequest = focusReq,
-                isStructuralConversion = true
-            )
+            return EditorMutationResult(mutable, targetId, focusReq, isStructuralConversion = true)
         }
 
         val splice = ParagraphFlowEngine.replaceLineRangeWithBlocks(
@@ -298,21 +163,15 @@ object EditorInputController {
             rangeStart = line.start,
             rangeEnd = line.end,
             nextId = nextId
-        ) { preferredId -> listOf(buildEmptySlashBlock(preferredId, kind, nextId)) }
+        ) { preferredId -> listOf(EditorMarkdownTriggers.buildEmptySlashBlock(preferredId, kind, nextId)) }
 
         val targetId = splice.primaryBlockId
         val focusReq = if (kind == SlashCommandKind.TABLE) {
             null
         } else {
-            val subIdx = listSubItemIndex(kind)
-            EditorFocusRequest(targetId, subItemIndex = subIdx, cursorOffset = 0, requestToken = nextToken())
+            EditorFocusRequest(targetId, subItemIndex = listSubItemIndex(kind), cursorOffset = 0, requestToken = nextToken())
         }
-        return EditorMutationResult(
-            blocks = splice.blocks,
-            activeBlockId = targetId,
-            focusRequest = focusReq,
-            isStructuralConversion = true
-        )
+        return EditorMutationResult(splice.blocks, targetId, focusReq, isStructuralConversion = true)
     }
 
     fun dismissSlashCommand(
@@ -328,95 +187,13 @@ object EditorInputController {
         if (!line.text.startsWith("/")) return EditorMutationResult(blocks, blockId)
 
         val mutable = blocks.toMutableList()
-        mutable[idx] = removeRangePreservingSpans(current, line.start, line.end)
+        mutable[idx] = EditorMarkdownTriggers.removeRangePreservingSpans(current, line.start, line.end)
         return EditorMutationResult(
             blocks = mutable,
             activeBlockId = blockId,
             focusRequest = EditorFocusRequest(blockId, cursorOffset = line.start, requestToken = nextToken()),
             isStructuralConversion = true
         )
-    }
-
-    private fun removeRangePreservingSpans(
-        paragraph: DocumentBlock.Paragraph,
-        start: Int,
-        end: Int
-    ): DocumentBlock.Paragraph {
-        val s = start.coerceIn(0, paragraph.text.length)
-        val e = end.coerceIn(s, paragraph.text.length)
-        val updatedText = paragraph.text.removeRange(s, e)
-        val updatedSpans = RichSpanEngine.adjustSpansAfterEdit(
-            oldText = paragraph.text,
-            newText = updatedText,
-            existingSpans = paragraph.effectiveSpans()
-        )
-        return DocumentBlock.Paragraph(
-            id = paragraph.id,
-            text = updatedText,
-            spans = updatedSpans
-        )
-    }
-
-    private fun executeSlashCommandOnWholeBlock(
-        blocks: List<DocumentBlock>,
-        idx: Int,
-        blockId: String,
-        kind: SlashCommandKind,
-        nextId: () -> String,
-        nextToken: () -> Long
-    ): EditorMutationResult {
-        val mutable = blocks.toMutableList()
-        return when (kind) {
-            SlashCommandKind.DIVIDER -> {
-                mutable[idx] = DocumentBlock.Divider(id = blockId)
-                val (targetId, focusReq) = ParagraphFlowEngine.focusOrPrependNextParagraph(mutable, idx, "", nextId, nextToken)
-                EditorMutationResult(mutable, targetId, focusReq, true)
-            }
-            SlashCommandKind.ATTACHMENT -> {
-                mutable[idx] = DocumentBlock.Paragraph(id = blockId, text = "")
-                EditorMutationResult(mutable, blockId, isStructuralConversion = true)
-            }
-            SlashCommandKind.TABLE -> {
-                mutable[idx] = buildEmptySlashBlock(blockId, kind, nextId)
-                EditorMutationResult(mutable, blockId, isStructuralConversion = true)
-            }
-            else -> {
-                mutable[idx] = buildEmptySlashBlock(blockId, kind, nextId)
-                val subIdx = listSubItemIndex(kind)
-                EditorMutationResult(
-                    mutable,
-                    blockId,
-                    EditorFocusRequest(blockId, subItemIndex = subIdx, cursorOffset = 0, requestToken = nextToken()),
-                    true
-                )
-            }
-        }
-    }
-
-    private fun buildEmptySlashBlock(
-        blockId: String,
-        kind: SlashCommandKind,
-        nextId: () -> String
-    ): DocumentBlock = when (kind) {
-        SlashCommandKind.PARAGRAPH, SlashCommandKind.ATTACHMENT -> DocumentBlock.Paragraph(id = blockId, text = "")
-        SlashCommandKind.HEADING_1 -> DocumentBlock.Heading(id = blockId, text = "", level = 1)
-        SlashCommandKind.HEADING_2 -> DocumentBlock.Heading(id = blockId, text = "", level = 2)
-        SlashCommandKind.HEADING_3 -> DocumentBlock.Heading(id = blockId, text = "", level = 3)
-        SlashCommandKind.CHECKLIST -> DocumentBlock.Checklist(
-            id = blockId,
-            title = "",
-            items = listOf(ChecklistItem(id = nextId(), text = "", isChecked = false))
-        )
-        SlashCommandKind.BULLET_LIST -> DocumentBlock.BulletList(id = blockId, isNumbered = false, items = listOf(""))
-        SlashCommandKind.NUMBERED_LIST -> DocumentBlock.BulletList(id = blockId, isNumbered = true, items = listOf(""))
-        SlashCommandKind.TABLE -> DocumentBlock.Table(
-            id = blockId,
-            headers = listOf("Column 1", "Column 2", "Status"),
-            rows = listOf(listOf("", "", ""))
-        )
-        SlashCommandKind.CALLOUT -> DocumentBlock.Callout(id = blockId, title = "Key Point", text = "", tone = CalloutTone.TIP)
-        SlashCommandKind.CODE -> DocumentBlock.CodeSnippet(id = blockId, language = "kotlin", code = "")
-        SlashCommandKind.DIVIDER -> DocumentBlock.Divider(id = blockId)
     }
 
     private fun listSubItemIndex(kind: SlashCommandKind): Int = if (
@@ -451,22 +228,11 @@ object EditorInputController {
             }
             is DocumentBlock.Heading -> {
                 val split = cursorOffset.coerceIn(0, target.text.length)
-                val headText = target.text.substring(0, split)
-                val tailText = target.text.substring(split)
-                mutable[idx] = target.copy(text = headText)
+                mutable[idx] = target.copy(text = target.text.substring(0, split))
                 val (targetId, focusReq) = ParagraphFlowEngine.focusOrPrependNextParagraph(
-                    mutable,
-                    idx,
-                    tailText,
-                    nextId,
-                    nextToken
+                    mutable, idx, target.text.substring(split), nextId, nextToken
                 )
-                EditorMutationResult(
-                    blocks = mutable,
-                    activeBlockId = targetId,
-                    focusRequest = focusReq,
-                    isStructuralConversion = true
-                )
+                EditorMutationResult(mutable, targetId, focusReq, isStructuralConversion = true)
             }
             else -> EditorMutationResult(blocks, blockId)
         }
@@ -492,78 +258,77 @@ object EditorInputController {
                     coalesceParagraphResult(mutable, idx, cursorInBlock = 0, nextToken = nextToken)
                 } else EditorMutationResult(blocks, blockId)
             }
+            is DocumentBlock.Paragraph -> backspaceParagraphAtStart(mutable, idx, current, nextToken)
+            else -> EditorMutationResult(blocks, blockId)
+        }
+    }
+
+    private fun backspaceParagraphAtStart(
+        mutable: MutableList<DocumentBlock>,
+        idx: Int,
+        current: DocumentBlock.Paragraph,
+        nextToken: () -> Long
+    ): EditorMutationResult {
+        if (idx == 0) {
+            if (current.text.isEmpty() && mutable.size > 1) {
+                mutable.removeAt(0)
+                val nextActive = mutable.first().id
+                return EditorMutationResult(
+                    blocks = mutable,
+                    activeBlockId = nextActive,
+                    focusRequest = EditorFocusRequest(nextActive, cursorOffset = 0, requestToken = nextToken()),
+                    isStructuralConversion = true
+                )
+            }
+            return EditorMutationResult(mutable, current.id)
+        }
+
+        return when (val prev = mutable[idx - 1]) {
             is DocumentBlock.Paragraph -> {
-                if (idx == 0) {
-                    if (current.text.isEmpty() && blocks.size > 1) {
-                        mutable.removeAt(0)
-                        val nextActive = mutable.first().id
-                        EditorMutationResult(
-                            blocks = mutable,
-                            activeBlockId = nextActive,
-                            focusRequest = EditorFocusRequest(nextActive, cursorOffset = 0, requestToken = nextToken()),
-                            isStructuralConversion = true
-                        )
-                    } else {
-                        EditorMutationResult(blocks, blockId)
-                    }
+                val joinOffset = prev.text.length
+                mutable[idx - 1] = RichSpanEngine.mergeParagraphs(prev, current)
+                mutable.removeAt(idx)
+                EditorMutationResult(
+                    blocks = mutable,
+                    activeBlockId = prev.id,
+                    focusRequest = EditorFocusRequest(prev.id, cursorOffset = joinOffset, requestToken = nextToken()),
+                    isStructuralConversion = true
+                )
+            }
+            is DocumentBlock.Heading -> {
+                val joinOffset = prev.text.length
+                val firstNl = current.text.indexOf('\n')
+                if (firstNl < 0) {
+                    mutable[idx - 1] = prev.copy(text = prev.text + current.text)
+                    mutable.removeAt(idx)
                 } else {
-                    when (val prev = blocks[idx - 1]) {
-                        is DocumentBlock.Paragraph -> {
-                            val joinOffset = prev.text.length
-                            val merged = RichSpanEngine.mergeParagraphs(prev, current)
-                            mutable[idx - 1] = merged
-                            mutable.removeAt(idx)
-                            EditorMutationResult(
-                                blocks = mutable,
-                                activeBlockId = prev.id,
-                                focusRequest = EditorFocusRequest(prev.id, cursorOffset = joinOffset, requestToken = nextToken()),
-                                isStructuralConversion = true
-                            )
-                        }
-                        is DocumentBlock.Heading -> {
-                            val joinOffset = prev.text.length
-                            val firstNl = current.text.indexOf('\n')
-                            if (firstNl < 0) {
-                                mutable[idx - 1] = prev.copy(text = prev.text + current.text)
-                                mutable.removeAt(idx)
-                            } else {
-                                val firstLine = current.text.substring(0, firstNl)
-                                mutable[idx - 1] = prev.copy(text = prev.text + firstLine)
-                                mutable[idx] = RichSpanEngine.sliceParagraph(
-                                    paragraph = current,
-                                    start = firstNl + 1,
-                                    end = current.text.length,
-                                    newId = current.id
-                                )
-                            }
-                            EditorMutationResult(
-                                blocks = mutable,
-                                activeBlockId = prev.id,
-                                focusRequest = EditorFocusRequest(prev.id, cursorOffset = joinOffset, requestToken = nextToken()),
-                                isStructuralConversion = true
-                            )
-                        }
-                        is DocumentBlock.Divider -> {
-                            mutable.removeAt(idx - 1)
-                            coalesceParagraphResult(mutable, idx - 1, cursorInBlock = 0, nextToken = nextToken)
-                        }
-                        else -> {
-                            if (current.text.isEmpty()) {
-                                mutable.removeAt(idx)
-                                EditorMutationResult(
-                                    blocks = mutable,
-                                    activeBlockId = prev.id,
-                                    focusRequest = EditorFocusRequest(prev.id, cursorOffset = Int.MAX_VALUE, requestToken = nextToken()),
-                                    isStructuralConversion = true
-                                )
-                            } else {
-                                EditorMutationResult(blocks, blockId)
-                            }
-                        }
-                    }
+                    mutable[idx - 1] = prev.copy(text = prev.text + current.text.substring(0, firstNl))
+                    mutable[idx] = RichSpanEngine.sliceParagraph(current, firstNl + 1, current.text.length, current.id)
+                }
+                EditorMutationResult(
+                    blocks = mutable,
+                    activeBlockId = prev.id,
+                    focusRequest = EditorFocusRequest(prev.id, cursorOffset = joinOffset, requestToken = nextToken()),
+                    isStructuralConversion = true
+                )
+            }
+            is DocumentBlock.Divider -> {
+                mutable.removeAt(idx - 1)
+                coalesceParagraphResult(mutable, idx - 1, cursorInBlock = 0, nextToken = nextToken)
+            }
+            else -> {
+                if (current.text.isEmpty()) {
+                    mutable.removeAt(idx)
+                    EditorMutationResult(
+                        blocks = mutable,
+                        activeBlockId = prev.id,
+                        focusRequest = EditorFocusRequest(prev.id, cursorOffset = Int.MAX_VALUE, requestToken = nextToken()),
+                        isStructuralConversion = true
+                    )
+                } else {
+                    EditorMutationResult(mutable, current.id)
                 }
             }
-            else -> EditorMutationResult(blocks, blockId)
         }
     }
 
@@ -581,31 +346,18 @@ object EditorInputController {
         return when (val current = blocks[idx]) {
             is DocumentBlock.Checklist -> {
                 if (itemIndex !in current.items.indices) return EditorMutationResult(blocks, blockId)
-                val activeItem = current.items[itemIndex]
-                if (activeItem.text.isEmpty()) {
-                    if (current.items.size <= 1) {
-                        mutable[idx] = DocumentBlock.Paragraph(id = blockId, text = "")
-                        coalesceParagraphResult(mutable, idx, cursorInBlock = 0, nextToken = nextToken)
-                    } else {
-                        val trimmed = current.items.filterIndexed { i, _ -> i != itemIndex }
-                        mutable[idx] = current.copy(items = trimmed)
-                        val (targetId, focusReq) = ParagraphFlowEngine.focusOrPrependNextParagraph(
-                            mutable,
-                            idx,
-                            "",
-                            nextId,
-                            nextToken
-                        )
-                        EditorMutationResult(mutable, targetId, focusReq, true)
-                    }
+                if (current.items[itemIndex].text.isEmpty()) {
+                    exitEmptyListItem(mutable, idx, blockId, current.items.size <= 1,
+                        trimBlock = { current.copy(items = current.items.filterIndexed { i, _ -> i != itemIndex }) },
+                        nextId = nextId, nextToken = nextToken
+                    )
                 } else {
                     val newItems = current.items.toMutableList().apply {
                         add(itemIndex + 1, ChecklistItem(id = nextId(), text = "", isChecked = false))
                     }
                     mutable[idx] = current.copy(items = newItems)
                     EditorMutationResult(
-                        mutable,
-                        blockId,
+                        mutable, blockId,
                         EditorFocusRequest(blockId, subItemIndex = itemIndex + 1, cursorOffset = 0, requestToken = nextToken()),
                         true
                     )
@@ -613,31 +365,16 @@ object EditorInputController {
             }
             is DocumentBlock.BulletList -> {
                 if (itemIndex !in current.items.indices) return EditorMutationResult(blocks, blockId)
-                val activeText = current.items[itemIndex]
-                if (activeText.isEmpty()) {
-                    if (current.items.size <= 1) {
-                        mutable[idx] = DocumentBlock.Paragraph(id = blockId, text = "")
-                        coalesceParagraphResult(mutable, idx, cursorInBlock = 0, nextToken = nextToken)
-                    } else {
-                        val trimmed = current.items.filterIndexed { i, _ -> i != itemIndex }
-                        mutable[idx] = current.copy(items = trimmed)
-                        val (targetId, focusReq) = ParagraphFlowEngine.focusOrPrependNextParagraph(
-                            mutable,
-                            idx,
-                            "",
-                            nextId,
-                            nextToken
-                        )
-                        EditorMutationResult(mutable, targetId, focusReq, true)
-                    }
+                if (current.items[itemIndex].isEmpty()) {
+                    exitEmptyListItem(mutable, idx, blockId, current.items.size <= 1,
+                        trimBlock = { current.copy(items = current.items.filterIndexed { i, _ -> i != itemIndex }) },
+                        nextId = nextId, nextToken = nextToken
+                    )
                 } else {
-                    val newItems = current.items.toMutableList().apply {
-                        add(itemIndex + 1, "")
-                    }
+                    val newItems = current.items.toMutableList().apply { add(itemIndex + 1, "") }
                     mutable[idx] = current.copy(items = newItems)
                     EditorMutationResult(
-                        mutable,
-                        blockId,
+                        mutable, blockId,
                         EditorFocusRequest(blockId, subItemIndex = itemIndex + 1, cursorOffset = 0, requestToken = nextToken()),
                         true
                     )
@@ -645,6 +382,23 @@ object EditorInputController {
             }
             else -> EditorMutationResult(blocks, blockId)
         }
+    }
+
+    private inline fun exitEmptyListItem(
+        mutable: MutableList<DocumentBlock>,
+        idx: Int,
+        blockId: String,
+        isSingleItem: Boolean,
+        trimBlock: () -> DocumentBlock,
+        noinline nextId: () -> String,
+        noinline nextToken: () -> Long
+    ): EditorMutationResult = if (isSingleItem) {
+        mutable[idx] = DocumentBlock.Paragraph(id = blockId, text = "")
+        coalesceParagraphResult(mutable, idx, cursorInBlock = 0, nextToken = nextToken)
+    } else {
+        mutable[idx] = trimBlock()
+        val (targetId, focusReq) = ParagraphFlowEngine.focusOrPrependNextParagraph(mutable, idx, "", nextId, nextToken)
+        EditorMutationResult(mutable, targetId, focusReq, true)
     }
 
     fun handleListBackspaceOnEmpty(
@@ -665,12 +419,10 @@ object EditorInputController {
                     coalesceParagraphResult(mutable, idx, cursorInBlock = 0, nextToken = nextToken)
                 } else {
                     val prevIdx = (itemIndex - 1).coerceAtLeast(0)
-                    val prevLen = current.items[prevIdx].text.length
                     mutable[idx] = current.copy(items = current.items.filterIndexed { i, _ -> i != itemIndex })
                     EditorMutationResult(
-                        mutable,
-                        blockId,
-                        EditorFocusRequest(blockId, subItemIndex = prevIdx, cursorOffset = prevLen, requestToken = nextToken()),
+                        mutable, blockId,
+                        EditorFocusRequest(blockId, subItemIndex = prevIdx, cursorOffset = current.items[prevIdx].text.length, requestToken = nextToken()),
                         true
                     )
                 }
@@ -682,12 +434,10 @@ object EditorInputController {
                     coalesceParagraphResult(mutable, idx, cursorInBlock = 0, nextToken = nextToken)
                 } else {
                     val prevIdx = (itemIndex - 1).coerceAtLeast(0)
-                    val prevLen = current.items[prevIdx].length
                     mutable[idx] = current.copy(items = current.items.filterIndexed { i, _ -> i != itemIndex })
                     EditorMutationResult(
-                        mutable,
-                        blockId,
-                        EditorFocusRequest(blockId, subItemIndex = prevIdx, cursorOffset = prevLen, requestToken = nextToken()),
+                        mutable, blockId,
+                        EditorFocusRequest(blockId, subItemIndex = prevIdx, cursorOffset = current.items[prevIdx].length, requestToken = nextToken()),
                         true
                     )
                 }

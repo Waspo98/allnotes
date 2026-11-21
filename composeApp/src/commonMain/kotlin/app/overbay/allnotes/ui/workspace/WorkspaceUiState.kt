@@ -72,6 +72,7 @@ data class WorkspaceUiState(
     val statusBannerActionLabel: String? = null,
     val statusBannerAction: WorkspaceAction? = null,
     val revision: Long = 1L,
+    val structureRevision: Long = 0L,
     val searchFocusRequestToken: Long = 0L,
     val titleFocusRequestToken: Long = 0L,
     val previewAttachment: DocumentBlock.Attachment? = null,

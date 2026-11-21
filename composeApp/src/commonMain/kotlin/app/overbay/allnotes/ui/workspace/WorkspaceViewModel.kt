@@ -12,6 +12,7 @@ import app.overbay.allnotes.model.RichSpanKind
 import app.overbay.allnotes.model.SectionAccentKey
 import app.overbay.allnotes.model.ThemeMode
 import app.overbay.allnotes.model.WorkspaceSnapshot
+import app.overbay.allnotes.ui.editor.spans.RichSpanEngine
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
@@ -400,8 +401,11 @@ class WorkspaceViewModel(
 
     internal fun performUndo() = editorCoordinator.performUndo()
     internal fun performRedo() = editorCoordinator.performRedo()
-    internal fun applyEditorResult(debounced: Boolean, compute: (List<DocumentBlock>) -> EditorMutationResult) =
-        editorCoordinator.applyEditorResult(debounced, compute)
+    internal fun applyEditorResult(
+        debounced: Boolean,
+        updatedSelection: Pair<Int, Int>? = null,
+        compute: (List<DocumentBlock>) -> EditorMutationResult
+    ) = editorCoordinator.applyEditorResult(debounced, updatedSelection, compute)
     private fun mutateActivePageBlocks(
         keepBlockActive: String? = null,
         debounced: Boolean = false,
@@ -443,26 +447,61 @@ class WorkspaceViewModel(
     fun updateCodeLanguage(blockId: String, language: String) = mutateActivePageBlocks(blockId) { BlockMutationEngine.updateCodeLanguage(it, blockId, language) }
 
     fun clearActiveParagraphFormatting() {
-        val targetId = _uiState.value.activeBlockId ?: return
-        mutateActivePageBlocks(targetId) { BlockMutationEngine.clearParagraphFormatting(it, targetId) }
+        val state = _uiState.value
+        val targetId = state.activeBlockId ?: return
+        val activePara = state.activePage?.blocks?.firstOrNull { it.id == targetId } as? DocumentBlock.Paragraph
+        if (activePara == null) {
+            mutateActivePageBlocks(targetId) { BlockMutationEngine.clearParagraphFormatting(it, targetId) }
+            return
+        }
+        mutateActivePageBlocks(targetId) { blocks ->
+            blocks.map { block ->
+                if (block.id != targetId || block !is DocumentBlock.Paragraph) return@map block
+                if (state.selectionStart != state.selectionEnd) {
+                    RichSpanEngine.clearSpansInRange(block, state.selectionStart, state.selectionEnd)
+                } else {
+                    val line = ParagraphFlowEngine.lineBoundsAt(block.text, state.selectionStart)
+                    val clearedLine = if (line.start < line.end) {
+                        RichSpanEngine.clearSpansInRange(block, line.start, line.end)
+                    } else block
+                    if (clearedLine != block) {
+                        clearedLine
+                    } else {
+                        BlockMutationEngine.clearParagraphFormatting(listOf(block), targetId).single()
+                    }
+                }
+            }
+        }
     }
 
     fun convertActiveBlock(command: SlashCommandKind) {
-        val blockId = _uiState.value.activeBlockId ?: return
+        val state = _uiState.value
+        val blockId = state.activeBlockId ?: return
         applyEditorResult(debounced = false) {
-            EditorInputController.convertBlockWithFocus(it, blockId, command, ::nextBlockId, ::nextFocusToken)
+            EditorInputController.convertBlockWithFocus(
+                blocks = it,
+                blockId = blockId,
+                target = command,
+                nextId = ::nextBlockId,
+                nextToken = ::nextFocusToken,
+                selectionStart = state.selectionStart,
+                selectionEnd = state.selectionEnd
+            )
         }
     }
 
     fun deleteBlock(blockId: String) {
         val page = _uiState.value.activePage ?: return
-        if (page.blocks.none { it.id == blockId }) return
+        val idx = page.blocks.indexOfFirst { it.id == blockId }
+        if (idx < 0) return
         editorCoordinator.recordBeforeMutation(page.id, page.blocks)
-        repository.updatePageBlocks(page.id, page.blocks.filterNot { it.id == blockId })
+        val updated = ParagraphFlowEngine.coalesceAcrossRemovedIndex(page.blocks, idx)
+        repository.updatePageBlocks(page.id, updated)
         syncStateFromRepository()
         _uiState.update {
             it.copy(
-                activeBlockId = if (it.activeBlockId == blockId) null else it.activeBlockId,
+                activeBlockId = if (it.activeBlockId == blockId || updated.none { b -> b.id == it.activeBlockId }) null else it.activeBlockId,
+                structureRevision = it.structureRevision + 1L,
                 statusBannerMessage = "Block removed", statusBannerActionLabel = "Undo", statusBannerAction = WorkspaceAction.Undo
             )
         }
